@@ -67,12 +67,17 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
     return this.service.info(body.id);
   }
 
-  add(body: { data: Partial<T> }) {
-    return this.service.add(body.data);
+  add(body: { data: Partial<T>; children?: unknown }) {
+    return this.service.add(body.data, body.children);
   }
 
-  update(body: { id: string; version: number; data: Partial<T> }) {
-    return this.service.update(body.id, body.version, body.data);
+  update(body: {
+    id: string;
+    version: number;
+    data: Partial<T>;
+    children?: unknown;
+  }) {
+    return this.service.update(body.id, body.version, body.data, body.children);
   }
 
   delete(body: { ids: string[] }) {

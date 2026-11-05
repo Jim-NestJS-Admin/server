@@ -22,6 +22,34 @@ export class CrudRuntime {
     if (existing && existing.entity !== meta.entity)
       throw new Error(`资源 ${meta.prefix} 重复定义`);
     this.resources.set(meta.prefix, meta);
+    this.checkChildOwnership();
+  }
+
+  /**
+   * 子表只有主表这一个写入口：子表实体不能再被别的主表挂上，也不能自己开放新增、修改、删除接口，
+   * 否则就有绕过主表版本号改明细的通道。只读的接口（分页、详情）可以有。
+   */
+  private checkChildOwnership(): void {
+    const owners = new Map<Function, string>();
+    for (const r of this.resources.values())
+      for (const c of r.children) {
+        const other = owners.get(c.entity);
+        if (other && other !== r.prefix)
+          throw new Error(
+            `子表实体 ${c.entity.name} 同时挂在 ${other} 和 ${r.prefix} 下，一个子表只能属于一个主表`,
+          );
+        owners.set(c.entity, r.prefix);
+      }
+    for (const r of this.resources.values()) {
+      const owner = owners.get(r.entity);
+      const writes = r.api.filter(
+        (a) => a === 'add' || a === 'update' || a === 'delete',
+      );
+      if (owner && writes.length)
+        throw new Error(
+          `资源 ${r.prefix} 的实体是 ${owner} 的子表，不能开放 ${writes.join('、')} 接口：子表只能通过主表一起保存`,
+        );
+    }
   }
 
   list(): CrudResourceMeta[] {

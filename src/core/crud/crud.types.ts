@@ -32,6 +32,25 @@ export interface PageQueryOptions<T> {
   maxSize?: number;
 }
 
+/** 主子表里的一个子表（架构「通用 CRUD · 主子表」） */
+export interface CrudChildOptions {
+  /** 子表在接口里的名字，小写字母开头的驼峰，如 items */
+  resource: string;
+  /** 显示名称，如「订单明细」 */
+  label: string;
+  /** 子表实体，必须继承 BaseEntity */
+  entity: Type<BaseEntity>;
+  /** 子表上指向主表编号的字段（属性名），如 orderId；由框架填写，前端不能传 */
+  foreignKey: string;
+  /** 最少、最多行数，默认 0 和 500 */
+  min?: number;
+  max?: number;
+  /** 同一张单据里不能重复的字段；一组里写多个字段表示组合不能重复，如 [['productCode']] */
+  unique?: string[][];
+  /** 子表排序字段，详情里按它从小到大返回；不写按编号 */
+  sortField?: string;
+}
+
 export interface CrudControllerOptions<T extends BaseEntity> {
   /** 资源路径，如 system/user，对应接口 /admin/system/user/*，权限码前缀 system:user */
   prefix: string;
@@ -44,6 +63,28 @@ export interface CrudControllerOptions<T extends BaseEntity> {
   pageQuery?: PageQueryOptions<T>;
   /** 删除方式：soft（默认，只打删除标记）或 hard（真删） */
   delete?: 'soft' | 'hard';
+  /** 子表：主表和全部子表在同一个事务里一起保存 */
+  children?: CrudChildOptions[];
+}
+
+/** 子表整理好的定义 */
+export interface CrudChildMeta {
+  resource: string;
+  label: string;
+  /** 接口文档名，如 DemoOrderItems */
+  name: string;
+  entity: Type<BaseEntity>;
+  foreignKey: string;
+  fields: CrudFieldMeta[];
+  addable: string[];
+  updatable: string[];
+  readable: string[];
+  min: number;
+  max: number;
+  unique: string[][];
+  sortField?: string;
+  /** 逐行校验用的 DTO，由 buildCrudDtos 填入 */
+  rowDtos?: { AddRow: Type; UpdateRow: Type };
 }
 
 /** 一个资源在启动时整理好的完整定义，页面描述、字段权限、MCP 都从这里读 */
@@ -66,6 +107,7 @@ export interface CrudResourceMeta<T extends BaseEntity = BaseEntity> {
   fieldEq: string[];
   defaultSort: SortItem[];
   maxSize: number;
+  children: CrudChildMeta[];
 }
 
 /** 请求上下文：租户和当前用户。T04 / T05 接入后由认证守卫写入 */

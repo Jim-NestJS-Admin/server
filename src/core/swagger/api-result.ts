@@ -18,6 +18,11 @@ export class ApiFieldError {
   @ApiPropertyOptional({ description: '已有子行的编号' }) id?: string;
   @ApiPropertyOptional({ description: '新增子行的客户端标识' })
   clientId?: string;
+  @ApiPropertyOptional({
+    description:
+      '新增子行没有可用的 clientId 时，它在 added 里的位置（从 0 开始）',
+  })
+  index?: number;
 }
 
 export class ApiErrorData {

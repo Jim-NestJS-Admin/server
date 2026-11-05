@@ -98,6 +98,24 @@ export class CrudSchemaSort {
   @ApiProperty({ enum: ['asc', 'desc'] }) order: 'asc' | 'desc';
 }
 
+export class CrudSchemaChild {
+  @ApiProperty({ example: 'items' }) resource: string;
+  @ApiProperty() label: string;
+  @ApiProperty() min: number;
+  @ApiProperty() max: number;
+  @ApiProperty({
+    type: 'array',
+    items: { type: 'array', items: { type: 'string' } },
+    description: '同一张单据里不能重复的字段组',
+  })
+  unique: string[][];
+  @ApiPropertyOptional() sortField?: string;
+  @ApiProperty({ type: [CrudSchemaColumn] }) columns: CrudSchemaColumn[];
+  @ApiProperty({ type: [CrudSchemaFormItem] }) form: CrudSchemaFormItem[];
+  @ApiProperty({ type: CrudSchemaWriteAction }) add: CrudSchemaWriteAction;
+  @ApiProperty({ type: CrudSchemaWriteAction }) update: CrudSchemaWriteAction;
+}
+
 /**
  * 页面描述 GET /admin/<资源>/schema：前端通用 CRUD 页面据此渲染（架构「通用 CRUD」）。
  * 现在给的是资源定义本身的能力上限；T06 / T16 接入后按当前用户的本次有效角色和字段权限再裁剪。
@@ -127,6 +145,11 @@ export class CrudSchema {
   @ApiProperty({ type: CrudSchemaActions }) actions: CrudSchemaActions;
   @ApiProperty({ type: [CrudSchemaSort] }) defaultSort: SortItem[];
   @ApiProperty() maxSize: number;
+  @ApiProperty({
+    type: [CrudSchemaChild],
+    description: '子表；没有子表时为空数组',
+  })
+  children: CrudSchemaChild[];
 }
 
 export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
@@ -182,6 +205,49 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
   if (meta.api.includes('update'))
     actions.update = { writable: meta.updatable };
 
+  const children: CrudSchemaChild[] = meta.children.map((c) => {
+    const cf = (p: string) => c.fields.find((f) => f.property === p);
+    for (const f of c.fields)
+      if (f.dict) dictionaries[`${c.resource}.${f.property}`] = f.dict;
+    return {
+      resource: c.resource,
+      label: c.label,
+      min: c.min,
+      max: c.max,
+      unique: c.unique,
+      ...(c.sortField ? { sortField: c.sortField } : {}),
+      columns: c.readable
+        .filter((p) => cf(p)?.list !== false)
+        .map((p) => {
+          const f = cf(p);
+          const list = f?.list || undefined;
+          return {
+            field: p,
+            label: f?.label ?? BASE_LABELS[p] ?? p,
+            ...(list?.width ? { width: list.width } : {}),
+            sortable: false,
+            ...(f?.dict ? { dict: `${c.resource}.${p}` } : {}),
+          };
+        }),
+      form: c.fields
+        .filter((f) => f.form !== false && (f.edit ?? 'both') !== 'none')
+        .map((f) => {
+          const cfg = f.form || {};
+          return {
+            field: f.property,
+            label: f.label,
+            component: cfg.component ?? (f.dict ? 'select' : 'input'),
+            required: Boolean(cfg.required),
+            ...(cfg.placeholder ? { placeholder: cfg.placeholder } : {}),
+            edit: f.edit ?? 'both',
+            ...(f.dict ? { dict: `${c.resource}.${f.property}` } : {}),
+          };
+        }),
+      add: { writable: c.addable },
+      update: { writable: c.updatable },
+    };
+  });
+
   return {
     resource: meta.prefix,
     label: meta.label,
@@ -195,5 +261,6 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
     actions,
     defaultSort: meta.defaultSort,
     maxSize: meta.maxSize,
+    children,
   };
 }

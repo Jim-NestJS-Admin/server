@@ -1,5 +1,6 @@
 import { IsString } from 'class-validator';
 import { Column, Entity } from 'typeorm';
+import type { CrudChildOptions } from './crud.types.js';
 import { SnakeNamingStrategy } from '../database/naming.strategy.js';
 import { BaseEntity } from './base.entity.js';
 import { CrudField } from './crud-field.decorator.js';
@@ -85,6 +86,80 @@ describe('资源定义 resolveCrudMeta：配置写错在启动时就报错', () 
         api: ['add'],
       }),
     ).toThrow(/remark 没有 class-validator/);
+  });
+});
+
+@Entity('spec_line')
+class LineEntity extends BaseEntity {
+  @Column({ type: 'bigint' })
+  itemId: string;
+
+  @CrudField({ label: '编码' })
+  @IsString()
+  @Column({ type: 'varchar', length: 20 })
+  code: string;
+}
+
+class NotAnEntity {}
+
+describe('子表配置', () => {
+  const child = (patch: Partial<CrudChildOptions> = {}): CrudChildOptions => ({
+    resource: 'lines',
+    label: '行',
+    entity: LineEntity,
+    foreignKey: 'itemId',
+    ...patch,
+  });
+  const resolve = (children: CrudChildOptions[]) =>
+    resolveCrudMeta({ ...base, prefix: 'demo/item', children });
+
+  it('整理出子表定义：可写字段、默认行数、文档名', () => {
+    const [c] = resolve([child({ unique: [['code']] })]).children;
+    expect(c).toMatchObject({
+      name: 'DemoItemLines',
+      addable: ['code'],
+      min: 0,
+      max: 500,
+      unique: [['code']],
+    });
+    expect(c.readable).not.toContain('itemId');
+    expect(c.readable).not.toContain('version');
+  });
+
+  it.each([
+    ['resource 不是驼峰名', { resource: 'Lines' }, /resource/],
+    ['实体没继承 BaseEntity', { entity: NotAnEntity as never }, /BaseEntity/],
+    ['外键不是列', { foreignKey: 'nope' }, /外键 nope/],
+    ['唯一字段没声明', { unique: [['nope']] }, /唯一字段 nope/],
+    ['唯一字段空组', { unique: [[]] }, /空组/],
+    ['排序字段不是列', { sortField: 'nope' }, /排序字段 nope/],
+    ['最少大于最多', { min: 3, max: 2 }, /行数限制/],
+    ['最多超过上限', { max: 1001 }, /行数限制/],
+  ])('%s：启动失败', (_name, patch, error) => {
+    expect(() => resolve([child(patch)])).toThrow(error);
+  });
+
+  it('外键用 @CrudField 声明（前端可写）：启动失败', () => {
+    @Entity('spec_line_bad')
+    class BadLine extends BaseEntity {
+      @CrudField({ label: '外键' })
+      @IsString()
+      @Column({ type: 'bigint' })
+      itemId: string;
+    }
+    expect(() => resolve([child({ entity: BadLine })])).toThrow(/由框架填写/);
+  });
+
+  it('同名子表、子表和主表同实体、同一实体挂两次：启动失败', () => {
+    expect(() => resolve([child(), child()])).toThrow(/重复/);
+    expect(() =>
+      resolve([
+        child({ entity: ItemEntity as never, foreignKey: 'createdBy' }),
+      ]),
+    ).toThrow(/同一个实体/);
+    expect(() => resolve([child(), child({ resource: 'other' })])).toThrow(
+      /只能挂一次/,
+    );
   });
 });
 

@@ -68,7 +68,7 @@ export function CrudController<T extends BaseEntity>(
         http: 'post',
         summary: `${label}详情`,
         body: dtos.InfoBody,
-        result: dtos.Row,
+        result: dtos.Detail,
         errors: [400, 404],
       },
       {
@@ -76,7 +76,7 @@ export function CrudController<T extends BaseEntity>(
         http: 'post',
         summary: `新增${label}`,
         body: dtos.AddBody,
-        result: dtos.Row,
+        result: dtos.Detail,
         errors: [400],
       },
       {
@@ -84,7 +84,7 @@ export function CrudController<T extends BaseEntity>(
         http: 'post',
         summary: `修改${label}`,
         body: dtos.UpdateBody,
-        result: dtos.Row,
+        result: dtos.Detail,
         errors: [400, 404, 409],
       },
       {

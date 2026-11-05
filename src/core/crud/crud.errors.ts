@@ -5,6 +5,14 @@ import { ErrorCode } from '../exceptions/error-code.js';
 import type { FieldError } from '../validation.js';
 import type { CrudResourceMeta } from './crud.types.js';
 
+/** 字段错误：主子表保存时带上子表名和行标识（已有行 id、新增行 clientId，没有可用 clientId 时给 index） */
+export interface CrudFieldError extends FieldError {
+  resource?: string;
+  id?: string;
+  clientId?: string;
+  index?: number;
+}
+
 /**
  * CRUD 的对外错误（T19 审查第 1 条、T03 补充验收）：
  * - 不存在和无权访问一律 404 / 4004，说明文字也一样，不能借此判断看不见的数据是否存在；
@@ -24,7 +32,7 @@ export const crudErrors = {
       '数据已被他人修改，请刷新后重试',
       HttpStatus.CONFLICT,
     ),
-  badRequest: (message: string, errors?: FieldError[]) =>
+  badRequest: (message: string, errors?: CrudFieldError[]) =>
     new BusinessException(
       ErrorCode.BadRequest,
       message,

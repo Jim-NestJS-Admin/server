@@ -10,6 +10,12 @@ import {
   type BaseEntity,
 } from './base.entity.js';
 import { crudErrors, translateDbError } from './crud.errors.js';
+import {
+  deleteChildrenOf,
+  loadChildren,
+  planChildren,
+  saveChildren,
+} from './crud-children.js';
 import type { CrudContextProvider, CrudScope } from './crud-scope.js';
 import type {
   CrudAction,
@@ -150,14 +156,22 @@ export class BaseService<T extends BaseEntity> {
   }
 
   async info(id: string): Promise<CrudRow<T>> {
-    const row = await this.findOne(this.crud.dataSource.manager, id, 'info');
+    const manager = this.crud.dataSource.manager;
+    const row = await this.findOne(manager, id, 'info');
     if (!row) throw crudErrors.notFound();
-    return this.toRow(row);
+    return this.toDetail(manager, row, this.crud.context.current().tenantId);
   }
 
   // ---------- 写 ----------
 
-  async add(data: Partial<T>): Promise<CrudRow<T>> {
+  /** 新增；有子表时 children 里每个子表只有 added，主表和子表在同一个事务里写入 */
+  async add(data: Partial<T>, children?: unknown): Promise<CrudRow<T>> {
+    const plans = await planChildren(
+      this.meta as CrudResourceMeta,
+      children,
+      'add',
+      this.crud.dataSource,
+    );
     return this.transaction(async (tx) => {
       const values = this.pick(data, this.meta.addable);
       this.assertNullable(values);
@@ -175,20 +189,43 @@ export class BaseService<T extends BaseEntity> {
         } as never)
         .execute();
       const id = String(result.identifiers[0]?.id);
+      // 没提交的子表也要按「空」检查行数下限
+      const all = this.meta.children.map(
+        (child) =>
+          plans.find((p) => p.child === child) ?? {
+            child,
+            added: [],
+            updated: [],
+            deleted: [],
+          },
+      );
+      if (all.length) await saveChildren(tx, tx.meta, id, all, true);
       const row = await this.findOne(tx.manager, id, 'add');
       if (!row) throw new Error(`新增后读不到数据：${this.meta.prefix} ${id}`);
       await this.afterAdd(row, tx);
-      return this.toRow(row);
+      return this.toDetail(tx.manager, row, tx.ctx.tenantId);
     });
   }
 
+  /**
+   * 修改；有子表时 children 里每个子表分 added / updated / deleted 三组，没提交的行保持不动。
+   * 只改子表也会让主表版本号加 1（子表只有主表这一个写入口）。
+   */
   async update(
     id: string,
     version: number,
     data: Partial<T>,
+    children?: unknown,
   ): Promise<CrudRow<T>> {
+    const plans = await planChildren(
+      this.meta as CrudResourceMeta,
+      children,
+      'update',
+      this.crud.dataSource,
+    );
     return this.transaction(async (tx) => {
-      const existing = await this.findOne(tx.manager, id, 'update');
+      // 锁住主表这一行：同一张单据的聚合保存排队执行，子表的行数、唯一检查基于一致的数据
+      const existing = await this.findOne(tx.manager, id, 'update', true);
       if (!existing) throw crudErrors.notFound();
       if (existing.version !== version) throw crudErrors.versionConflict();
       const changes = this.pick(data, this.meta.updatable);
@@ -211,11 +248,12 @@ export class BaseService<T extends BaseEntity> {
       const result = await qb.execute();
       // 读到时版本一致、更新时 0 行：说明这期间被别人改了或删了
       if (!result.affected) throw crudErrors.versionConflict();
+      if (plans.length) await saveChildren(tx, tx.meta, id, plans);
 
       const row = await this.findOne(tx.manager, id, 'update');
       if (!row) throw crudErrors.notFound();
       await this.afterUpdate(row, tx);
-      return this.toRow(row);
+      return this.toDetail(tx.manager, row, tx.ctx.tenantId);
     });
   }
 
@@ -228,6 +266,8 @@ export class BaseService<T extends BaseEntity> {
         .getMany();
       if (rows.length !== unique.length) throw crudErrors.notFound();
       await this.beforeDelete(rows, tx);
+      if (this.meta.children.length)
+        await deleteChildrenOf(tx, tx.meta, unique);
 
       const base =
         this.meta.deleteMode === 'soft'
@@ -288,10 +328,34 @@ export class BaseService<T extends BaseEntity> {
     return this.crud.scope.conditions(tx.ctx, tx.meta, action);
   }
 
-  private findOne(manager: EntityManager, id: string, action: CrudAction) {
-    return this.select(manager, action)
-      .andWhere(`${ALIAS}.id = :__id`, { __id: id })
-      .getOne();
+  private findOne(
+    manager: EntityManager,
+    id: string,
+    action: CrudAction,
+    lock = false,
+  ) {
+    const qb = this.select(manager, action).andWhere(`${ALIAS}.id = :__id`, {
+      __id: id,
+    });
+    if (lock) qb.setLock('pessimistic_write');
+    return qb.getOne();
+  }
+
+  /** 详情：主表可读字段，有子表时加上 children */
+  private async toDetail(
+    manager: EntityManager,
+    row: T,
+    tenantId: string,
+  ): Promise<CrudRow<T>> {
+    const out = this.toRow(row) as Record<string, unknown>;
+    if (this.meta.children.length)
+      out.children = await loadChildren(
+        manager,
+        this.meta as CrudResourceMeta,
+        tenantId,
+        String(row.id),
+      );
+    return out as CrudRow<T>;
   }
 
   private column(property: string): string {

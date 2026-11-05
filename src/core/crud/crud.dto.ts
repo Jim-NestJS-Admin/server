@@ -13,6 +13,7 @@ import {
   IsArray,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
@@ -56,6 +57,8 @@ export interface CrudDtos {
   UpdateBody: Type;
   DeleteBody: Type;
   Row: Type;
+  /** 详情、新增、修改的返回：有子表时带 children */
+  Detail: Type;
   PageResult: Type;
   DeleteResult: Type;
 }
@@ -80,6 +83,81 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     PartialType(PickType(entity, meta.fieldEq as never[])) as Type,
     `${n}PageEq`,
   );
+
+  // ---------- 子表 ----------
+  // 请求体里的 children 只用于接口文档；逐行校验由 BaseService 做，这样错误能按 resource + id / clientId 定位到行
+  const AddChildren = named(class {}, `${n}AddChildren`);
+  const UpdateChildren = named(class {}, `${n}UpdateChildren`);
+  const DetailChildren = named(class {}, `${n}DetailChildren`);
+  for (const c of meta.children) {
+    const ce = c.entity as Type;
+    const AddRow = named(
+      PickType(ce, c.addable as never[]) as Type,
+      `${c.name}AddRow`,
+    );
+    prop(AddRow, 'clientId', String, [
+      ApiProperty({
+        description: '前端给新增行的临时标识，本次请求内唯一，只用来定位错误',
+        maxLength: 64,
+      }),
+      IsString({ message: 'clientId 必须是字符串' }),
+      IsNotEmpty({ message: '新增行必须带 clientId' }),
+      MaxLength(64),
+    ]);
+    const UpdateRow = named(
+      PartialType(PickType(ce, c.updatable as never[])) as Type,
+      `${c.name}UpdateRow`,
+    );
+    prop(UpdateRow, 'id', String, [
+      ApiProperty({ type: String, description: '已有行的编号' }),
+      Matches(ID_PATTERN, { message: ID_MESSAGE }),
+    ]);
+    c.rowDtos = { AddRow, UpdateRow };
+
+    const AddChange = named(class {}, `${c.name}AddChange`);
+    prop(AddChange, 'added', Array, [
+      ApiPropertyOptional({ type: [AddRow], maxItems: c.max }),
+    ]);
+    const Change = named(class {}, `${c.name}Change`);
+    prop(Change, 'added', Array, [
+      ApiPropertyOptional({ type: [AddRow], maxItems: MAX_BATCH }),
+    ]);
+    prop(Change, 'updated', Array, [
+      ApiPropertyOptional({
+        type: [UpdateRow],
+        maxItems: MAX_BATCH,
+        description: '只传要改的字段',
+      }),
+    ]);
+    prop(Change, 'deleted', Array, [
+      ApiPropertyOptional({
+        type: [String],
+        maxItems: MAX_BATCH,
+        description: '要删除的行编号；没列出的行保持不动',
+      }),
+    ]);
+    prop(AddChildren, c.resource, Object, [
+      ApiPropertyOptional({ type: AddChange, description: c.label }),
+    ]);
+    prop(UpdateChildren, c.resource, Object, [
+      ApiPropertyOptional({ type: Change, description: c.label }),
+    ]);
+
+    const ChildRow = named(
+      PickType(ce, c.readable as never[]) as Type,
+      `${c.name}Row`,
+    );
+    prop(DetailChildren, c.resource, Array, [
+      ApiProperty({ type: [ChildRow], description: c.label }),
+    ]);
+  }
+  const hasChildren = meta.children.length > 0;
+  const childrenProp = (cls: Type, type: Type, desc: string) =>
+    prop(cls, 'children', Object, [
+      ApiPropertyOptional({ type, description: desc }),
+      IsOptional(),
+      IsObject({ message: 'children 必须是对象' }),
+    ]);
 
   const SortItem = named(class {}, `${n}PageSort`);
   prop(SortItem, 'field', String, [
@@ -146,6 +224,9 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     TransformType(() => AddData),
   ]);
 
+  if (hasChildren)
+    childrenProp(AddBody, AddChildren, '子表：每个子表只有新增的行');
+
   const UpdateBody = named(class {}, `${n}UpdateBody`);
   prop(UpdateBody, 'id', String, [
     ApiProperty({ type: String, example: '1' }),
@@ -163,6 +244,13 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     TransformType(() => UpdateData),
   ]);
 
+  if (hasChildren)
+    childrenProp(
+      UpdateBody,
+      UpdateChildren,
+      '子表：每个子表分别提交新增、修改、删除三组；没提交的行保持不动',
+    );
+
   const DeleteBody = named(class {}, `${n}DeleteBody`);
   prop(DeleteBody, 'ids', Array, [
     ApiProperty({ type: [String], minItems: 1, maxItems: MAX_BATCH }),
@@ -178,6 +266,14 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     PickType(entity, meta.readable as never[]) as Type,
     `${n}Row`,
   );
+  let Detail = Row;
+  if (hasChildren) {
+    Detail = named(
+      PickType(entity, meta.readable as never[]) as Type,
+      `${n}Detail`,
+    );
+    prop(Detail, 'children', Object, [ApiProperty({ type: DetailChildren })]);
+  }
   const PageResult = named(class {}, `${n}PageResult`);
   prop(PageResult, 'list', Array, [ApiProperty({ type: [Row] })]);
   prop(PageResult, 'total', Number, [ApiProperty()]);
@@ -195,6 +291,7 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     UpdateBody,
     DeleteBody,
     Row,
+    Detail,
     PageResult,
     DeleteResult,
   };
