@@ -39,13 +39,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const code = codeFromStatus(status);
       const body = exception.getResponse();
-      // Nest 自带异常的 message 可能是英文或数组，统一换成中文默认文案；4xx 保留可读的单条中文说明
+      // Nest 自带异常的 message 可能是英文或数组，统一换成中文默认文案；4xx 保留可读的单条中文说明。
+      // 5xx 一律只返回公开文案，异常里的信息只进日志（业务上需要公开的提示请用 BusinessException）
       const raw =
         typeof body === 'object' && body !== null
           ? (body as { message?: unknown }).message
           : body;
       const message =
-        typeof raw === 'string' && /[一-龥]/.test(raw)
+        status < 500 && typeof raw === 'string' && /[一-龥]/.test(raw)
           ? raw
           : DEFAULT_MESSAGES[code];
       if (status >= 500) this.logger.error(exception);

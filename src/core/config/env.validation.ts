@@ -25,12 +25,13 @@ export enum LogLevel {
   Silent = 'silent',
 }
 
-const toBool = ({ value }: { value: unknown }) =>
-  value === undefined || value === ''
-    ? undefined
-    : typeof value === 'string'
-      ? value.toLowerCase() === 'true'
-      : value;
+/** 只认 true / false（不区分大小写），其他写法原样保留交给 @IsBoolean 报错，避免拼错时被静默当成 false */
+const toBool = ({ value }: { value: unknown }) => {
+  if (value === undefined || value === '') return undefined;
+  if (typeof value !== 'string') return value;
+  const v = value.trim().toLowerCase();
+  return v === 'true' ? true : v === 'false' ? false : value;
+};
 
 /**
  * 启动时校验的环境变量。缺项或格式不对直接启动失败，不带病运行。

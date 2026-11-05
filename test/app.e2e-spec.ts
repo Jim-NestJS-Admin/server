@@ -5,9 +5,12 @@ import {
   Body,
   Controller,
   Get,
+  HttpException,
   INestApplication,
+  InternalServerErrorException,
   NotFoundException,
   Post,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { IsInt, IsString, MaxLength, Min } from 'class-validator';
@@ -48,6 +51,18 @@ class DemoController {
   }
   @Get('boom') boom() {
     throw new Error('数据库密码是 hunter2');
+  }
+  @Get('internal-cn')
+  internalCn() {
+    throw new InternalServerErrorException('数据库连接失败 CANARY_INTERNAL');
+  }
+  @Get('unavailable-cn')
+  unavailableCn() {
+    throw new ServiceUnavailableException('Redis 地址 CANARY_REDIS 连不上');
+  }
+  @Get('http-502')
+  http502() {
+    throw new HttpException('上游网关 CANARY_GATEWAY', 502);
   }
   @Get('rid') rid() {
     return { id: this.cls.getId() };
@@ -121,6 +136,36 @@ describe('server 骨架（T02）', () => {
         message: '服务器内部错误',
       });
       expect(JSON.stringify(r.body)).not.toContain('hunter2');
+    });
+  });
+
+  describe('5xx 不外露内部信息（T02 审查修正）', () => {
+    it('带中文说明的 500 也只返回公开文案', async () => {
+      const r = await request(app.getHttpServer())
+        .get('/demo/internal-cn')
+        .expect(500);
+      expect(r.body).toEqual({
+        code: ErrorCode.Internal,
+        data: null,
+        message: '服务器内部错误',
+      });
+    });
+    it('503 只返回「服务暂不可用」', async () => {
+      const r = await request(app.getHttpServer())
+        .get('/demo/unavailable-cn')
+        .expect(503);
+      expect(r.body).toEqual({
+        code: ErrorCode.ServiceUnavailable,
+        data: null,
+        message: '服务暂不可用',
+      });
+    });
+    it('其他 5xx 同样不外露', async () => {
+      const r = await request(app.getHttpServer())
+        .get('/demo/http-502')
+        .expect(502);
+      expect(JSON.stringify(r.body)).not.toContain('CANARY');
+      expect(r.body.code).toBe(ErrorCode.Internal);
     });
   });
 

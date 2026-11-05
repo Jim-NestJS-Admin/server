@@ -16,6 +16,19 @@ describe('validateEnv', () => {
     ).toBe(true);
   });
 
+  it('接口文档开关只认 true / false，拼错时启动失败（不会被静默当成 false）', () => {
+    expect(validateEnv({ SWAGGER_ENABLED: 'TRUE' }).SWAGGER_ENABLED).toBe(true);
+    expect(validateEnv({ SWAGGER_ENABLED: ' false ' }).SWAGGER_ENABLED).toBe(
+      false,
+    );
+    expect(() => validateEnv({ SWAGGER_ENABLED: 'flase' })).toThrow(
+      /SWAGGER_ENABLED/,
+    );
+    expect(() => validateEnv({ SWAGGER_ENABLED: 'yes' })).toThrow(
+      /SWAGGER_ENABLED/,
+    );
+  });
+
   it('端口不是数字时启动失败', () => {
     expect(() => validateEnv({ PORT: 'abc' })).toThrow(
       /环境变量校验失败[\s\S]*PORT/,
