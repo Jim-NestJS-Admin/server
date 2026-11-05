@@ -20,7 +20,9 @@ import {
 
 /** 端到端测试用的资源，只在测试里注册，不进正式应用 */
 @Entity('demo_user')
-@Index('uk_demo_user_username', ['tenantId', 'username'], { unique: true })
+@Index('uk_demo_user_username', ['tenantId', 'username', 'activeGuard'], {
+  unique: true,
+})
 export class DemoUserEntity extends BaseEntity {
   @CrudField({
     label: '账号',
@@ -130,7 +132,16 @@ export class DemoUserService extends BaseService<DemoUserEntity> {
   prefix: 'test/demo-user',
   label: '演示用户',
   entity: DemoUserEntity,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: [
+    'page',
+    'info',
+    'add',
+    'update',
+    'delete',
+    'recycle',
+    'restore',
+    'purge',
+  ],
   service: DemoUserService,
   pageQuery: {
     keyWords: ['username', 'nickname'],

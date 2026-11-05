@@ -19,7 +19,9 @@ import {
 
 /** 主子表演示：订单 + 明细 + 备注，只在测试里注册 */
 @Entity('demo_order')
-@Index('uk_demo_order_no', ['tenantId', 'orderNo'], { unique: true })
+@Index('uk_demo_order_no', ['tenantId', 'orderNo', 'activeGuard'], {
+  unique: true,
+})
 export class DemoOrderEntity extends BaseEntity {
   @CrudField({
     label: '单号',
@@ -116,7 +118,16 @@ export class DemoOrderTagEntity extends BaseEntity {
   prefix: 'test/demo-order',
   label: '演示订单',
   entity: DemoOrderEntity,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: [
+    'page',
+    'info',
+    'add',
+    'update',
+    'delete',
+    'recycle',
+    'restore',
+    'purge',
+  ],
   children: [
     {
       resource: 'items',

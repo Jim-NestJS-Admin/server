@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   Brackets,
   type DataSource,
@@ -10,10 +11,14 @@ import {
   type BaseEntity,
 } from './base.entity.js';
 import { crudErrors, translateDbError } from './crud.errors.js';
+import type { CrudAudit } from './crud-audit.js';
 import {
+  childRowsOf,
   deleteChildrenOf,
   loadChildren,
   planChildren,
+  purgeChildrenOf,
+  restoreChildrenOf,
   saveChildren,
 } from './crud-children.js';
 import type { CrudContextProvider, CrudScope } from './crud-scope.js';
@@ -43,6 +48,8 @@ export interface CrudBinding<T extends BaseEntity> {
   meta: CrudResourceMeta<T>;
   /** 查实体是不是某个主表的子表（由注册表提供） */
   childOwner: (entity: Function) => string | undefined;
+  /** 硬删除前留底 */
+  audit: CrudAudit;
 }
 
 const ALIAS = 'e';
@@ -101,6 +108,11 @@ export class BaseService<T extends BaseEntity> {
   /** 删除前：rows 是本批要删的全部数据，例如检查有没有被引用 */
   protected async beforeDelete(_rows: T[], _tx: CrudTx): Promise<void> {}
   protected async afterDelete(_rows: T[], _tx: CrudTx): Promise<void> {}
+  /** 从回收站恢复前：rows 是要恢复的数据（仍是已删除状态） */
+  protected async beforeRestore(_rows: T[], _tx: CrudTx): Promise<void> {}
+  protected async afterRestore(_rows: T[], _tx: CrudTx): Promise<void> {}
+  /** 彻底删除前：例如检查有没有被引用；抛异常整批不删 */
+  protected async beforePurge(_rows: T[], _tx: CrudTx): Promise<void> {}
 
   // ---------- 读 ----------
 
@@ -271,8 +283,24 @@ export class BaseService<T extends BaseEntity> {
         .getMany();
       if (rows.length !== unique.length) throw crudErrors.notFound();
       await this.beforeDelete(rows, tx);
+
+      if (this.meta.deleteMode === 'hard') {
+        // 真删之前把整行内容（含子行）留底
+        await this.crud.audit.hardDeleted(
+          {
+            resource: this.meta.prefix,
+            reason: 'delete',
+            ctx: tx.ctx,
+            rows,
+            children: await childRowsOf(tx, tx.meta, unique, false),
+          },
+          tx.manager,
+        );
+      }
+      // 这一次删除的主表和子行同一个批次，恢复主表时只恢复这一批子行
+      const batch = randomUUID();
       if (this.meta.children.length)
-        await deleteChildrenOf(tx, tx.meta, unique);
+        await deleteChildrenOf(tx, tx.meta, unique, batch);
 
       const base =
         this.meta.deleteMode === 'soft'
@@ -281,6 +309,7 @@ export class BaseService<T extends BaseEntity> {
               .update(this.meta.entity)
               .set({
                 deletedAt: () => 'CURRENT_TIMESTAMP(3)',
+                deleteBatch: batch,
                 updatedBy: tx.ctx.userId,
                 updatedAt: () => 'CURRENT_TIMESTAMP(3)',
               } as never)
@@ -297,6 +326,122 @@ export class BaseService<T extends BaseEntity> {
     });
   }
 
+  // ---------- 回收站（只有软删除的资源有） ----------
+
+  /** 回收站列表：只列已删除的数据，按删除时间倒序；搜索框和正常列表用同样的字段 */
+  async recyclePage(query: {
+    page?: number;
+    size?: number;
+    keyword?: string;
+  }): Promise<PageResult<CrudRow<T> & { deletedAt: Date }>> {
+    this.assertSoft();
+    const meta = this.meta;
+    const page = query.page ?? 1;
+    const size = query.size ?? 20;
+    const qb = this.deletedSelect(this.crud.dataSource.manager, 'recycle');
+    const keyword = query.keyword?.trim();
+    if (keyword && meta.keyWords.length)
+      qb.andWhere(
+        new Brackets((b) => {
+          for (const f of meta.keyWords)
+            b.orWhere(`${ALIAS}.\`${this.column(f)}\` LIKE :__kw`);
+        }),
+        { __kw: `%${escapeLike(keyword)}%` },
+      );
+    const [rows, total] = await qb
+      .orderBy(`${ALIAS}.deletedAt`, 'DESC')
+      .addOrderBy(`${ALIAS}.id`, 'DESC')
+      .offset((page - 1) * size)
+      .limit(size)
+      .getManyAndCount();
+    return {
+      list: rows.map((r) => ({
+        ...this.toRow(r),
+        deletedAt: r.deletedAt as Date,
+      })),
+      total,
+      page,
+      size,
+    };
+  }
+
+  /**
+   * 从回收站恢复，整批成败：有一条不在回收站（没删、不存在、无权访问）整批 404；
+   * 业务键已被新数据占用时数据库唯一约束（含 activeGuard）报冲突，整批回滚并提示，不会静默覆盖或改名。
+   * 子表只恢复和主表同一删除批次的行。
+   */
+  async restore(ids: string[]): Promise<{ count: number }> {
+    this.assertNotChild();
+    this.assertSoft();
+    const unique = [...new Set(ids)];
+    return this.transaction(async (tx) => {
+      const rows = await this.deletedSelect(tx.manager, 'restore')
+        .andWhere(`${ALIAS}.id IN (:...__ids)`, { __ids: unique })
+        .setLock('pessimistic_write')
+        .getMany();
+      if (rows.length !== unique.length) throw crudErrors.notFound();
+      await this.beforeRestore(rows, tx);
+      const qb = tx.manager
+        .createQueryBuilder()
+        .update(this.meta.entity)
+        .set({
+          deletedAt: null,
+          deleteBatch: null,
+          updatedBy: tx.ctx.userId,
+          updatedAt: () => 'CURRENT_TIMESTAMP(3)',
+        } as never)
+        .where('`id` IN (:...__ids)', { __ids: unique })
+        .andWhere('`deleted_at` IS NOT NULL');
+      for (const c of this.scope(tx, 'restore')) qb.andWhere(c.sql, c.params);
+      const result = await qb.execute();
+      if (result.affected !== unique.length) throw crudErrors.notFound();
+      if (this.meta.children.length)
+        await restoreChildrenOf(
+          tx,
+          tx.meta,
+          rows.map((r) => ({ id: String(r.id), batch: r.deleteBatch })),
+        );
+      await this.afterRestore(rows, tx);
+      return { count: unique.length };
+    });
+  }
+
+  /** 彻底删除回收站里的数据，整批成败；真删前把整行内容（含全部子行）留底 */
+  async purge(ids: string[]): Promise<{ count: number }> {
+    this.assertNotChild();
+    this.assertSoft();
+    const unique = [...new Set(ids)];
+    return this.transaction(async (tx) => {
+      const rows = await this.deletedSelect(tx.manager, 'purge')
+        .andWhere(`${ALIAS}.id IN (:...__ids)`, { __ids: unique })
+        .setLock('pessimistic_write')
+        .getMany();
+      if (rows.length !== unique.length) throw crudErrors.notFound();
+      await this.beforePurge(rows, tx);
+      await this.crud.audit.hardDeleted(
+        {
+          resource: this.meta.prefix,
+          reason: 'purge',
+          ctx: tx.ctx,
+          rows,
+          children: await childRowsOf(tx, tx.meta, unique, true),
+        },
+        tx.manager,
+      );
+      if (this.meta.children.length) await purgeChildrenOf(tx, tx.meta, unique);
+      const qb = tx.manager
+        .createQueryBuilder()
+        .delete()
+        .from(this.meta.entity)
+        .where('`id` IN (:...__ids)', { __ids: unique })
+        .andWhere('`deleted_at` IS NOT NULL');
+      for (const c of this.scope(tx, 'purge')) qb.andWhere(c.sql, c.params);
+      const result = await qb.execute();
+      if (result.affected !== unique.length) throw crudErrors.notFound();
+      return { count: unique.length };
+    });
+  }
+
   // ---------- 给子类和后续任务用的工具 ----------
 
   /**
@@ -309,6 +454,19 @@ export class BaseService<T extends BaseEntity> {
       throw new Error(
         `${this.meta.prefix} 的实体是 ${owner} 的子表，只能通过 ${owner} 的新增、修改一起保存`,
       );
+  }
+
+  private assertSoft(): void {
+    if (this.meta.deleteMode !== 'soft')
+      throw new Error(`${this.meta.prefix} 是硬删除资源，没有回收站`);
+  }
+
+  /** 只查已删除的数据（回收站用），同样带范围条件；删除批次一起取出来 */
+  private deletedSelect(manager: EntityManager, action: CrudAction) {
+    return this.select(manager, action)
+      .withDeleted()
+      .addSelect(`${ALIAS}.deleteBatch`)
+      .andWhere(`${ALIAS}.\`deleted_at\` IS NOT NULL`);
   }
 
   /** 开一个事务；里面的读写都要用 tx.manager */

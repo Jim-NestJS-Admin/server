@@ -40,7 +40,13 @@ const CHILD_BASE_READABLE = [
 const CHILD_RESOURCE = /^[a-z][a-zA-Z0-9]*$/;
 export const MAX_CHILD_ROWS = 1000;
 
-const FRAMEWORK_FIELDS = new Set([...BASE_READABLE, 'tenantId', 'deletedAt']);
+const FRAMEWORK_FIELDS = new Set([
+  ...BASE_READABLE,
+  'tenantId',
+  'deletedAt',
+  'activeGuard',
+  'deleteBatch',
+]);
 
 function validatedProps(entity: Function): Set<string> {
   return new Set(
@@ -153,12 +159,15 @@ export function resolveCrudMeta<T extends BaseEntity>(
   const fields = getCrudFields(options.entity);
   const names = new Set(fields.map((f) => f.property));
   for (const f of fields)
-    if (
-      BASE_READABLE.includes(f.property) ||
-      f.property === 'tenantId' ||
-      f.property === 'deletedAt'
-    )
+    if (FRAMEWORK_FIELDS.has(f.property))
       fail(`${f.property} 是框架维护的字段，不能用 @CrudField 声明`);
+
+  const deleteMode = options.delete ?? 'soft';
+  const recycleApis = options.api.filter(
+    (a) => a === 'recycle' || a === 'restore' || a === 'purge',
+  );
+  if (deleteMode === 'hard' && recycleApis.length)
+    fail(`硬删除的资源没有回收站，不能开放 ${recycleApis.join('、')}`);
 
   const addable = fields
     .filter((f) => (f.edit ?? 'both') !== 'none')
@@ -218,7 +227,7 @@ export function resolveCrudMeta<T extends BaseEntity>(
     permPrefix: options.prefix.replace(/\//g, ':'),
     entity: options.entity,
     api: [...options.api],
-    deleteMode: options.delete ?? 'soft',
+    deleteMode,
     fields,
     addable,
     updatable,

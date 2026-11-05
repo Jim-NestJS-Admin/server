@@ -17,3 +17,4 @@
 9. 业务错误抛 `BusinessException`，错误码统一维护在 `src/core/exceptions/error-code.ts`。
 10. 普通增删改查模块用 `@CrudController` + `BaseController`（`src/core/crud/`），业务字段用 `@CrudField` 声明，可写字段必须写 class-validator 校验；需要钩子时继承 `BaseService` 并放进模块 providers。自定义接口查数据用 `BaseService` 的 `select()`，**禁止**直接用 Repository 绕开租户和数据范围条件。
 11. 端到端测试连真实 MySQL 的测试库 `<DB_NAME>_test`（`deploy/docker-compose.yml` 首次启动时自动建好），测试会清空这个库，绝不能指向开发库或生产库。
+12. 唯一约束必须带租户：`@Index('uk_表_字段', ['tenantId', '业务字段', 'activeGuard'], { unique: true })`；软删除的表必须带 `activeGuard`，硬删除的表可以不带。写错启动时会报错。

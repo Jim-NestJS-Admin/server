@@ -61,6 +61,8 @@ export interface CrudDtos {
   Detail: Type;
   PageResult: Type;
   DeleteResult: Type;
+  RecyclePageBody: Type;
+  RecyclePageResult: Type;
 }
 
 /**
@@ -279,9 +281,42 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
   prop(PageResult, 'total', Number, [ApiProperty()]);
   prop(PageResult, 'page', Number, [ApiProperty()]);
   prop(PageResult, 'size', Number, [ApiProperty()]);
+  const RecyclePageBody = named(class {}, `${n}RecyclePageBody`);
+  prop(RecyclePageBody, 'page', Number, [
+    ApiPropertyOptional({ minimum: 1, default: 1 }),
+    IsOptional(),
+    IsInt(),
+    Min(1),
+  ]);
+  prop(RecyclePageBody, 'size', Number, [
+    ApiPropertyOptional({ minimum: 1, maximum: meta.maxSize, default: 20 }),
+    IsOptional(),
+    IsInt(),
+    Min(1),
+    Max(meta.maxSize, { message: `每页最多 ${meta.maxSize} 条` }),
+  ]);
+  prop(RecyclePageBody, 'keyword', String, [
+    ApiPropertyOptional({ maxLength: 100 }),
+    IsOptional(),
+    IsString(),
+    MaxLength(100),
+  ]);
+  const RecycleRow = named(
+    PickType(entity, meta.readable as never[]) as Type,
+    `${n}RecycleRow`,
+  );
+  prop(RecycleRow, 'deletedAt', String, [
+    ApiProperty({ type: String, format: 'date-time', description: '删除时间' }),
+  ]);
+  const RecyclePageResult = named(class {}, `${n}RecyclePageResult`);
+  prop(RecyclePageResult, 'list', Array, [ApiProperty({ type: [RecycleRow] })]);
+  prop(RecyclePageResult, 'total', Number, [ApiProperty()]);
+  prop(RecyclePageResult, 'page', Number, [ApiProperty()]);
+  prop(RecyclePageResult, 'size', Number, [ApiProperty()]);
+
   const DeleteResult = named(class {}, `${n}DeleteResult`);
   prop(DeleteResult, 'count', Number, [
-    ApiProperty({ description: '删除的行数' }),
+    ApiProperty({ description: '处理的行数' }),
   ]);
 
   return {
@@ -294,5 +329,7 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     Detail,
     PageResult,
     DeleteResult,
+    RecyclePageBody,
+    RecyclePageResult,
   };
 }

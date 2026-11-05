@@ -3,17 +3,30 @@ import type { EntityManager } from 'typeorm';
 import type { BaseEntity } from './base.entity.js';
 import type { CrudFieldMeta } from './crud-field.decorator.js';
 
-/** 按配置开放的接口。导出在 T18，回收站在 T03 验收点③ */
-export type CrudApi = 'page' | 'info' | 'add' | 'update' | 'delete';
+/**
+ * 按配置开放的接口。recycle / restore / purge 是回收站（列表、恢复、彻底删除），只有软删除的资源能开，
+ * 恢复和彻底删除各有独立的权限码（T06）。导出在 T18。
+ */
+export type CrudApi =
+  | 'page'
+  | 'info'
+  | 'add'
+  | 'update'
+  | 'delete'
+  | 'recycle'
+  | 'restore'
+  | 'purge';
 export const CRUD_APIS: readonly CrudApi[] = [
   'page',
   'info',
   'add',
   'update',
   'delete',
+  'recycle',
+  'restore',
+  'purge',
 ];
 
-/** 数据范围、字段权限等按「动作」区分 */
 export type CrudAction = CrudApi;
 
 export interface SortItem {
