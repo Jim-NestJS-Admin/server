@@ -7,8 +7,13 @@ import type { INestApplication } from '@nestjs/common';
 export async function exportOpenApi(
   outFile = resolve(process.cwd(), 'openapi/admin.json'),
 ): Promise<string> {
-  // 导出时不需要访问日志；模块在设置环境变量之后再加载，配置校验才能读到
+  // 导出时不需要访问日志，也不连数据库；模块在设置环境变量之后再加载，配置校验才能读到。
+  // 数据库配置给占位值，只为通过启动校验，导出过程不会用它们连接。
   process.env.LOG_LEVEL ??= 'silent';
+  process.env.OPENAPI_EXPORT = 'true';
+  process.env.DB_NAME ??= 'openapi_export';
+  process.env.DB_USER ??= 'openapi_export';
+  process.env.DB_PASSWORD ??= 'openapi_export';
   const { NestFactory } = await import('@nestjs/core');
   const { AppModule } = await import('../app.module.js');
   const { configureApp } = await import('../app.setup.js');

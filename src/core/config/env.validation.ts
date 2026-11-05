@@ -1,9 +1,11 @@
 import { plainToInstance, Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsNotEmpty,
   IsOptional,
   IsEnum,
   IsInt,
+  IsString,
   Max,
   Min,
   validateSync,
@@ -35,7 +37,7 @@ const toBool = ({ value }: { value: unknown }) => {
 
 /**
  * 启动时校验的环境变量。缺项或格式不对直接启动失败，不带病运行。
- * 新增配置项时同步写进 .env.example。数据库、Redis 等配置在用到它们的任务里再加入（T03、T04）。
+ * 新增配置项时同步写进 .env.example。Redis 配置在 T04 加入。
  */
 export class EnvironmentVariables {
   @IsEnum(NodeEnv)
@@ -57,6 +59,42 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsBoolean()
   SWAGGER_ENABLED?: boolean;
+
+  @IsString()
+  @IsNotEmpty()
+  DB_HOST: string = '127.0.0.1';
+
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  DB_PORT: number = 3306;
+
+  @IsString()
+  @IsNotEmpty()
+  DB_NAME!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  DB_USER!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  DB_PASSWORD!: string;
+
+  /** 启动时按实体自动建表。只允许测试环境打开，开发和生产都用迁移（T10） */
+  @Transform(toBool)
+  @IsOptional()
+  @IsBoolean()
+  DB_SYNCHRONIZE?: boolean;
+
+  /** 只给接口文档导出脚本用：导出时不连数据库。不要手动设置 */
+  @Transform(toBool)
+  @IsOptional()
+  @IsBoolean()
+  OPENAPI_EXPORT?: boolean;
 }
 
 export function validateEnv(
@@ -77,6 +115,11 @@ export function validateEnv(
       )
       .join('\n');
     throw new Error(`环境变量校验失败，服务不能启动：\n${detail}`);
+  }
+  if (env.DB_SYNCHRONIZE && env.NODE_ENV !== NodeEnv.Test) {
+    throw new Error(
+      '环境变量校验失败，服务不能启动：\nDB_SYNCHRONIZE 只允许在 NODE_ENV=test 时打开，开发和生产环境用迁移管理表结构',
+    );
   }
   if (env.SWAGGER_ENABLED === undefined) {
     env.SWAGGER_ENABLED = env.NODE_ENV !== NodeEnv.Production;

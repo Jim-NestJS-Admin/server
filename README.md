@@ -27,15 +27,29 @@ pnpm start:dev                                         # 开发模式，改代�
 | `pnpm lint` | 代码检查（oxlint，带类型检查规则） |
 | `pnpm typecheck` | TypeScript 类型检查 |
 | `pnpm test` | 单元测试（vitest） |
-| `pnpm test:e2e` | 端到端测试 |
+| `pnpm test:e2e` | 端到端测试（连真实 MySQL 的测试库，见下文） |
 | `pnpm format` / `pnpm format:check` | 格式化 / 检查格式（Prettier） |
 | `pnpm openapi:export` | 导出接口文档到 `openapi/admin.json`（改了接口就要跑并提交，前端据此生成代码） |
 
 提交前必须全部通过：`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:e2e`、`pnpm build`、`pnpm format:check`。
 
+### 端到端测试用的数据库
+
+端到端测试连 `.env` 里同一个 MySQL，但库名换成 `<DB_NAME>_test`（例如 `jim_admin_test`），并在测试环境自动建表。测试会清空这个库，**不要**让它指向开发库。
+
+- 第一次用 compose 启动 MySQL 时，`deploy/mysql-init/` 会自动建好测试库并授权给应用账号。
+- 如果 MySQL 数据卷是在加这个脚本之前建的（初始化脚本只在第一次执行），手动建一次：
+
+  ```bash
+  docker compose --env-file .env -f deploy/docker-compose.yml exec mysql \
+    sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}_test\`; GRANT ALL ON \`${MYSQL_DATABASE}_test\`.* TO \"$MYSQL_USER\"@\"%\";"'
+  ```
+
+- 想换测试库名，设置环境变量 `DB_TEST_NAME`。
+
 ## 当前状态
 
-已完成 T01（项目骨架）、T02（server 骨架）：
+已完成 T01（项目骨架）、T02（server 骨架），T03（通用 CRUD）进行中：
 
 - 启动时校验环境变量，缺项或格式不对直接启动失败（`src/core/config/`）
 - 结构化日志（Pino），带请求 ID，授权头、Cookie、密码、令牌、密钥自动隐去
@@ -43,4 +57,6 @@ pnpm start:dev                                         # 开发模式，改代�
 - 统一响应 `{ code, data, message }`，`code` 为 1000 表示成功；错误统一中文提示，未知错误不暴露内部信息
 - 全局参数校验，DTO 没声明的字段直接拒绝
 - 接口文档：开发环境访问 `/docs`，生产环境默认关闭
-- 健康检查 `GET /health`（数据库、Redis 检查在接入后注册）
+- 健康检查 `GET /health`（已注册数据库检查；Redis 在 T04 接入后注册）
+- 数据库：MySQL + TypeORM，表名、列名小写下划线，bigint 一律按字符串返回（`src/core/database/`）
+- 通用 CRUD 验收点①（`src/core/crud/`）：`@CrudController` 按配置生成分页、详情、新增、修改、删除接口和页面描述 `GET /admin/<资源>/schema`；乐观锁（编号 + 旧版本号 + 范围条件一条更新）、批量删除整批成败、软删除 / 硬删除、钩子在事务里执行；不存在和无权访问统一 404 / 4004，版本冲突 409 / 4009，参数和唯一冲突 400 / 4000

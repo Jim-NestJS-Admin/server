@@ -219,9 +219,9 @@ describe('server 骨架（T02）', () => {
   });
 
   describe('健康检查', () => {
-    it('原样返回，不包统一格式', async () => {
+    it('原样返回，不包统一格式；数据库检查已注册', async () => {
       const r = await request(app.getHttpServer()).get('/health').expect(200);
-      expect(r.body).toEqual({ status: 'ok', checks: {} });
+      expect(r.body).toEqual({ status: 'ok', checks: { database: 'ok' } });
     });
     it('注册的检查失败时返回 503', async () => {
       const health = app.get(HealthService);
@@ -231,7 +231,7 @@ describe('server 骨架（T02）', () => {
       const r = await request(app.getHttpServer()).get('/health').expect(503);
       expect(r.body).toEqual({
         status: 'error',
-        checks: { 'fake-db': 'error' },
+        checks: { database: 'ok', 'fake-db': 'error' },
       });
       health.register('fake-db', async () => {});
       await request(app.getHttpServer()).get('/health').expect(200);

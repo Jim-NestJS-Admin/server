@@ -11,8 +11,10 @@ import { HealthController } from './health/health.controller.js';
 import { HealthService } from './health/health.service.js';
 import { ResponseInterceptor } from './interceptors/response.interceptor.js';
 import { buildLoggerOptions } from './logger/logger.options.js';
+import { CrudModule } from './crud/crud.module.js';
+import { DatabaseModule } from './database/database.module.js';
 
-/** core 框架层：配置、日志、请求上下文、统一响应、异常处理、健康检查。业务模块不写在这里 */
+/** core 框架层：配置、日志、请求上下文、统一响应、异常处理、健康检查、数据库、通用 CRUD。业务模块不写在这里 */
 @Global()
 @Module({
   imports: [
@@ -37,6 +39,8 @@ import { buildLoggerOptions } from './logger/logger.options.js';
           pretty: config.nodeEnv === 'development',
         }),
     }),
+    DatabaseModule,
+    CrudModule,
   ],
   controllers: [HealthController],
   providers: [

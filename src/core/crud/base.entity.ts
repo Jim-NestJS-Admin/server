@@ -1,0 +1,78 @@
+import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
+import {
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Index,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+  VersionColumn,
+} from 'typeorm';
+
+/** 阶段 1 只有一个默认租户，T04 接入租户上下文后由框架按请求填充 */
+export const DEFAULT_TENANT_ID = '1';
+
+/**
+ * 所有业务表的基类（架构「核心框架层 · 实体基类」）。
+ * bigint 字段在 JS 里一律是字符串，前端也按字符串处理，避免超过安全整数丢精度。
+ * 这些字段都由框架维护，新增和修改接口不接受前端传入。
+ */
+export abstract class BaseEntity {
+  @ApiProperty({ description: '编号', type: String, example: '1' })
+  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
+  id: string;
+
+  @ApiHideProperty()
+  @Index()
+  @Column({ type: 'bigint', unsigned: true, default: DEFAULT_TENANT_ID })
+  tenantId: string;
+
+  @ApiProperty({ description: '创建人', type: String, nullable: true })
+  @Column({ type: 'bigint', unsigned: true, nullable: true })
+  createdBy: string | null;
+
+  @ApiProperty({ description: '修改人', type: String, nullable: true })
+  @Column({ type: 'bigint', unsigned: true, nullable: true })
+  updatedBy: string | null;
+
+  @ApiProperty({ description: '创建时间', type: String, format: 'date-time' })
+  @CreateDateColumn({
+    type: 'datetime',
+    precision: 3,
+    default: () => 'CURRENT_TIMESTAMP(3)',
+  })
+  createdAt: Date;
+
+  @ApiProperty({ description: '修改时间', type: String, format: 'date-time' })
+  @UpdateDateColumn({
+    type: 'datetime',
+    precision: 3,
+    default: () => 'CURRENT_TIMESTAMP(3)',
+    onUpdate: 'CURRENT_TIMESTAMP(3)',
+  })
+  updatedAt: Date;
+
+  /** 乐观锁版本号：修改时带上读到的值，每次修改加 1 */
+  @ApiProperty({ description: '版本号，修改时原样带回', type: Number })
+  @VersionColumn({ type: 'int', unsigned: true })
+  version: number;
+
+  @ApiHideProperty()
+  @DeleteDateColumn({ type: 'datetime', precision: 3, nullable: true })
+  deletedAt: Date | null;
+}
+
+/** 由框架维护、任何时候都不允许前端写入的字段 */
+export const SYSTEM_FIELDS = [
+  'id',
+  'tenantId',
+  'createdBy',
+  'updatedBy',
+  'createdAt',
+  'updatedAt',
+  'version',
+  'deletedAt',
+] as const;
+
+/** 不在接口响应里出现的内部字段 */
+export const INTERNAL_FIELDS = ['tenantId', 'deletedAt'] as const;
