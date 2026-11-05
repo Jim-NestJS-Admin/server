@@ -1,4 +1,4 @@
-import { CENSOR, sanitizeUrl, scrub } from './sanitize.js';
+import { CENSOR, sanitizeReferer, sanitizeUrl, scrub } from './sanitize.js';
 
 describe('日志清洗 scrub', () => {
   it('根级、嵌套、数组里的敏感字段都隐去，普通字段保留', () => {
@@ -50,5 +50,19 @@ describe('URL 查询参数清理 sanitizeUrl', () => {
   it('没有查询参数时原样返回', () => {
     expect(sanitizeUrl('/health')).toBe('/health');
     expect(sanitizeUrl(undefined)).toBeUndefined();
+  });
+});
+
+describe('来源页清理 sanitizeReferer', () => {
+  it('只保留协议、域名和路径', () => {
+    expect(
+      sanitizeReferer('https://u:p@a.example.com:8443/x/y?code=1#t=2'),
+    ).toBe('https://a.example.com:8443/x/y');
+  });
+  it('非网页地址、解析失败、空值都返回 undefined', () => {
+    expect(sanitizeReferer('javascript:alert(1)')).toBeUndefined();
+    expect(sanitizeReferer('not a url')).toBeUndefined();
+    expect(sanitizeReferer('')).toBeUndefined();
+    expect(sanitizeReferer(['https://a.example.com/'])).toBeUndefined();
   });
 });

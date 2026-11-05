@@ -52,14 +52,14 @@ export function sanitizeUrl(url: string | undefined): string | undefined {
   const q = url.indexOf('?');
   const path = url.slice(0, q);
   const params = new URLSearchParams(url.slice(q + 1));
-  for (const key of [...new Set(params.keys())]) {
+  for (const key of new Set(params.keys())) {
     if (isSensitiveKey(key) || SENSITIVE_QUERY.has(key.toLowerCase()))
       params.set(key, CENSOR);
   }
   return `${path}?${params.toString()}`;
 }
 
-/** 请求头只记录这些，其余（授权、Cookie、各种密钥头）一律不记 */
+/** 请求头只记录这些，其余（授权、Cookie、各种密钥头）一律不记；referer 只留来源页的域名和路径 */
 const REQ_HEADERS = [
   'host',
   'user-agent',
@@ -71,11 +71,29 @@ const REQ_HEADERS = [
 ];
 const RES_HEADERS = ['content-type', 'content-length', 'x-request-id'];
 
+/**
+ * 来源页只记「协议 + 域名 + 路径」：查询参数、#后面的内容、URL 里的账号密码都丢掉，
+ * 因为第三方回跳地址常把 code、token 放在这些位置。解析不了的值整个不记。
+ */
+export function sanitizeReferer(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value) return undefined;
+  try {
+    const u = new URL(value);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return undefined;
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    return undefined;
+  }
+}
+
 function pick(headers: unknown, keys: string[]): Record<string, unknown> {
   const h = (headers ?? {}) as Record<string, unknown>;
-  return Object.fromEntries(
-    keys.filter((k) => h[k] !== undefined).map((k) => [k, h[k]]),
-  );
+  const out: Record<string, unknown> = {};
+  for (const k of keys) {
+    const v = k === 'referer' ? sanitizeReferer(h[k]) : h[k];
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
 }
 
 interface SerializedReq {
