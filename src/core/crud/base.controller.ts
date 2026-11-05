@@ -131,12 +131,12 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
     return this.service.recyclePage(body);
   }
 
-  restore(body: { ids: string[] }) {
-    return this.service.restore(body.ids);
+  restore(body: { items: { id: string; version: number }[] }) {
+    return this.service.restore(body.items);
   }
 
-  purge(body: { ids: string[] }) {
-    return this.service.purge(body.ids);
+  purge(body: { items: { id: string; version: number }[] }) {
+    return this.service.purge(body.items);
   }
 
   schema() {

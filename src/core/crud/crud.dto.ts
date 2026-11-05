@@ -63,6 +63,7 @@ export interface CrudDtos {
   DeleteResult: Type;
   RecyclePageBody: Type;
   RecyclePageResult: Type;
+  RecycleActionBody: Type;
 }
 
 /**
@@ -314,6 +315,30 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
   prop(RecyclePageResult, 'page', Number, [ApiProperty()]);
   prop(RecyclePageResult, 'size', Number, [ApiProperty()]);
 
+  // 恢复、彻底删除：每行带上回收站里读到的版本号
+  const RecycleItem = named(class {}, `${n}RecycleItem`);
+  prop(RecycleItem, 'id', String, [
+    ApiProperty({ type: String, example: '1' }),
+    Matches(ID_PATTERN, { message: ID_MESSAGE }),
+  ]);
+  prop(RecycleItem, 'version', Number, [
+    ApiProperty({
+      description: '回收站列表里读到的版本号，原样带回',
+      minimum: 1,
+    }),
+    IsInt(),
+    Min(1),
+  ]);
+  const RecycleActionBody = named(class {}, `${n}RecycleActionBody`);
+  prop(RecycleActionBody, 'items', Array, [
+    ApiProperty({ type: [RecycleItem], minItems: 1, maxItems: MAX_BATCH }),
+    IsArray(),
+    ArrayMinSize(1),
+    ArrayMaxSize(MAX_BATCH),
+    ValidateNested({ each: true }),
+    TransformType(() => RecycleItem),
+  ]);
+
   const DeleteResult = named(class {}, `${n}DeleteResult`);
   prop(DeleteResult, 'count', Number, [
     ApiProperty({ description: '处理的行数' }),
@@ -331,5 +356,6 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     DeleteResult,
     RecyclePageBody,
     RecyclePageResult,
+    RecycleActionBody,
   };
 }

@@ -8,8 +8,10 @@ export interface HardDeleteEvent {
   /** delete：硬删除资源的删除；purge：回收站彻底删除 */
   reason: 'delete' | 'purge';
   ctx: CrudContext;
-  /** 删除前的整行内容（含未声明的内部列） */
+  /** 删除前的整行内容（含未声明的内部列）；只删了子行时为空数组 */
   rows: object[];
+  /** 只删了子行（修改主表时 children.deleted）时，子行所属的主表编号 */
+  masterId?: string;
   /** 随主表一起真删的子行，按子表名分组 */
   children: Record<string, object[]>;
 }
@@ -40,6 +42,7 @@ export class LoggerCrudAudit extends CrudAudit {
       reason: event.reason,
       tenantId: event.ctx.tenantId,
       userId: event.ctx.userId,
+      masterId: event.masterId,
       count: event.rows.length,
       rows: event.rows,
       children: event.children,

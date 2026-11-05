@@ -214,7 +214,8 @@ export class BaseService<T extends BaseEntity> {
             deleted: [],
           },
       );
-      if (all.length) await saveChildren(tx, tx.meta, id, all, true);
+      if (all.length)
+        await saveChildren(tx, tx.meta, id, all, this.crud.audit, true);
       const row = await this.findOne(tx.manager, id, 'add');
       if (!row) throw new Error(`新增后读不到数据：${this.meta.prefix} ${id}`);
       await this.afterAdd(row, tx);
@@ -264,7 +265,8 @@ export class BaseService<T extends BaseEntity> {
       const result = await qb.execute();
       // 读到时版本一致、更新时 0 行：说明这期间被别人改了或删了
       if (!result.affected) throw crudErrors.versionConflict();
-      if (plans.length) await saveChildren(tx, tx.meta, id, plans);
+      if (plans.length)
+        await saveChildren(tx, tx.meta, id, plans, this.crud.audit);
 
       const row = await this.findOne(tx.manager, id, 'update');
       if (!row) throw crudErrors.notFound();
@@ -366,20 +368,19 @@ export class BaseService<T extends BaseEntity> {
   }
 
   /**
-   * 从回收站恢复，整批成败：有一条不在回收站（没删、不存在、无权访问）整批 404；
-   * 业务键已被新数据占用时数据库唯一约束（含 activeGuard）报冲突，整批回滚并提示，不会静默覆盖或改名。
+   * 从回收站恢复，整批成败。每行带上用户在回收站里看到的版本号：
+   * - 有一条不在回收站（没删、不存在、无权访问）整批 404；
+   * - 版本号对不上（这期间被恢复、改过又删了，或者被别人处理过）整批 409，避免按过期的确认操作新的删除批次；
+   * - 业务键已被新数据占用时数据库唯一约束（含 activeGuard）报冲突，整批回滚并提示，不会静默覆盖或改名。
    * 子表只恢复和主表同一删除批次的行。
    */
-  async restore(ids: string[]): Promise<{ count: number }> {
+  async restore(
+    items: { id: string; version: number }[],
+  ): Promise<{ count: number }> {
     this.assertNotChild();
     this.assertSoft();
-    const unique = [...new Set(ids)];
     return this.transaction(async (tx) => {
-      const rows = await this.deletedSelect(tx.manager, 'restore')
-        .andWhere(`${ALIAS}.id IN (:...__ids)`, { __ids: unique })
-        .setLock('pessimistic_write')
-        .getMany();
-      if (rows.length !== unique.length) throw crudErrors.notFound();
+      const rows = await this.lockRecycled(tx, items, 'restore');
       await this.beforeRestore(rows, tx);
       const qb = tx.manager
         .createQueryBuilder()
@@ -390,11 +391,11 @@ export class BaseService<T extends BaseEntity> {
           updatedBy: tx.ctx.userId,
           updatedAt: () => 'CURRENT_TIMESTAMP(3)',
         } as never)
-        .where('`id` IN (:...__ids)', { __ids: unique })
         .andWhere('`deleted_at` IS NOT NULL');
+      this.whereIdVersion(qb, items);
       for (const c of this.scope(tx, 'restore')) qb.andWhere(c.sql, c.params);
       const result = await qb.execute();
-      if (result.affected !== unique.length) throw crudErrors.notFound();
+      if (result.affected !== items.length) throw crudErrors.versionConflict();
       if (this.meta.children.length)
         await restoreChildrenOf(
           tx,
@@ -402,21 +403,19 @@ export class BaseService<T extends BaseEntity> {
           rows.map((r) => ({ id: String(r.id), batch: r.deleteBatch })),
         );
       await this.afterRestore(rows, tx);
-      return { count: unique.length };
+      return { count: items.length };
     });
   }
 
-  /** 彻底删除回收站里的数据，整批成败；真删前把整行内容（含全部子行）留底 */
-  async purge(ids: string[]): Promise<{ count: number }> {
+  /** 彻底删除回收站里的数据，整批成败，版本号规则同恢复；真删前把整行内容（含全部子行）留底 */
+  async purge(
+    items: { id: string; version: number }[],
+  ): Promise<{ count: number }> {
     this.assertNotChild();
     this.assertSoft();
-    const unique = [...new Set(ids)];
     return this.transaction(async (tx) => {
-      const rows = await this.deletedSelect(tx.manager, 'purge')
-        .andWhere(`${ALIAS}.id IN (:...__ids)`, { __ids: unique })
-        .setLock('pessimistic_write')
-        .getMany();
-      if (rows.length !== unique.length) throw crudErrors.notFound();
+      const rows = await this.lockRecycled(tx, items, 'purge');
+      const ids = rows.map((r) => String(r.id));
       await this.beforePurge(rows, tx);
       await this.crud.audit.hardDeleted(
         {
@@ -424,22 +423,58 @@ export class BaseService<T extends BaseEntity> {
           reason: 'purge',
           ctx: tx.ctx,
           rows,
-          children: await childRowsOf(tx, tx.meta, unique, true),
+          children: await childRowsOf(tx, tx.meta, ids, true),
         },
         tx.manager,
       );
-      if (this.meta.children.length) await purgeChildrenOf(tx, tx.meta, unique);
+      if (this.meta.children.length) await purgeChildrenOf(tx, tx.meta, ids);
       const qb = tx.manager
         .createQueryBuilder()
         .delete()
         .from(this.meta.entity)
-        .where('`id` IN (:...__ids)', { __ids: unique })
         .andWhere('`deleted_at` IS NOT NULL');
+      this.whereIdVersion(qb, items);
       for (const c of this.scope(tx, 'purge')) qb.andWhere(c.sql, c.params);
       const result = await qb.execute();
-      if (result.affected !== unique.length) throw crudErrors.notFound();
-      return { count: unique.length };
+      if (result.affected !== items.length) throw crudErrors.versionConflict();
+      return { count: items.length };
     });
+  }
+
+  /** 锁住回收站里的这些行：缺任何一行整批 404，有版本号对不上整批 409 */
+  private async lockRecycled(
+    tx: CrudTx,
+    items: { id: string; version: number }[],
+    action: CrudAction,
+  ): Promise<T[]> {
+    const ids = items.map((i) => i.id);
+    if (new Set(ids).size !== ids.length)
+      throw crudErrors.badRequest('同一行出现了多次', [
+        { field: 'items', messages: ['同一行出现了多次'] },
+      ]);
+    const rows = await this.deletedSelect(tx.manager, action)
+      .andWhere(`${ALIAS}.id IN (:...__ids)`, { __ids: ids })
+      .setLock('pessimistic_write')
+      .getMany();
+    if (rows.length !== ids.length) throw crudErrors.notFound();
+    const current = new Map(rows.map((r) => [String(r.id), r.version]));
+    if (items.some((i) => current.get(i.id) !== i.version))
+      throw crudErrors.versionConflict();
+    return rows;
+  }
+
+  /** 「编号 + 版本号」逐行条件：(id, version) IN ((?, ?), ...) */
+  private whereIdVersion(
+    qb: { andWhere: (sql: string, params?: object) => unknown },
+    items: { id: string; version: number }[],
+  ): void {
+    const params: Record<string, unknown> = {};
+    const tuples = items.map((it, n) => {
+      params[`__i${n}`] = it.id;
+      params[`__v${n}`] = it.version;
+      return `(:__i${n}, :__v${n})`;
+    });
+    qb.andWhere(`(\`id\`, \`version\`) IN (${tuples.join(', ')})`, params);
   }
 
   // ---------- 给子类和后续任务用的工具 ----------

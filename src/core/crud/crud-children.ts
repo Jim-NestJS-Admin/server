@@ -4,6 +4,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate, type ValidationError } from 'class-validator';
 import type { DataSource, EntityManager } from 'typeorm';
 import { SYSTEM_FIELDS } from './base.entity.js';
+import type { CrudAudit } from './crud-audit.js';
 import { ID_PATTERN, MAX_BATCH } from './crud.dto.js';
 import { crudErrors, type CrudFieldError } from './crud.errors.js';
 import type { CrudChildMeta, CrudResourceMeta, CrudTx } from './crud.types.js';
@@ -321,6 +322,7 @@ export async function saveChildren(
   meta: CrudResourceMeta,
   masterId: string,
   plans: ChildPlan[],
+  audit: CrudAudit,
   isNew = false,
 ): Promise<void> {
   const errors: CrudFieldError[] = [];
@@ -412,7 +414,7 @@ export async function saveChildren(
   if (errors.length)
     throw crudErrors.badRequest('明细有误，请修正标红的行', errors);
 
-  for (const { plan } of work) {
+  for (const { plan, current } of work) {
     const { child } = plan;
     const em = tx.manager.connection.getMetadata(child.entity);
     const fk = em.findColumnWithPropertyName(child.foreignKey)!.databaseName;
@@ -423,6 +425,21 @@ export async function saveChildren(
     };
 
     if (plan.deleted.length) {
+      // 硬删除模式下单独删的子行也是真删：删之前在同一事务里留底，留底失败整个保存回滚
+      if (meta.deleteMode === 'hard')
+        await audit.hardDeleted(
+          {
+            resource: meta.prefix,
+            reason: 'delete',
+            ctx: tx.ctx,
+            rows: [],
+            masterId,
+            children: {
+              [child.resource]: plan.deleted.map((id) => current.get(id)!),
+            },
+          },
+          tx.manager,
+        );
       const del =
         meta.deleteMode === 'soft'
           ? tx.manager

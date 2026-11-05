@@ -128,18 +128,18 @@ export function CrudController<T extends BaseEntity>(
         method: 'restore',
         http: 'post',
         summary: `从回收站恢复${label}（整批成败）`,
-        body: dtos.DeleteBody,
+        body: dtos.RecycleActionBody,
         result: dtos.DeleteResult,
-        errors: [400, 404],
+        errors: [400, 404, 409],
       },
       {
         api: 'purge',
         method: 'purge',
         http: 'post',
         summary: `彻底删除${label}（整批成败，不能撤销）`,
-        body: dtos.DeleteBody,
+        body: dtos.RecycleActionBody,
         result: dtos.DeleteResult,
-        errors: [400, 404],
+        errors: [400, 404, 409],
       },
     ];
     const enabled = specs.filter((s) => s.api && meta.api.includes(s.api));

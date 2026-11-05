@@ -6,8 +6,13 @@ import type { App } from 'supertest/types.js';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
+import { APP_VERSION } from '../src/app.version.js';
+import { buildOpenApiDocument } from '../src/core/swagger/swagger.js';
 import { CrudAudit, type HardDeleteEvent } from '../src/core/crud/index.js';
 import {
+  DemoHardLineEntity,
+  DemoHardOrderController,
+  DemoHardOrderEntity,
   DemoOrderController,
   DemoOrderEntity,
   DemoOrderItemEntity,
@@ -30,8 +35,10 @@ describe('删除方式与回收站（验收点③）', () => {
   let app: INestApplication<App>;
   let ds: DataSource;
   const audits: HardDeleteEvent[] = [];
+  let auditFails = false;
   const recorder: CrudAudit = {
     hardDeleted: async (e: HardDeleteEvent) => {
+      if (auditFails) throw new Error('留底失败');
       audits.push(e);
     },
   };
@@ -53,6 +60,18 @@ describe('删除方式与回收站（验收点③）', () => {
       id: string;
       version: number;
     };
+  /** 恢复、彻底删除的请求体：每行带上库里当前的版本号（等于回收站列表里看到的） */
+  const items = async (table: string, ids: string[]) => {
+    const rows = (await ds.query(
+      `SELECT id, version FROM ${table} WHERE id IN (?)`,
+      [ids],
+    )) as {
+      id: string;
+      version: number;
+    }[];
+    const v = new Map(rows.map((r) => [String(r.id), r.version]));
+    return { items: ids.map((id) => ({ id, version: v.get(id) ?? 1 })) };
+  };
   const item = (clientId: string, productCode: string) => ({
     clientId,
     productCode,
@@ -81,9 +100,16 @@ describe('删除方式与回收站（验收点③）', () => {
           DemoOrderItemEntity,
           DemoOrderNoteEntity,
           DemoOrderTagEntity,
+          DemoHardOrderEntity,
+          DemoHardLineEntity,
         ]),
       ],
-      controllers: [DemoUserController, DemoLogController, DemoOrderController],
+      controllers: [
+        DemoUserController,
+        DemoLogController,
+        DemoOrderController,
+        DemoHardOrderController,
+      ],
       providers: [DemoUserService],
     })
       .overrideProvider(CrudAudit)
@@ -112,6 +138,7 @@ describe('删除方式与回收站（验收点③）', () => {
     ])
       await ds.query(`DELETE FROM ${t}`);
     audits.length = 0;
+    auditFails = false;
   });
 
   describe('软删除下的唯一约束（activeGuard）', () => {
@@ -184,7 +211,7 @@ describe('删除方式与回收站（验收点③）', () => {
     it('恢复：重新可见，版本号加 1，删除标记和批次清空', async () => {
       const a = await addUser('restore-me');
       await user('delete', { ids: [a.id] }).expect(200);
-      await user('restore', { ids: [a.id] }).expect(200);
+      await user('restore', await items('demo_user', [a.id])).expect(200);
       const info = await user('info', { id: a.id }).expect(200);
       expect(info.body.data.version).toBe(3);
       const [db] = await ds.query(
@@ -202,7 +229,10 @@ describe('删除方式与回收站（验收点③）', () => {
       const old = await addUser('taken');
       await user('delete', { ids: [old.id] }).expect(200);
       await addUser('taken');
-      const res = await user('restore', { ids: [old.id] }).expect(400);
+      const res = await user(
+        'restore',
+        await items('demo_user', [old.id]),
+      ).expect(400);
       expect(res.body).toMatchObject({ code: 4000, message: '账号已存在' });
       const [db] = await ds.query(
         'SELECT deleted_at, username FROM demo_user WHERE id = ?',
@@ -217,7 +247,7 @@ describe('删除方式与回收站（验收点③）', () => {
       const b = await addUser('batch-b');
       await user('delete', { ids: [a.id, b.id] }).expect(200);
       await addUser('batch-b');
-      await user('restore', { ids: [a.id, b.id] }).expect(400);
+      await user('restore', await items('demo_user', [a.id, b.id])).expect(400);
       await user('info', { id: a.id }).expect(404);
     });
 
@@ -232,7 +262,10 @@ describe('删除方式与回收站（验收点③）', () => {
       for (const action of ['restore', 'purge']) {
         const bodies = [];
         for (const bad of [alive.id, '999999', other]) {
-          const res = await user(action, { ids: [gone.id, bad] }).expect(404);
+          const res = await user(
+            action,
+            await items('demo_user', [gone.id, bad]),
+          ).expect(404);
           bodies.push(res.body);
         }
         expect(bodies[1]).toEqual(bodies[0]);
@@ -249,7 +282,7 @@ describe('删除方式与回收站（验收点③）', () => {
     it('彻底删除：真的删掉，删除前把整行内容留底（含内部列）', async () => {
       const a = await addUser('purge-me', { remark: '留底' });
       await user('delete', { ids: [a.id] }).expect(200);
-      await user('purge', { ids: [a.id] }).expect(200);
+      await user('purge', await items('demo_user', [a.id])).expect(200);
       const rows = await ds.query('SELECT id FROM demo_user WHERE id = ?', [
         a.id,
       ]);
@@ -269,8 +302,72 @@ describe('删除方式与回收站（验收点③）', () => {
 
     it('没删除的数据不能直接彻底删除', async () => {
       const a = await addUser('not-deleted');
-      await user('purge', { ids: [a.id] }).expect(404);
+      await user('purge', await items('demo_user', [a.id])).expect(404);
       await user('info', { id: a.id }).expect(200);
+    });
+  });
+
+  describe('恢复、彻底删除核对版本号', () => {
+    it('按过期的确认恢复：恢复→修改→再删除之后，拿第一次删除时的版本号恢复 409，用新版本号才行', async () => {
+      const a = await addUser('ver');
+      await user('delete', { ids: [a.id] }).expect(200);
+      const stale = await items('demo_user', [a.id]);
+      await user('restore', stale).expect(200);
+      await user('update', {
+        id: a.id,
+        version: 3,
+        data: { nickname: '改过' },
+      }).expect(200);
+      await user('delete', { ids: [a.id] }).expect(200);
+      const res = await user('restore', stale).expect(409);
+      expect(res.body.code).toBe(4009);
+      await user('purge', stale).expect(409);
+      const [db] = await ds.query(
+        'SELECT deleted_at, nickname FROM demo_user WHERE id = ?',
+        [a.id],
+      );
+      expect(db.deleted_at).not.toBeNull();
+      await user('restore', await items('demo_user', [a.id])).expect(200);
+    });
+
+    it('一批里有一行版本号过期：整批 409，一行都不恢复', async () => {
+      const a = await addUser('mix-a');
+      const b = await addUser('mix-b');
+      await user('delete', { ids: [a.id, b.id] }).expect(200);
+      const body = await items('demo_user', [a.id, b.id]);
+      body.items[1].version -= 1;
+      await user('restore', body).expect(409);
+      const rows = await ds.query(
+        'SELECT deleted_at FROM demo_user WHERE id IN (?, ?)',
+        [a.id, b.id],
+      );
+      for (const r of rows) expect(r.deleted_at).not.toBeNull();
+    });
+
+    it('主子表按过期版本号恢复：409，主表和明细都还在回收站', async () => {
+      const o = await addOrder('V-1');
+      await order('delete', { ids: [o.id] }).expect(200);
+      const body = await items('demo_order', [o.id]);
+      body.items[0].version = 1;
+      await order('restore', body).expect(409);
+      const its = await ds.query(
+        'SELECT deleted_at FROM demo_order_item WHERE order_id = ?',
+        [o.id],
+      );
+      for (const i of its) expect(i.deleted_at).not.toBeNull();
+    });
+
+    it('同一行出现两次、缺版本号：400', async () => {
+      const a = await addUser('dup-item');
+      await user('delete', { ids: [a.id] }).expect(200);
+      await user('restore', {
+        items: [
+          { id: a.id, version: 2 },
+          { id: a.id, version: 2 },
+        ],
+      }).expect(400);
+      await user('restore', { items: [{ id: a.id }] }).expect(400);
+      await user('restore', { ids: [a.id] }).expect(400);
     });
   });
 
@@ -293,7 +390,7 @@ describe('删除方式与回收站（验收点③）', () => {
         new Set(batches.map((b: { delete_batch: string }) => b.delete_batch))
           .size,
       ).toBe(2);
-      await order('restore', { ids: [o.id] }).expect(200);
+      await order('restore', await items('demo_order', [o.id])).expect(200);
       const info = await order('info', { id: o.id }).expect(200);
       expect(
         info.body.data.children.items.map((r: { id: string }) => r.id),
@@ -310,19 +407,22 @@ describe('删除方式与回收站（验收点③）', () => {
       const b = await addOrder('C-2');
       await order('delete', { ids: [a.id, b.id] }).expect(200);
       await addOrder('C-2');
-      const res = await order('restore', { ids: [a.id, b.id] }).expect(400);
+      const res = await order(
+        'restore',
+        await items('demo_order', [a.id, b.id]),
+      ).expect(400);
       expect(res.body.message).toBe('单号已存在');
       const masters = await ds.query(
         'SELECT deleted_at FROM demo_order WHERE id IN (?, ?)',
         [a.id, b.id],
       );
       for (const m of masters) expect(m.deleted_at).not.toBeNull();
-      const items = await ds.query(
+      const childRows = await ds.query(
         'SELECT deleted_at FROM demo_order_item WHERE order_id IN (?, ?)',
         [a.id, b.id],
       );
-      expect(items).toHaveLength(4);
-      for (const i of items) expect(i.deleted_at).not.toBeNull();
+      expect(childRows).toHaveLength(4);
+      for (const i of childRows) expect(i.deleted_at).not.toBeNull();
     });
 
     it('彻底删除主表：主表和它名下全部明细（包括之前单独删的）一起真删，留底里有明细', async () => {
@@ -334,7 +434,7 @@ describe('删除方式与回收站（验收点③）', () => {
         children: { items: { deleted: [o.children.items[0].id] } },
       }).expect(200);
       await order('delete', { ids: [o.id] }).expect(200);
-      await order('purge', { ids: [o.id] }).expect(200);
+      await order('purge', await items('demo_order', [o.id])).expect(200);
       const left = await ds.query(
         'SELECT COUNT(*) n FROM demo_order_item WHERE order_id = ?',
         [o.id],
@@ -342,6 +442,124 @@ describe('删除方式与回收站（验收点③）', () => {
       expect(Number(left[0].n)).toBe(0);
       expect(audits).toHaveLength(1);
       expect((audits[0].children.items as object[]).length).toBe(2);
+    });
+  });
+
+  describe('硬删除的主子表', () => {
+    const hard = (path: string, body: unknown) =>
+      http()
+        .post(`/admin/test/demo-hard-order/${path}`)
+        .send(body as object);
+    const create = async () =>
+      (
+        await hard('add', {
+          data: { title: '硬' },
+          children: {
+            lines: {
+              added: [
+                { clientId: 'a', content: '一' },
+                { clientId: 'b', content: '二' },
+              ],
+            },
+          },
+        }).expect(200)
+      ).body.data as { id: string; children: { lines: { id: string }[] } };
+
+    it('修改时单独删的子行：真删前在同一事务里留底，带主表编号', async () => {
+      const o = await create();
+      const [l1] = o.children.lines;
+      await hard('update', {
+        id: o.id,
+        version: 1,
+        data: {},
+        children: { lines: { deleted: [l1.id] } },
+      }).expect(200);
+      expect(audits).toHaveLength(1);
+      expect(audits[0]).toMatchObject({
+        resource: 'test/demo-hard-order',
+        reason: 'delete',
+        masterId: o.id,
+        rows: [],
+      });
+      expect(audits[0].children.lines).toEqual([
+        expect.objectContaining({ id: l1.id, content: '一' }),
+      ]);
+      const left = await ds.query(
+        'SELECT id FROM demo_hard_line WHERE id = ?',
+        [l1.id],
+      );
+      expect(left).toHaveLength(0);
+    });
+
+    it('留底失败：整个保存回滚，子行还在，主表版本号不变', async () => {
+      const o = await create();
+      auditFails = true;
+      await hard('update', {
+        id: o.id,
+        version: 1,
+        data: { title: '改' },
+        children: { lines: { deleted: [o.children.lines[0].id] } },
+      }).expect(500);
+      const lines = await ds.query(
+        'SELECT id FROM demo_hard_line WHERE order_id = ?',
+        [o.id],
+      );
+      expect(lines).toHaveLength(2);
+      const [m] = await ds.query(
+        'SELECT version, title FROM demo_hard_order WHERE id = ?',
+        [o.id],
+      );
+      expect(m).toMatchObject({ version: 1, title: '硬' });
+    });
+
+    it('删除整张主表：只留底一次（主表 + 全部子行），然后全部真删', async () => {
+      const o = await create();
+      await hard('delete', { ids: [o.id] }).expect(200);
+      expect(audits).toHaveLength(1);
+      expect(audits[0].rows).toHaveLength(1);
+      expect(audits[0].children.lines).toHaveLength(2);
+      const [{ n }] = await ds.query(
+        'SELECT COUNT(*) n FROM demo_hard_line WHERE order_id = ?',
+        [o.id],
+      );
+      expect(Number(n)).toBe(0);
+    });
+  });
+
+  describe('接口文档', () => {
+    it('页面描述的 api 枚举包含回收站动作；恢复和彻底删除的请求带版本号、文档有 409', () => {
+      const doc = buildOpenApiDocument(app, APP_VERSION);
+      const schemas = doc.components?.schemas ?? {};
+      const api = (
+        schemas.CrudSchema as {
+          properties: { api: { items: { enum: string[] } } };
+        }
+      ).properties.api;
+      expect(api.items.enum).toEqual([
+        'page',
+        'info',
+        'add',
+        'update',
+        'delete',
+        'recycle',
+        'restore',
+        'purge',
+      ]);
+      const item = schemas.TestDemoUserRecycleItem as {
+        properties: Record<string, unknown>;
+        required: string[];
+      };
+      expect(
+        Object.keys(item.properties).sort((a, b) => a.localeCompare(b)),
+      ).toEqual(['id', 'version']);
+      const restore = (
+        doc.paths['/admin/test/demo-user/restore'] as {
+          post: { responses: Record<string, unknown> };
+        }
+      ).post;
+      expect(
+        Object.keys(restore.responses).sort((a, b) => a.localeCompare(b)),
+      ).toEqual(['200', '400', '404', '409']);
     });
   });
 
