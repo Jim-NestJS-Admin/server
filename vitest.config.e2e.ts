@@ -17,7 +17,7 @@ export default defineConfig({
     globals: true,
     env: {
       NODE_ENV: 'test',
-      LOG_LEVEL: 'silent',
+      LOG_LEVEL: process.env.LOG_LEVEL ?? 'silent',
       DB_NAME: testDb,
       DB_SYNCHRONIZE: 'true',
     },

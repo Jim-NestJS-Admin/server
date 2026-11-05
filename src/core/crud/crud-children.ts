@@ -163,6 +163,12 @@ export async function planChildren(
         cid !== undefined && !seenClient.has(cid)
           ? { clientId: cid }
           : { index };
+      if (
+        isObject(row) &&
+        typeof row.clientId === 'string' &&
+        cid === undefined
+      )
+        at({ index, field: 'clientId', messages: ['clientId 不能只有空白'] });
       if (cid !== undefined && seenClient.has(cid))
         at({
           index,
@@ -263,10 +269,47 @@ export async function loadChildren(
   return out;
 }
 
-const valueKey = (row: Values, group: string[]) =>
-  group.some((f) => row[f] === null || row[f] === undefined)
-    ? null
-    : JSON.stringify(group.map((f) => String(row[f])));
+/** 数据库会补、但写入前算不出来的默认值（如 SQL 表达式），唯一检查交给写入后的复核 */
+const UNKNOWN = Symbol('unknown-default');
+
+/**
+ * 新增行省略的字段按数据库最终会存的值补上：常量默认值直接用，可空列算 null，
+ * SQL 表达式默认值标成「未知」，由写入后的数据库复核兜底。
+ */
+function withDefaults(
+  tx: CrudTx,
+  child: CrudChildMeta,
+  values: Values,
+): Values {
+  const em = tx.manager.connection.getMetadata(child.entity);
+  const out: Values = { ...values };
+  for (const group of child.unique)
+    for (const f of group) {
+      if (out[f] !== undefined) continue;
+      const col = em.findColumnWithPropertyName(f);
+      const d: unknown = col?.default;
+      if (
+        typeof d === 'string' ||
+        typeof d === 'number' ||
+        typeof d === 'boolean'
+      )
+        out[f] = d;
+      else if (d === undefined && col?.isNullable) out[f] = null;
+      else out[f] = UNKNOWN;
+    }
+  return out;
+}
+
+/** 唯一键：有空值的不参与唯一（和数据库唯一约束一致）；有算不出来的默认值时返回 UNKNOWN */
+const valueKey = (
+  row: Values,
+  group: string[],
+): string | null | typeof UNKNOWN =>
+  group.some((f) => row[f] === UNKNOWN)
+    ? UNKNOWN
+    : group.some((f) => row[f] === null || row[f] === undefined)
+      ? null
+      : JSON.stringify(group.map((f) => String(row[f])));
 
 /**
  * 第二步（在主表事务里，主表这一行已加锁或刚刚新建）：核对子行归属，按保存后的完整结果检查行数和唯一，然后写入。
@@ -327,7 +370,10 @@ export async function saveChildren(
           where: { id },
         });
     for (const a of plan.added)
-      final.push({ row: a.values, where: { clientId: a.clientId } });
+      final.push({
+        row: withDefaults(tx, child, a.values),
+        where: { clientId: a.clientId },
+      });
 
     if (final.length < child.min || final.length > child.max)
       errors.push({
@@ -344,7 +390,7 @@ export async function saveChildren(
       const byKey = new Map<string, Final[]>();
       for (const f of final) {
         const k = valueKey(f.row, group);
-        if (k !== null) byKey.set(k, [...(byKey.get(k) ?? []), f]);
+        if (typeof k === 'string') byKey.set(k, [...(byKey.get(k) ?? []), f]);
       }
       const labels = group
         .map((p) => child.fields.find((x) => x.property === p)?.label ?? p)
@@ -409,22 +455,65 @@ export async function saveChildren(
       if (r.affected !== 1) throw crudErrors.versionConflict();
     }
 
-    if (plan.added.length)
-      await tx.manager
+    // 逐行插入，记下 clientId 对应的新编号，写入后复核时能把错误定位回新增行
+    const inserted = new Map<string, string>();
+    for (const a of plan.added) {
+      const r = await tx.manager
         .createQueryBuilder()
         .insert()
         .into(child.entity)
-        .values(
-          plan.added.map((a) => ({
-            ...a.values,
-            [child.foreignKey]: masterId,
-            tenantId: tx.ctx.tenantId,
-            createdBy: tx.ctx.userId,
-            updatedBy: tx.ctx.userId,
-          })) as never,
-        )
+        .values({
+          ...a.values,
+          [child.foreignKey]: masterId,
+          tenantId: tx.ctx.tenantId,
+          createdBy: tx.ctx.userId,
+          updatedBy: tx.ctx.userId,
+        } as never)
         .execute();
+      inserted.set(String(r.identifiers[0]?.id), a.clientId);
+    }
+    if (child.unique.length) await recheckUnique(tx, child, masterId, inserted);
   }
+}
+
+/**
+ * 写入后在同一事务里按数据库实际存下的值再查一次重复：覆盖写入前算不出的默认值，
+ * 以及数据库排序规则下视为相同的值（如大小写不同）。发现重复就抛错，整个保存回滚。
+ */
+async function recheckUnique(
+  tx: CrudTx,
+  child: CrudChildMeta,
+  masterId: string,
+  inserted: Map<string, string>,
+): Promise<void> {
+  const errors: CrudFieldError[] = [];
+  const em = tx.manager.connection.getMetadata(child.entity);
+  for (const group of child.unique) {
+    const cols = group.map(
+      (p) => em.findColumnWithPropertyName(p)!.databaseName,
+    );
+    const qb = childQuery(tx.manager, child, tx.ctx.tenantId, [masterId])
+      .select(`GROUP_CONCAT(${ALIAS}.\`id\`)`, 'ids')
+      .groupBy(cols.map((c) => `${ALIAS}.\`${c}\``).join(', '))
+      .having('COUNT(*) > 1');
+    for (const c of cols) qb.andWhere(`${ALIAS}.\`${c}\` IS NOT NULL`);
+    const dups = await qb.getRawMany<{ ids: string }>();
+    const labels = group
+      .map((p) => child.fields.find((x) => x.property === p)?.label ?? p)
+      .join('、');
+    for (const d of dups)
+      for (const id of String(d.ids).split(',')) {
+        const clientId = inserted.get(id);
+        errors.push({
+          resource: child.resource,
+          ...(clientId !== undefined ? { clientId } : { id }),
+          field: group[0],
+          messages: [`同一张单据里${labels}不能重复`],
+        });
+      }
+  }
+  if (errors.length)
+    throw crudErrors.badRequest('明细有误，请修正标红的行', errors);
 }
 
 /** 删除主表时子表一起处理，跟随主表的删除方式（删除批次和回收站在验收点③） */

@@ -12,9 +12,19 @@ import {
   DemoOrderController,
   DemoOrderEntity,
   DemoOrderItemEntity,
+  DemoOrderItemReadController,
+  DemoOrderItemReadService,
   DemoOrderItemWriteController,
   DemoOrderNoteEntity,
+  DemoOrderTagEntity,
 } from './fixtures/demo-order.js';
+
+const ENTITIES = [
+  DemoOrderEntity,
+  DemoOrderItemEntity,
+  DemoOrderNoteEntity,
+  DemoOrderTagEntity,
+];
 
 type Err = {
   resource?: string;
@@ -81,14 +91,7 @@ describe('主子表聚合保存（验收点②）', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [
-        AppModule,
-        TypeOrmModule.forFeature([
-          DemoOrderEntity,
-          DemoOrderItemEntity,
-          DemoOrderNoteEntity,
-        ]),
-      ],
+      imports: [AppModule, TypeOrmModule.forFeature(ENTITIES)],
       controllers: [DemoOrderController],
     }).compile();
     app = moduleRef.createNestApplication();
@@ -104,7 +107,12 @@ describe('主子表聚合保存（验收点②）', () => {
   });
 
   beforeEach(async () => {
-    for (const t of ['demo_order_note', 'demo_order_item', 'demo_order'])
+    for (const t of [
+      'demo_order_tag',
+      'demo_order_note',
+      'demo_order_item',
+      'demo_order',
+    ])
       await ds.query(`DELETE FROM ${t}`);
   });
 
@@ -249,6 +257,145 @@ describe('主子表聚合保存（验收点②）', () => {
       expect(errorsOf(res)).toEqual([
         expect.objectContaining({ resource: 'items', field: '_rows' }),
       ]);
+    });
+  });
+
+  describe('空白 clientId', () => {
+    it.each([
+      ['三个空格', ['   ']],
+      ['制表符', ['\t']],
+      ['两行都是空白', ['  ', '  ']],
+    ])('%s：按 index 定位，整个保存被拒', async (_name, ids) => {
+      const added = ids.map((clientId, n) => item(clientId, `P${n}`));
+      const res = await post('add', {
+        data: { orderNo: 'WS', title: 't' },
+        children: { items: { added } },
+      }).expect(400);
+      expect(
+        errorsOf(res)
+          .filter((e) => e.field === 'clientId')
+          .map((e) => e.index),
+      ).toEqual(ids.map((_, n) => n));
+      expect(await counts()).toEqual([0, 0]);
+    });
+
+    it('修改时新增行 clientId 为空白：被拒，版本号不变', async () => {
+      const order = await create([item('a', 'P1')]);
+      await post('update', {
+        id: order.id,
+        version: 1,
+        data: {},
+        children: { items: { added: [item(' ', 'P2')] } },
+      }).expect(400);
+      const [m] = await ds.query(
+        'SELECT version FROM demo_order WHERE id = ?',
+        [order.id],
+      );
+      expect(m.version).toBe(1);
+    });
+  });
+
+  describe('唯一字段的默认值', () => {
+    const tag = (clientId: string, extra: object) => ({ clientId, ...extra });
+    const addWithTags = (tags: object[]) =>
+      post('add', {
+        data: {
+          orderNo: `T-${Math.random().toString(36).slice(2, 8)}`,
+          title: 't',
+        },
+        children: {
+          items: { added: [item('i', 'P1')] },
+          tags: { added: tags },
+        },
+      });
+
+    it('两条新增都省略常量默认值字段（级别默认 0）：写入前就发现重复，按 clientId 定位', async () => {
+      const res = await addWithTags([
+        tag('a', { label: 'x', code: 'c1' }),
+        tag('b', { label: 'y', code: 'c2' }),
+      ]).expect(400);
+      expect(
+        errorsOf(res).map((e) => [e.resource, e.clientId, e.field]),
+      ).toEqual([
+        ['tags', 'a', 'level'],
+        ['tags', 'b', 'level'],
+      ]);
+      expect(await counts()).toEqual([0, 0]);
+    });
+
+    it('组合唯一里有 SQL 表达式默认值（代码默认 none）：写入后复核发现重复，整批回滚', async () => {
+      const res = await addWithTags([
+        tag('a', { label: 'x', level: 1 }),
+        tag('b', { label: 'x', level: 2 }),
+      ]).expect(400);
+      expect(
+        errorsOf(res)
+          .map((e) => e.clientId)
+          .sort((x, y) => String(x).localeCompare(String(y))),
+      ).toEqual(['a', 'b']);
+      expect(errorsOf(res)[0]).toMatchObject({
+        resource: 'tags',
+        field: 'code',
+        messages: ['同一张单据里代码、名称不能重复'],
+      });
+      expect(await counts()).toEqual([0, 0]);
+      const [{ n }] = await ds.query('SELECT COUNT(*) n FROM demo_order_tag');
+      expect(Number(n)).toBe(0);
+    });
+
+    it('新增行省略默认值字段，和已有行的默认值重复：被拒，已有行用 id 定位，版本号不变', async () => {
+      const res = await addWithTags([
+        tag('a', { label: 'x', code: 'c1' }),
+      ]).expect(200);
+      const order = res.body.data;
+      const existing = order.children.tags[0].id;
+      const bad = await post('update', {
+        id: order.id,
+        version: 1,
+        data: {},
+        children: { tags: { added: [tag('n', { label: 'y', code: 'c2' })] } },
+      }).expect(400);
+      expect(errorsOf(bad)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            resource: 'tags',
+            id: existing,
+            field: 'level',
+          }),
+          expect.objectContaining({
+            resource: 'tags',
+            clientId: 'n',
+            field: 'level',
+          }),
+        ]),
+      );
+      const [m] = await ds.query(
+        'SELECT version FROM demo_order WHERE id = ?',
+        [order.id],
+      );
+      expect(m.version).toBe(1);
+      // 显式给不同的值就可以
+      await post('update', {
+        id: order.id,
+        version: 1,
+        data: {},
+        children: {
+          tags: { added: [tag('n', { label: 'y', code: 'c2', level: 5 })] },
+        },
+      }).expect(200);
+    });
+
+    it('数据库排序规则下视为相同的值（大小写不同）：写入后复核发现重复', async () => {
+      const res = await addWithTags([
+        tag('a', { label: 'X', level: 1, code: 'k' }),
+        tag('b', { label: 'x', level: 2, code: 'k' }),
+      ]).expect(400);
+      expect(
+        errorsOf(res)
+          .map((e) => e.clientId)
+          .sort((x, y) => String(x).localeCompare(String(y))),
+      ).toEqual(['a', 'b']);
+      expect(await counts()).toEqual([0, 0]);
     });
   });
 
@@ -683,14 +830,7 @@ describe('主子表聚合保存（验收点②）', () => {
 describe('子表只有主表一个写入口', () => {
   it('子表实体自己开放修改接口：启动失败', async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [
-        AppModule,
-        TypeOrmModule.forFeature([
-          DemoOrderEntity,
-          DemoOrderItemEntity,
-          DemoOrderNoteEntity,
-        ]),
-      ],
+      imports: [AppModule, TypeOrmModule.forFeature(ENTITIES)],
       controllers: [DemoOrderController, DemoOrderItemWriteController],
     }).compile();
     const app = moduleRef.createNestApplication();
@@ -700,4 +840,74 @@ describe('子表只有主表一个写入口', () => {
     );
     await app.close().catch(() => undefined);
   });
+});
+
+describe('子表只有主表一个写入口：Service 层', () => {
+  // 两种注册顺序都要拦住
+  it.each([
+    ['先注册主表', [DemoOrderController, DemoOrderItemReadController]],
+    ['先注册只读子表资源', [DemoOrderItemReadController, DemoOrderController]],
+  ])(
+    '%s：只读子表资源可以查，但它的 Service 新增、修改、删除都被拒，数据不变',
+    async (_name, controllers) => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [AppModule, TypeOrmModule.forFeature(ENTITIES)],
+        controllers,
+        providers: [DemoOrderItemReadService],
+      }).compile();
+      const app = moduleRef.createNestApplication();
+      configureApp(app);
+      await app.init();
+      try {
+        const ds = app.get(DataSource);
+        for (const t of [
+          'demo_order_tag',
+          'demo_order_note',
+          'demo_order_item',
+          'demo_order',
+        ])
+          await ds.query(`DELETE FROM ${t}`);
+        const created = await request(app.getHttpServer())
+          .post('/admin/test/demo-order/add')
+          .send({
+            data: { orderNo: 'G1', title: 't' },
+            children: {
+              items: { added: [{ clientId: 'a', productCode: 'P1', qty: 1 }] },
+            },
+          })
+          .expect(200);
+        const order = created.body.data;
+        const itemId = order.children.items[0].id;
+        await request(app.getHttpServer())
+          .post('/admin/test/demo-order-item-read/info')
+          .send({ id: itemId })
+          .expect(200);
+
+        const svc = app.get(DemoOrderItemReadService);
+        const owner = /只能通过 test\/demo-order 的新增、修改一起保存/;
+        await expect(svc.update(itemId, 1, { qty: 99 })).rejects.toThrow(owner);
+        await expect(
+          svc.add({ orderId: order.id, productCode: 'P2', qty: 1 } as never),
+        ).rejects.toThrow(owner);
+        await expect(svc.delete([itemId])).rejects.toThrow(owner);
+
+        const [row] = await ds.query(
+          'SELECT qty, deleted_at FROM demo_order_item WHERE id = ?',
+          [itemId],
+        );
+        expect(row).toMatchObject({ qty: 1, deleted_at: null });
+        const [{ n }] = await ds.query(
+          'SELECT COUNT(*) n FROM demo_order_item',
+        );
+        expect(Number(n)).toBe(1);
+        const [m] = await ds.query(
+          'SELECT version FROM demo_order WHERE id = ?',
+          [order.id],
+        );
+        expect(m.version).toBe(1);
+      } finally {
+        await app.close();
+      }
+    },
+  );
 });

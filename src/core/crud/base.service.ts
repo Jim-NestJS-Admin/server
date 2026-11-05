@@ -41,6 +41,8 @@ export interface CrudBinding<T extends BaseEntity> {
   scope: CrudScope;
   context: CrudContextProvider;
   meta: CrudResourceMeta<T>;
+  /** 查实体是不是某个主表的子表（由注册表提供） */
+  childOwner: (entity: Function) => string | undefined;
 }
 
 const ALIAS = 'e';
@@ -166,6 +168,7 @@ export class BaseService<T extends BaseEntity> {
 
   /** 新增；有子表时 children 里每个子表只有 added，主表和子表在同一个事务里写入 */
   async add(data: Partial<T>, children?: unknown): Promise<CrudRow<T>> {
+    this.assertNotChild();
     const plans = await planChildren(
       this.meta as CrudResourceMeta,
       children,
@@ -217,6 +220,7 @@ export class BaseService<T extends BaseEntity> {
     data: Partial<T>,
     children?: unknown,
   ): Promise<CrudRow<T>> {
+    this.assertNotChild();
     const plans = await planChildren(
       this.meta as CrudResourceMeta,
       children,
@@ -258,6 +262,7 @@ export class BaseService<T extends BaseEntity> {
   }
 
   async delete(ids: string[]): Promise<{ count: number }> {
+    this.assertNotChild();
     const unique = [...new Set(ids)];
     return this.transaction(async (tx) => {
       const rows = await this.select(tx.manager, 'delete')
@@ -293,6 +298,18 @@ export class BaseService<T extends BaseEntity> {
   }
 
   // ---------- 给子类和后续任务用的工具 ----------
+
+  /**
+   * 子表只有主表这一个写入口：实体是别的资源的子表时，它自己的 Service 不能新增、修改、删除，
+   * 后台任务或其他业务代码直接调用也一样。主表聚合保存走的是 crud-children 里的内部写入，不经过这里。
+   */
+  private assertNotChild(): void {
+    const owner = this.crud.childOwner(this.meta.entity);
+    if (owner)
+      throw new Error(
+        `${this.meta.prefix} 的实体是 ${owner} 的子表，只能通过 ${owner} 的新增、修改一起保存`,
+      );
+  }
 
   /** 开一个事务；里面的读写都要用 tx.manager */
   protected async transaction<R>(fn: (tx: CrudTx) => Promise<R>): Promise<R> {

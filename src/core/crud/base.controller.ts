@@ -35,6 +35,15 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
         `${this.constructor.name} 继承了 BaseController，但没有加 @CrudController`,
       );
     const { options, meta } = cls;
+    // 实体没在 TypeORM 里注册时，请求进来才报「找不到元数据」；在启动时就说清楚。
+    // 导出接口文档时不连数据库，元数据没有建立，跳过这项检查
+    const ds = this.crudRuntime.dataSource;
+    if (ds.isInitialized)
+      for (const e of [meta.entity, ...meta.children.map((c) => c.entity)])
+        if (!ds.hasMetadata(e))
+          throw new Error(
+            `${meta.prefix} 用到的实体 ${e.name} 没有注册：请在模块里加上 TypeOrmModule.forFeature([${e.name}])`,
+          );
     let service: BaseService<T>;
     if (options.service) {
       service = this.crudModuleRef.get(options.service, {
@@ -52,6 +61,7 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
       scope: this.crudRuntime.scope,
       context: this.crudRuntime.context,
       meta: meta as CrudResourceMeta<T>,
+      childOwner: (entity) => this.crudRuntime.childOwner(entity),
     });
     this.crudRuntime.register(meta);
     this.service = service;

@@ -3,7 +3,10 @@ import type { CrudBinding } from './base.service.js';
 import type { BaseEntity } from './base.entity.js';
 
 const binding = (prefix: string, entity: Function) =>
-  ({ meta: { prefix, entity } }) as unknown as CrudBinding<BaseEntity>;
+  ({
+    meta: { prefix, entity },
+    childOwner: () => undefined,
+  }) as unknown as CrudBinding<BaseEntity>;
 
 describe('BaseService 绑定', () => {
   class A {}

@@ -7,10 +7,12 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Injectable } from '@nestjs/common';
 import { Column, Entity, Index } from 'typeorm';
 import {
   BaseController,
   BaseEntity,
+  BaseService,
   CrudController,
   CrudField,
 } from '../../src/core/crud/index.js';
@@ -83,6 +85,33 @@ export class DemoOrderNoteEntity extends BaseEntity {
   content: string;
 }
 
+/** 唯一字段带默认值的子表：level 是常量默认值，code 是 SQL 表达式默认值（写入前算不出来） */
+@Entity('demo_order_tag')
+export class DemoOrderTagEntity extends BaseEntity {
+  @Index()
+  @Column({ type: 'bigint', unsigned: true })
+  orderId: string;
+
+  @CrudField({ label: '名称', form: { required: true } })
+  @IsString()
+  @Length(1, 20)
+  @Column({ type: 'varchar', length: 20 })
+  label: string;
+
+  @CrudField({ label: '级别' })
+  @IsOptional()
+  @IsInt()
+  @Column({ type: 'int', default: 0 })
+  level: number;
+
+  @CrudField({ label: '代码' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 20)
+  @Column({ type: 'varchar', length: 20, default: () => "'none'" })
+  code: string;
+}
+
 @CrudController({
   prefix: 'test/demo-order',
   label: '演示订单',
@@ -105,6 +134,13 @@ export class DemoOrderNoteEntity extends BaseEntity {
       entity: DemoOrderNoteEntity,
       foreignKey: 'orderId',
     },
+    {
+      resource: 'tags',
+      label: '订单标签',
+      entity: DemoOrderTagEntity,
+      foreignKey: 'orderId',
+      unique: [['level'], ['code', 'label']],
+    },
   ],
 })
 export class DemoOrderController extends BaseController<DemoOrderEntity> {}
@@ -117,3 +153,16 @@ export class DemoOrderController extends BaseController<DemoOrderEntity> {}
   api: ['page', 'update'],
 })
 export class DemoOrderItemWriteController extends BaseController<DemoOrderItemEntity> {}
+
+/** 明细的只读资源：允许注册，但它的 Service 不能新增、修改、删除 */
+@Injectable()
+export class DemoOrderItemReadService extends BaseService<DemoOrderItemEntity> {}
+
+@CrudController({
+  prefix: 'test/demo-order-item-read',
+  label: '明细只读',
+  entity: DemoOrderItemEntity,
+  api: ['page', 'info'],
+  service: DemoOrderItemReadService,
+})
+export class DemoOrderItemReadController extends BaseController<DemoOrderItemEntity> {}

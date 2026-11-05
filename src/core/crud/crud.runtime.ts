@@ -52,6 +52,13 @@ export class CrudRuntime {
     }
   }
 
+  /** 这个实体是哪个资源的子表；不是子表返回 undefined。调用时现算，和注册顺序无关 */
+  childOwner(entity: Function): string | undefined {
+    for (const r of this.resources.values())
+      if (r.children.some((c) => c.entity === entity)) return r.prefix;
+    return undefined;
+  }
+
   list(): CrudResourceMeta[] {
     return [...this.resources.values()].sort((a, b) =>
       a.prefix.localeCompare(b.prefix),
