@@ -1,0 +1,22 @@
+{
+  "components": {
+    "schemas": {},
+    "securitySchemes": {
+      "bearer": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "contact": {},
+    "description": "后台、APP、网站、开放接口。统一响应格式：{ code, data, message }，code 为 1000 表示成功。",
+    "title": "jim-nestjs-admin 接口",
+    "version": "0.0.1"
+  },
+  "openapi": "3.0.0",
+  "paths": {},
+  "servers": [],
+  "tags": []
+}
