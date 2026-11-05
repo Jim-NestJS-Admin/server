@@ -1,4 +1,8 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  ApiProperty,
+  ApiPropertyOptional,
+  getSchemaPath,
+} from '@nestjs/swagger';
 import type { DictItem, FormComponent } from './crud-field.decorator.js';
 import type { CrudApi, CrudResourceMeta, SortItem } from './crud.types.js';
 
@@ -116,7 +120,7 @@ export class CrudSchema {
     type: 'object',
     additionalProperties: {
       type: 'array',
-      items: { $ref: '#/components/schemas/CrudSchemaDictItem' },
+      items: { $ref: getSchemaPath('CrudSchemaDictItem') },
     },
   })
   dictionaries: Record<string, DictItem[]>;

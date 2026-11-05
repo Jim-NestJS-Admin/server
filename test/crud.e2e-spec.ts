@@ -12,6 +12,7 @@ import {
   DemoLogController,
   DemoLogEntity,
   DemoUserController,
+  DemoUserCopyController,
   DemoUserEntity,
   DemoUserService,
 } from './fixtures/demo-resources.js';
@@ -45,6 +46,9 @@ describe('通用 CRUD（验收点①）', () => {
     await app.init();
     ds = app.get(DataSource);
     service = app.get(DemoUserService);
+    // 下面会清空数据：再确认一次连的是测试库
+    const [{ db }] = await ds.query('SELECT DATABASE() db');
+    expect(db).toMatch(/_test$/);
   });
 
   afterAll(async () => {
@@ -435,6 +439,125 @@ describe('通用 CRUD（验收点①）', () => {
     });
   });
 
+  describe('响应只输出可读字段', () => {
+    const hidden = (row: Record<string, unknown>) => {
+      expect(row).not.toHaveProperty('internalNote');
+      expect(JSON.stringify(row)).not.toContain('INTERNAL_SECRET');
+      expect(row).not.toHaveProperty('tenantId');
+      expect(row).not.toHaveProperty('deletedAt');
+    };
+
+    it('新增、修改、详情、分页四个返回路径都不带未声明的内部列', async () => {
+      const added = await add({ username: 'proj', nickname: '投影' }).expect(
+        200,
+      );
+      hidden(added.body.data);
+      const [db] = await ds.query(
+        'SELECT internal_note FROM demo_user WHERE id = ?',
+        [added.body.data.id],
+      );
+      expect(db.internal_note).toBe('INTERNAL_SECRET');
+      const updated = await post('update', {
+        id: added.body.data.id,
+        version: 1,
+        data: { nickname: '改' },
+      }).expect(200);
+      hidden(updated.body.data);
+      const info = await post('info', { id: added.body.data.id }).expect(200);
+      hidden(info.body.data);
+      const page = await post('page', {}).expect(200);
+      expect(page.body.data.list).toHaveLength(1);
+      hidden(page.body.data.list[0]);
+      expect(
+        Object.keys(info.body.data).sort((a, b) => a.localeCompare(b)),
+      ).toEqual([
+        'createdAt',
+        'createdBy',
+        'id',
+        'nickname',
+        'orgId',
+        'remark',
+        'status',
+        'updatedAt',
+        'updatedBy',
+        'username',
+        'version',
+      ]);
+    });
+
+    it('请求里带内部字段：400，不能借此写入', async () => {
+      await add({
+        username: 'proj2',
+        nickname: 'x',
+        internalNote: 'hack',
+      }).expect(400);
+    });
+  });
+
+  describe('不传和清空（显式 null）', () => {
+    it('非空字段传 null：400 / 4000 字段错误，数据和版本号都不变', async () => {
+      const { body } = await add({
+        username: 'n1',
+        nickname: '原名',
+        remark: '备注',
+      });
+      const res = await post('update', {
+        id: body.data.id,
+        version: 1,
+        data: { nickname: null, status: null },
+      }).expect(400);
+      expect(res.body.code).toBe(4000);
+      const fields = res.body.data.errors
+        .map((e: { field: string }) => e.field)
+        .sort((a: string, b: string) => a.localeCompare(b));
+      expect(fields).toEqual(['data.nickname', 'data.status']);
+      expect(res.body.data.errors[0].messages[0]).toMatch(/不能为空/);
+      const [db] = await ds.query(
+        'SELECT nickname, status, version FROM demo_user WHERE id = ?',
+        [body.data.id],
+      );
+      expect(db).toMatchObject({
+        nickname: '原名',
+        status: 'enabled',
+        version: 1,
+      });
+      expect(service.calls.some((c) => c.startsWith('beforeUpdate'))).toBe(
+        false,
+      );
+    });
+
+    it('可空字段传 null 表示清空；不传的字段保持原值', async () => {
+      const { body } = await add({
+        username: 'n2',
+        nickname: '名',
+        remark: '备注',
+        orgId: '10',
+      });
+      const res = await post('update', {
+        id: body.data.id,
+        version: 1,
+        data: { remark: null },
+      }).expect(200);
+      expect(res.body.data).toMatchObject({
+        remark: null,
+        orgId: '10',
+        nickname: '名',
+        version: 2,
+      });
+    });
+
+    it('新增时非空字段传 null：400，不入库', async () => {
+      const res = await add({
+        username: 'n3',
+        nickname: 'x',
+        status: null,
+      }).expect(400);
+      expect(res.body.data.errors[0].field).toBe('data.status');
+      const [{ n }] = await ds.query('SELECT COUNT(*) n FROM demo_user');
+      expect(Number(n)).toBe(0);
+    });
+  });
+
   describe('页面描述', () => {
     it('GET schema 返回列、表单、筛选、字典和按动作区分的字段能力', async () => {
       const res = await request(app.getHttpServer())
@@ -509,6 +632,29 @@ describe('通用 CRUD（验收点①）', () => {
   });
 
   describe('接口文档', () => {
+    it('文档里所有本地 $ref 都能找到定义（生成前端代码时不会遇到悬空类型）', () => {
+      const doc = buildOpenApiDocument(app, APP_VERSION);
+      const schemas = doc.components?.schemas ?? {};
+      const refs = new Set<string>();
+      const walk = (v: unknown) => {
+        if (Array.isArray(v)) v.forEach(walk);
+        else if (v && typeof v === 'object')
+          for (const [k, x] of Object.entries(v)) {
+            if (k === '$ref' && typeof x === 'string') refs.add(x);
+            else walk(x);
+          }
+      };
+      walk(doc);
+      expect(refs.size).toBeGreaterThan(10);
+      const missing = [...refs].filter(
+        (r) =>
+          !r.startsWith('#/components/schemas/') ||
+          !(r.slice('#/components/schemas/'.length) in schemas),
+      );
+      expect(missing).toEqual([]);
+      expect(refs).toContain('#/components/schemas/CrudSchemaDictItem');
+    });
+
     it('每个开放的接口都有 operationId、请求体、成功和失败响应（真实 HTTP 状态）', () => {
       const doc = buildOpenApiDocument(app, APP_VERSION);
       const ops = Object.values(doc.paths).flatMap((p) =>
@@ -561,5 +707,21 @@ describe('通用 CRUD（验收点①）', () => {
         'username',
       ]);
     });
+  });
+});
+
+describe('一个 Service 只能服务一个资源', () => {
+  it('同一实体的两个资源共用一个 Service：启动失败，不会静默互相覆盖规则', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule, TypeOrmModule.forFeature([DemoUserEntity])],
+      controllers: [DemoUserController, DemoUserCopyController],
+      providers: [DemoUserService],
+    }).compile();
+    const app = moduleRef.createNestApplication();
+    configureApp(app);
+    await expect(app.init()).rejects.toThrow(
+      /已绑定到资源 test\/demo-user(-copy)?，不能再绑定/,
+    );
+    await app.close().catch(() => undefined);
   });
 });

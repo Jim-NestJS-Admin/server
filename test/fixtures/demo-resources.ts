@@ -73,6 +73,10 @@ export class DemoUserEntity extends BaseEntity {
   @MaxLength(200)
   @Column({ type: 'varchar', length: 200, nullable: true })
   remark: string | null;
+
+  /** 内部字段：没有用 @CrudField 声明，任何接口响应里都不能出现 */
+  @Column({ type: 'varchar', length: 50, default: 'INTERNAL_SECRET' })
+  internalNote: string;
 }
 
 /** 带钩子的 Service：用来测钩子在事务里执行、抛异常能整体回滚 */
@@ -154,3 +158,14 @@ export class DemoLogEntity extends BaseEntity {
   delete: 'hard',
 })
 export class DemoLogController extends BaseController<DemoLogEntity> {}
+
+/** 和 DemoUserController 同一个实体、同一个 Service 的另一个资源：启动时必须报错 */
+@CrudController({
+  prefix: 'test/demo-user-copy',
+  label: '演示用户副本',
+  entity: DemoUserEntity,
+  api: ['page', 'delete'],
+  service: DemoUserService,
+  delete: 'hard',
+})
+export class DemoUserCopyController extends BaseController<DemoUserEntity> {}

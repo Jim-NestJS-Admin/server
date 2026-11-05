@@ -173,8 +173,11 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     Matches(ID_PATTERN, { each: true, message: ID_MESSAGE }),
   ]);
 
-  // 响应：一行数据就是实体上带接口文档说明的字段（内部字段已隐藏）
-  const Row = named(class extends (entity as Type<object>) {}, `${n}Row`);
+  // 响应：一行只含资源定义里的可读字段，和 BaseService.toRow 的输出一致
+  const Row = named(
+    PickType(entity, meta.readable as never[]) as Type,
+    `${n}Row`,
+  );
   const PageResult = named(class {}, `${n}PageResult`);
   prop(PageResult, 'list', Array, [ApiProperty({ type: [Row] })]);
   prop(PageResult, 'total', Number, [ApiProperty()]);

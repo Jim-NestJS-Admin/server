@@ -57,9 +57,11 @@ export class BaseService<T extends BaseEntity> {
 
   /** 由 @CrudController 在启动时绑定资源定义和运行环境 */
   bindCrud(binding: CrudBinding<T>): void {
-    if (this.binding && this.binding.meta.entity !== binding.meta.entity)
+    // 一个 Service 实例只服务一个资源：同一实体的两个资源共用一个实例，会让先初始化的资源
+    // 悄悄用上后一个资源的可写字段、删除方式和页面描述
+    if (this.binding && this.binding.meta !== binding.meta)
       throw new Error(
-        `${this.constructor.name} 已绑定到资源 ${this.binding.meta.prefix}，不能再绑定 ${binding.meta.prefix}`,
+        `${this.constructor.name} 已绑定到资源 ${this.binding.meta.prefix}，不能再绑定 ${binding.meta.prefix}：每个资源要用自己的 Service 类`,
       );
     this.binding = binding;
   }
@@ -158,6 +160,7 @@ export class BaseService<T extends BaseEntity> {
   async add(data: Partial<T>): Promise<CrudRow<T>> {
     return this.transaction(async (tx) => {
       const values = this.pick(data, this.meta.addable);
+      this.assertNullable(values);
       await this.beforeAdd(values, tx);
       const clean = this.stripSystem(values);
       const result = await tx.manager
@@ -189,6 +192,7 @@ export class BaseService<T extends BaseEntity> {
       if (!existing) throw crudErrors.notFound();
       if (existing.version !== version) throw crudErrors.versionConflict();
       const changes = this.pick(data, this.meta.updatable);
+      this.assertNullable(changes);
       await this.beforeUpdate(changes, existing, tx);
       const clean = this.stripSystem(changes);
 
@@ -298,6 +302,24 @@ export class BaseService<T extends BaseEntity> {
     return c.databaseName;
   }
 
+  /**
+   * 「不传」和「清空」要分开：不传的字段保持原值；显式传 null 表示清空，只有数据库里允许为空的列才行。
+   * 生成的修改 DTO 每个字段都是可选的，校验会放过 null，所以在这里按列定义再核对一次，返回字段错误而不是等数据库报 500。
+   */
+  private assertNullable(values: Partial<T>): void {
+    const em = this.crud.dataSource.getMetadata(this.meta.entity);
+    const errors = Object.entries(values)
+      .filter(
+        ([k, v]) => v === null && !em.findColumnWithPropertyName(k)?.isNullable,
+      )
+      .map(([k]) => {
+        const label =
+          this.meta.fields.find((f) => f.property === k)?.label ?? k;
+        return { field: `data.${k}`, messages: [`${label}不能为空`] };
+      });
+    if (errors.length) throw crudErrors.badRequest('请求参数有误', errors);
+  }
+
   private pick(data: Partial<T>, allowed: string[]): Partial<T> {
     const out: Record<string, unknown> = {};
     for (const k of allowed)
@@ -313,9 +335,14 @@ export class BaseService<T extends BaseEntity> {
     ) as Partial<T>;
   }
 
+  /**
+   * 响应只输出资源定义里的可读字段（基础字段 + @CrudField 声明的字段）。
+   * 实体上没声明的列（内部字段）一律不出去；T16 的逐行字段权限在这之上再裁剪。
+   */
   protected toRow(row: T): CrudRow<T> {
-    const out: Record<string, unknown> = { ...(row as object) };
-    for (const k of INTERNAL_FIELDS) delete out[k];
+    const src = row as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of this.meta.readable) if (k in src) out[k] = src[k];
     return out as CrudRow<T>;
   }
 }

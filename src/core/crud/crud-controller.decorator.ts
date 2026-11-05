@@ -7,13 +7,18 @@ import {
   Post,
   type Type,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiExtraModels,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ApiErrors, ApiResult } from '../swagger/api-result.js';
 import type { BaseEntity } from './base.entity.js';
 import { CRUD_RESOURCE } from './base.controller.js';
 import { buildCrudDtos } from './crud.dto.js';
 import { resolveCrudMeta } from './crud-meta.js';
-import { CrudSchema } from './crud-schema.js';
+import { CrudSchema, CrudSchemaDictItem } from './crud-schema.js';
 import type { CrudControllerOptions } from './crud.types.js';
 
 type Method = 'page' | 'info' | 'add' | 'update' | 'delete' | 'schema';
@@ -131,6 +136,9 @@ export function CrudController<T extends BaseEntity>(
         ApiResult(spec.result),
         ...(spec.errors.length ? [ApiErrors(...spec.errors)] : []),
       ];
+      // 页面描述里字典项是按 $ref 引用的，要单独登记模型，否则文档里是悬空引用
+      if (spec.method === 'schema')
+        decorators.push(ApiExtraModels(CrudSchemaDictItem));
       if (spec.body) {
         decorators.push(ApiBody({ type: spec.body }));
         Body()(proto, spec.method, 0);

@@ -121,6 +121,12 @@ export function validateEnv(
       '环境变量校验失败，服务不能启动：\nDB_SYNCHRONIZE 只允许在 NODE_ENV=test 时打开，开发和生产环境用迁移管理表结构',
     );
   }
+  // 第二道保护：自动建表时库名必须是测试库，防止测试配置指向开发库或生产库
+  if (env.DB_SYNCHRONIZE && !env.DB_NAME.endsWith('_test')) {
+    throw new Error(
+      `环境变量校验失败，服务不能启动：\nDB_SYNCHRONIZE 打开时 DB_NAME 必须以 _test 结尾（现在是 ${env.DB_NAME}）`,
+    );
+  }
   if (env.SWAGGER_ENABLED === undefined) {
     env.SWAGGER_ENABLED = env.NODE_ENV !== NodeEnv.Production;
   }

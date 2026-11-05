@@ -58,8 +58,16 @@ describe('validateEnv', () => {
 
   it('自动建表只允许测试环境打开', () => {
     expect(
-      validateEnv({ NODE_ENV: 'test', DB_SYNCHRONIZE: 'true' }).DB_SYNCHRONIZE,
+      validateEnv({
+        NODE_ENV: 'test',
+        DB_SYNCHRONIZE: 'true',
+        DB_NAME: 'app_test',
+      }).DB_SYNCHRONIZE,
     ).toBe(true);
+    // 测试环境也要求库名以 _test 结尾，防止测试配置指向开发库
+    expect(() =>
+      validateEnv({ NODE_ENV: 'test', DB_SYNCHRONIZE: 'true', DB_NAME: 'app' }),
+    ).toThrow(/_test 结尾/);
     for (const NODE_ENV of ['development', 'production'])
       expect(() => validateEnv({ NODE_ENV, DB_SYNCHRONIZE: 'true' })).toThrow(
         /DB_SYNCHRONIZE/,
