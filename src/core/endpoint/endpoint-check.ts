@@ -117,20 +117,26 @@ export class EndpointCheck implements OnModuleInit {
         throw new Error(
           `${name} 属于 ${endpoint} 端，这个端还没有接入认证，不能注册`,
         );
-      // 需要登录的接口必须声明权限：方法上的 @Perms，或者 @LoginOnly（方法或控制器上）
+      // 免登录控制器里不能有任何权限声明：声明了说明这个接口其实要登录，应该放到另一个控制器
       if (isAnonymous) {
         if (
           Reflect.getMetadata(PERMS_KEY, cls) ||
-          Reflect.getMetadata(LOGIN_ONLY_KEY, cls) ||
-          list.some(
-            (r) =>
-              Reflect.getMetadata(PERMS_KEY, r.fn) ||
-              Reflect.getMetadata(LOGIN_ONLY_KEY, r.fn),
-          )
+          Reflect.getMetadata(LOGIN_ONLY_KEY, cls)
         )
-          throw new Error(`${name} 免登录控制器不能混用 @Perms 或 @LoginOnly`);
+          throw new Error(
+            `${name} 是 @Anonymous，不能同时加 @Perms / @LoginOnly：需要登录的接口放到另一个控制器`,
+          );
+        for (const r of list)
+          if (
+            Reflect.getMetadata(PERMS_KEY, r.fn) ||
+            Reflect.getMetadata(LOGIN_ONLY_KEY, r.fn)
+          )
+            throw new Error(
+              `${name}.${r.method} 在 @Anonymous 控制器里却声明了权限：需要登录的接口放到另一个控制器`,
+            );
         continue;
       }
+      // 需要登录的接口必须声明权限：方法上的 @Perms，或者 @LoginOnly（方法或控制器上）
       const classLoginOnly = Reflect.getMetadata(LOGIN_ONLY_KEY, cls) as
         object | undefined;
       if (Reflect.getMetadata(PERMS_KEY, cls))

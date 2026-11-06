@@ -60,13 +60,15 @@ export class EndpointGuard implements CanActivate {
       ANONYMOUS_KEY,
       ctx.getClass(),
     );
+    // 免登录接口上出现权限声明是矛盾的（启动检查会拦，这里第二道）：拒绝，不按免登录放行
     if (
       anonymous &&
-      [ctx.getClass(), ctx.getHandler()].some(
-        (target) =>
-          this.reflector.get(PERMS_KEY, target) ||
-          this.reflector.get(LOGIN_ONLY_KEY, target),
-      )
+      (this.reflector.get(PERMS_KEY, ctx.getHandler()) ||
+        this.reflector.getAllAndOverride(LOGIN_ONLY_KEY, [
+          ctx.getHandler(),
+          ctx.getClass(),
+        ]) ||
+        this.reflector.get(PERMS_KEY, ctx.getClass()))
     )
       throw new BusinessException(
         ErrorCode.Forbidden,
