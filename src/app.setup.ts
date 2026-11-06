@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from 'nestjs-pino';
 import { requestIdMiddleware } from './core/context/request-id.js';
 import { createValidationPipe } from './core/validation.js';
@@ -15,6 +16,12 @@ export function configureApp(app: INestApplication): INestApplication {
     app.getHttpAdapter().getInstance() as { set(k: string, v: unknown): void }
   ).set('trust proxy', trust > 0 ? trust : false);
   app.use(requestIdMiddleware);
+  // 请求体上限（T25）：JSON / 表单 1MB；文件上传由文件模块自己的限制控制
+  const express = app as NestExpressApplication;
+  if (typeof express.useBodyParser === 'function') {
+    express.useBodyParser('json', { limit: '1mb' });
+    express.useBodyParser('urlencoded', { limit: '1mb', extended: true });
+  }
   app.useLogger(app.get(Logger));
   app.useGlobalPipes(createValidationPipe());
   return app;
