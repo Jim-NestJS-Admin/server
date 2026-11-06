@@ -6,7 +6,10 @@ import { ErrorCode } from '../exceptions/error-code.js';
 import { RequestContext } from '../tenant/request-context.js';
 import { AuthEvents, type LoginEvent } from './auth-events.js';
 import { AuthUserStore, type AuthOrg } from './auth-user.store.js';
-import { CaptchaProvider } from './captcha/captcha.provider.js';
+import {
+  CaptchaProvider,
+  type CaptchaChallenge,
+} from './captcha/captcha.provider.js';
 import type { LoginDto, ProfileResult, TokenResult } from './dto/auth.dto.js';
 import { clientIp, unauthorized } from './http.js';
 import { LoginAttempts } from './login-attempts.service.js';
@@ -21,8 +24,8 @@ export interface IssuedTokens {
 }
 
 const captchaError = () =>
-  new BusinessException(ErrorCode.BadRequest, '人机验证失败，请重试', 400, {
-    errors: [{ field: 'altcha', messages: ['人机验证失败，请重试'] }],
+  new BusinessException(ErrorCode.BadRequest, '验证码错误，请重新输入', 400, {
+    errors: [{ field: 'captchaCode', messages: ['验证码错误，请重新输入'] }],
   });
 
 const credentialsError = () =>
@@ -53,7 +56,10 @@ export class AuthService {
   }
 
   /** 出登录题：绑定租户、规范化账号和这个账号（及 IP）当前的难度 */
-  async createLoginChallenge(account: string, req: Request): Promise<unknown> {
+  async createLoginChallenge(
+    account: string,
+    req: Request,
+  ): Promise<CaptchaChallenge> {
     const tenantId = this.tenantId;
     const subject = normalizeUsername(account);
     const level = await this.attempts.level(tenantId, subject, clientIp(req));
@@ -86,15 +92,14 @@ export class AuthService {
       username,
       ip,
     );
-    if (required || dto.altcha) {
+    if (required || dto.captchaId) {
       const minLevel = await this.attempts.level(tenantId, username, ip);
-      const result = dto.altcha
-        ? await this.captcha.verify(
-            dto.altcha,
-            { purpose: 'login', tenantId, subject: username },
-            minLevel,
-          )
-        : ({ ok: false, reason: 'malformed' } as const);
+      const result = await this.captcha.verify(
+        dto.captchaId ?? '',
+        dto.captchaCode ?? '',
+        { purpose: 'login', tenantId, subject: username },
+        minLevel,
+      );
       if (!result.ok) {
         // 具体原因只写服务端日志，不告诉前端
         this.logger.warn({

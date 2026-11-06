@@ -8,7 +8,7 @@ import { AdminAuth } from '../endpoint/endpoint-auth.js';
 import { AuthEvents } from './auth-events.js';
 import { AuthUserStore, UnconfiguredAuthUserStore } from './auth-user.store.js';
 import { AuthService } from './auth.service.js';
-import { AltchaCaptcha } from './captcha/altcha.captcha.js';
+import { SvgCaptcha } from './captcha/svg.captcha.js';
 import { CaptchaProvider } from './captcha/captcha.provider.js';
 import { AuthController } from './controller/admin/auth.controller.js';
 import { SessionController } from './controller/admin/session.controller.js';
@@ -44,7 +44,7 @@ export class AuthModule {
         LoginAttempts,
         AuthService,
         { provide: AuthEvents, useClass: options.events ?? AuthEvents },
-        { provide: CaptchaProvider, useClass: AltchaCaptcha },
+        { provide: CaptchaProvider, useClass: SvgCaptcha },
         {
           provide: AuthUserStore,
           useClass: options.userStore ?? UnconfiguredAuthUserStore,

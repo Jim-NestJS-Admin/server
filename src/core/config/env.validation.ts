@@ -187,26 +187,9 @@ export class EnvironmentVariables {
   @IsString()
   AUTH_ADMIN_ORIGINS?: string;
 
-  /** 人机验证出现时机：always 每次登录都要；after-failure 同一账号或 IP 输错过才要 */
+  /** 验证码出现时机：always 每次登录都要；after-failure 同一账号或 IP 输错过才要 */
   @IsIn(['always', 'after-failure'])
   AUTH_CAPTCHA_MODE: 'always' | 'after-failure' = 'always';
-
-  /** ALTCHA 两个签名密钥，各至少 32 个字符，只放环境变量 */
-  @IsString()
-  @MinLength(32)
-  ALTCHA_HMAC_SECRET!: string;
-
-  @IsString()
-  @MinLength(32)
-  ALTCHA_HMAC_KEY_SECRET!: string;
-
-  /** 题目难度基数（PBKDF2 迭代次数）；输错后在此基础上提高计数器范围 */
-  @Transform(({ value }) =>
-    value === undefined || value === '' ? undefined : Number(value),
-  )
-  @IsInt()
-  @Min(1)
-  ALTCHA_COST: number = 5000;
 
   /** 只给接口文档导出脚本用：导出时不连数据库。不要手动设置 */
   @Transform(toBool)

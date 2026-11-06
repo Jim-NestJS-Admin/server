@@ -7,8 +7,6 @@ const DB = {
   DB_USER: 'app',
   DB_PASSWORD: 'secret',
   AUTH_JWT_SECRET: SECRET,
-  ALTCHA_HMAC_SECRET: SECRET,
-  ALTCHA_HMAC_KEY_SECRET: SECRET,
   AUTH_ADMIN_ORIGINS: 'https://admin.example.com',
 };
 const validateEnv = (raw: Record<string, unknown>) =>
@@ -93,7 +91,7 @@ describe('validateEnv', () => {
     );
     expect(() =>
       validateRaw({ DB_NAME: 'a', DB_USER: 'a', DB_PASSWORD: 'a' }),
-    ).toThrow(/ALTCHA_HMAC_SECRET/);
+    ).toThrow(/AUTH_JWT_SECRET/);
   });
 
   it('生产环境必须配置后台前端地址', () => {

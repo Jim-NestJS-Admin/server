@@ -75,6 +75,23 @@
         ],
         "type": "object"
       },
+      "CaptchaResultDto": {
+        "properties": {
+          "captchaId": {
+            "description": "验证码编号，登录时原样带上",
+            "type": "string"
+          },
+          "image": {
+            "description": "验证码图片（data:image/svg+xml;base64,...），直接放进 img 的 src",
+            "type": "string"
+          }
+        },
+        "required": [
+          "captchaId",
+          "image"
+        ],
+        "type": "object"
+      },
       "ChangeSystemPassword": {
         "properties": {
           "oldPassword": {
@@ -493,8 +510,12 @@
       },
       "LoginDto": {
         "properties": {
-          "altcha": {
-            "description": "altcha 组件给出的结果",
+          "captchaCode": {
+            "description": "用户看图输入的验证码，不区分大小写",
+            "type": "string"
+          },
+          "captchaId": {
+            "description": "验证码编号（出题接口返回的 captchaId）",
             "type": "string"
           },
           "password": {
@@ -2638,7 +2659,7 @@
   "paths": {
     "/admin/auth/captcha": {
       "get": {
-        "description": "直接返回 ALTCHA 题目对象（不包统一结构），给前端 altcha 组件用；出错时照常返回统一结构",
+        "description": "字母数字验证码，2 分钟有效，只能用一次（答错也作废，要重新获取）；account 传用户输入的账号",
         "operationId": "authCaptcha",
         "parameters": [
           {
@@ -2668,11 +2689,31 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CaptchaResultDto"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
                   "type": "object"
                 }
               }
             },
-            "description": "ALTCHA 题目对象"
+            "description": ""
           },
           "400": {
             "content": {
@@ -2695,7 +2736,7 @@
             "description": "5003：服务暂不可用"
           }
         },
-        "summary": "出人机验证题",
+        "summary": "获取图形验证码",
         "tags": [
           "auth 登录认证"
         ]

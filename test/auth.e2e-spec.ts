@@ -1,7 +1,5 @@
 import { Injectable, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { solveChallenge, type Challenge } from 'altcha-lib';
-import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
 import type { Redis } from 'ioredis';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
@@ -82,14 +80,6 @@ const cookieOf = (res: request.Response): string | null => {
   return v ? `jna_rt=${v}` : null;
 };
 
-const toPayload = async (challenge: Challenge) => {
-  const solution = await solveChallenge({ challenge, deriveKey });
-  if (!solution) throw new Error('解题失败');
-  return Buffer.from(JSON.stringify({ challenge, solution })).toString(
-    'base64',
-  );
-};
-
 describe('后台登录认证（T05）', () => {
   let app: INestApplication<App>;
   let raw: Redis;
@@ -102,11 +92,25 @@ describe('后台登录认证（T05）', () => {
         .get('/admin/auth/captcha')
         .query({ purpose: 'login', account })
         .expect(200)
-    ).body as Challenge;
-  const altchaFor = async (account: string) =>
-    toPayload(await captcha(account));
-  const login = (username: string, password: string, altcha?: string) =>
-    http().post('/admin/auth/login').send({ username, password, altcha });
+    ).body.data as { captchaId: string; image: string };
+  /** 测试直接从 Redis 读答案（真实用户是看图） */
+  const answerOf = async (tenantId: string, captchaId: string) =>
+    (
+      JSON.parse(
+        (await raw.get(`jna-test:t:${tenantId}:auth:captcha:${captchaId}`))!,
+      ) as { answer: string }
+    ).answer;
+  /** 出题并「看图作答」，返回「编号|答案」 */
+  const altchaFor = async (account: string) => {
+    const { captchaId } = await captcha(account);
+    return `${captchaId}|${await answerOf('1', captchaId)}`;
+  };
+  const login = (username: string, password: string, cap?: string) => {
+    const [captchaId, captchaCode] = cap ? cap.split('|') : [];
+    return http()
+      .post('/admin/auth/login')
+      .send({ username, password, captchaId, captchaCode });
+  };
   /** 出题、解题、登录，返回访问令牌和刷新 Cookie */
   const signIn = async (username = 'admin') => {
     const res = await login(
@@ -186,8 +190,11 @@ describe('后台登录认证（T05）', () => {
   describe('登录', () => {
     it('出题接口原样返回 ALTCHA 题目，不包统一结构，也不带难度级别', async () => {
       const ch = await captcha('admin');
-      expect(ch).toHaveProperty('parameters');
-      expect(ch).toHaveProperty('signature');
+      expect(ch.captchaId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(ch.image).toMatch(/^data:image\/svg\+xml;base64,/);
+      expect(JSON.stringify(ch)).not.toContain(
+        await answerOf('1', ch.captchaId),
+      );
       expect(ch).not.toHaveProperty('code');
       expect(ch).not.toHaveProperty('level');
     });
@@ -269,11 +276,13 @@ describe('后台登录认证（T05）', () => {
     });
   });
 
-  describe('人机验证：全部在核对密码之前拒绝，不计失败次数', () => {
+  describe('验证码：全部在核对密码之前拒绝，不计失败次数', () => {
     const rejected = async (res: request.Response) => {
       expect(res.status).toBe(400);
       expect(res.body.data).toEqual({
-        errors: [{ field: 'altcha', messages: ['人机验证失败，请重试'] }],
+        errors: [
+          { field: 'captchaCode', messages: ['验证码错误，请重新输入'] },
+        ],
       });
       // 用错误密码也是人机验证错误，说明没有走到密码校验
       expect(await failCount('admin')).toBe(0);
@@ -281,7 +290,7 @@ describe('后台登录认证（T05）', () => {
 
     it('没带结果、乱填', async () => {
       await rejected(await login('admin', 'wrong-pass1'));
-      await rejected(await login('admin', 'wrong-pass1', 'not-base64-json'));
+      await rejected(await login('admin', 'wrong-pass1', 'bad-id|abcd'));
     });
 
     it('重复提交同一结果', async () => {
@@ -306,20 +315,11 @@ describe('后台登录认证（T05）', () => {
       await rejected(await login('admin', 'wrong-pass1', await altchaFor('')));
     });
 
-    it('签名被篡改：改了绑定的账号', async () => {
-      const ch = await captcha('bob');
-      const payload = JSON.parse(
-        Buffer.from(await toPayload(ch), 'base64').toString(),
-      ) as { challenge: Challenge };
-      (payload.challenge.parameters.data as Record<string, string>).subject =
-        'admin';
-      await rejected(
-        await login(
-          'admin',
-          'wrong-pass1',
-          Buffer.from(JSON.stringify(payload)).toString('base64'),
-        ),
-      );
+    it('答错：这道题立即作废，再填对也不行', async () => {
+      const a = await altchaFor('admin');
+      const id = a.split('|')[0];
+      await rejected(await login('admin', PASSWORD, `${id}|zzzz`));
+      await rejected(await login('admin', PASSWORD, a));
     });
 
     it('登录题拿去别的用途、别的租户', async () => {
@@ -328,17 +328,18 @@ describe('后台登录认证（T05）', () => {
         { purpose: 'sms' as const, tenantId: '1', subject: 'admin' },
         { purpose: 'login' as const, tenantId: '2', subject: 'admin' },
       ]) {
-        const ch = (await provider.create(binding, 2)) as Challenge;
+        const { captchaId } = await provider.create(binding, 2);
+        const answer = await answerOf(binding.tenantId, captchaId);
         await rejected(
-          await login('admin', 'wrong-pass1', await toPayload(ch)),
+          await login('admin', 'wrong-pass1', `${captchaId}|${answer}`),
         );
       }
     });
 
-    it('题目过期（2 分钟）', async () => {
+    it('题目过期（2 分钟，Redis 里到期就没了）', async () => {
       const a = await altchaFor('admin');
-      vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(Date.now() + 125_000);
+      await raw.pexpire(`jna-test:t:1:auth:captcha:${a.split('|')[0]}`, 1);
+      await new Promise((r) => setTimeout(r, 20));
       await rejected(await login('admin', 'wrong-pass1', a));
     });
 
@@ -346,7 +347,7 @@ describe('后台登录认证（T05）', () => {
       const old = await altchaFor('admin');
       await login('admin', 'wrong-pass1', await altchaFor('admin')).expect(400);
       const res = await login('admin', PASSWORD, old).expect(400);
-      expect(res.body.data.errors[0].field).toBe('altcha');
+      expect(res.body.data.errors[0].field).toBe('captchaCode');
       expect(await failCount('admin')).toBe(1);
       await login('admin', PASSWORD, await altchaFor('admin')).expect(200);
     });
