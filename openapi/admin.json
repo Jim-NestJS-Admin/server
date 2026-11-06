@@ -1,6 +1,221 @@
 {
   "components": {
-    "schemas": {},
+    "schemas": {
+      "ApiErrorBody": {
+        "properties": {
+          "code": {
+            "description": "业务码，非 1000 都是失败",
+            "example": 4000,
+            "type": "number"
+          },
+          "data": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ApiErrorData"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "message": {
+            "example": "请求参数有误",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "data",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ApiErrorData": {
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ApiFieldError"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ApiFieldError": {
+        "properties": {
+          "clientId": {
+            "description": "新增子行的客户端标识",
+            "type": "string"
+          },
+          "field": {
+            "example": "username",
+            "type": "string"
+          },
+          "id": {
+            "description": "已有子行的编号",
+            "type": "string"
+          },
+          "index": {
+            "description": "新增子行没有可用的 clientId 时，它在 added 里的位置（从 0 开始）",
+            "type": "number"
+          },
+          "messages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resource": {
+            "description": "子表资源名（主子表保存时）",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "messages"
+        ],
+        "type": "object"
+      },
+      "LoginDto": {
+        "properties": {
+          "altcha": {
+            "description": "altcha 组件给出的结果",
+            "type": "string"
+          },
+          "password": {
+            "format": "password",
+            "type": "string"
+          },
+          "username": {
+            "description": "不区分大小写，首尾空格忽略",
+            "example": "admin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object"
+      },
+      "OrgOption": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "description": "从根到自己的名称",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path"
+        ],
+        "type": "object"
+      },
+      "ProfileResult": {
+        "properties": {
+          "currentOrg": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrgOption"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
+          },
+          "locale": {
+            "example": "zh-CN",
+            "type": "string"
+          },
+          "orgs": {
+            "description": "有角色的组织，可以切换",
+            "items": {
+              "$ref": "#/components/schemas/OrgOption"
+            },
+            "type": "array"
+          },
+          "user": {
+            "$ref": "#/components/schemas/ProfileUser"
+          }
+        },
+        "required": [
+          "user",
+          "currentOrg",
+          "orgs",
+          "locale"
+        ],
+        "type": "object"
+      },
+      "ProfileUser": {
+        "properties": {
+          "avatar": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "nickname": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "nickname",
+          "avatar"
+        ],
+        "type": "object"
+      },
+      "SwitchOrgDto": {
+        "properties": {
+          "orgId": {
+            "description": "要切换到的组织编号",
+            "type": "string"
+          }
+        },
+        "required": [
+          "orgId"
+        ],
+        "type": "object"
+      },
+      "TokenResult": {
+        "properties": {
+          "accessToken": {
+            "description": "访问令牌，只放内存，放在 Authorization: Bearer 头里",
+            "type": "string"
+          },
+          "expiresIn": {
+            "description": "访问令牌多少秒后过期",
+            "example": 1800,
+            "type": "number"
+          },
+          "tokenType": {
+            "enum": [
+              "Bearer"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken",
+          "tokenType",
+          "expiresIn"
+        ],
+        "type": "object"
+      }
+    },
     "securitySchemes": {
       "bearer": {
         "bearerFormat": "JWT",
@@ -16,7 +231,457 @@
     "version": "0.0.1"
   },
   "openapi": "3.0.0",
-  "paths": {},
+  "paths": {
+    "/admin/auth/captcha": {
+      "get": {
+        "description": "直接返回 ALTCHA 题目对象（不包统一结构），给前端 altcha 组件用；出错时照常返回统一结构",
+        "operationId": "authCaptcha",
+        "parameters": [
+          {
+            "description": "用途，后台只有 login",
+            "in": "query",
+            "name": "purpose",
+            "required": true,
+            "schema": {
+              "enum": [
+                "login"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "用户输入的账号原文，出题和登录必须传同一个值",
+            "in": "query",
+            "name": "account",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "ALTCHA 题目对象"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "5003：服务暂不可用"
+          }
+        },
+        "summary": "出人机验证题",
+        "tags": [
+          "auth 登录认证"
+        ]
+      }
+    },
+    "/admin/auth/login": {
+      "post": {
+        "operationId": "authLogin",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TokenResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "5003：服务暂不可用"
+          }
+        },
+        "summary": "账号密码登录",
+        "tags": [
+          "auth 登录认证"
+        ]
+      }
+    },
+    "/admin/auth/logout": {
+      "post": {
+        "description": "有访问令牌就带上；吊销本会话并清 Cookie，会话本来就没了也返回成功",
+        "operationId": "authLogout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "5003：服务暂不可用"
+          }
+        },
+        "summary": "退出",
+        "tags": [
+          "auth 登录认证"
+        ]
+      }
+    },
+    "/admin/auth/refresh": {
+      "post": {
+        "description": "靠 Cookie 里的刷新令牌，同时换新的刷新令牌。失败一律 401 并清 Cookie，不要重试",
+        "operationId": "authRefresh",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TokenResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "5003：服务暂不可用"
+          }
+        },
+        "summary": "刷新访问令牌",
+        "tags": [
+          "auth 登录认证"
+        ]
+      }
+    },
+    "/admin/session/profile": {
+      "get": {
+        "operationId": "sessionProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ProfileResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "5003：服务暂不可用"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "当前用户、当前组织、可切换的组织",
+        "tags": [
+          "auth 登录认证"
+        ]
+      }
+    },
+    "/admin/session/switch-org": {
+      "post": {
+        "description": "返回带新组织的访问令牌，同时换刷新令牌 Cookie；旧访问令牌立即失效",
+        "operationId": "sessionSwitchOrg",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchOrgDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TokenResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "5003：服务暂不可用"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "切换当前组织",
+        "tags": [
+          "auth 登录认证"
+        ]
+      }
+    }
+  },
   "servers": [],
   "tags": []
 }

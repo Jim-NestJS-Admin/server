@@ -1,6 +1,8 @@
 import { plainToInstance, Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsIn,
+  MinLength,
   IsNotEmpty,
   IsOptional,
   IsEnum,
@@ -37,7 +39,7 @@ const toBool = ({ value }: { value: unknown }) => {
 
 /**
  * 启动时校验的环境变量。缺项或格式不对直接启动失败，不带病运行。
- * 新增配置项时同步写进 .env.example。Redis 配置在 T04 加入。
+ * 新增配置项时同步写进 .env.example。
  */
 export class EnvironmentVariables {
   @IsEnum(NodeEnv)
@@ -90,6 +92,122 @@ export class EnvironmentVariables {
   @IsBoolean()
   DB_SYNCHRONIZE?: boolean;
 
+  @IsString()
+  @IsNotEmpty()
+  REDIS_HOST: string = '127.0.0.1';
+
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  REDIS_PORT: number = 6379;
+
+  @IsOptional()
+  @IsString()
+  REDIS_PASSWORD?: string;
+
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(0)
+  @Max(15)
+  REDIS_DB: number = 0;
+
+  /** 所有键的前缀。同一个 Redis 给多个环境用时靠它区分；端到端测试用单独的前缀，只清理自己的键 */
+  @IsString()
+  @IsNotEmpty()
+  REDIS_KEY_PREFIX: string = 'jna:';
+
+  /** 访问令牌签名密钥，至少 32 个字符，只放环境变量 */
+  @IsString()
+  @MinLength(32)
+  AUTH_JWT_SECRET!: string;
+
+  /** 访问令牌有效期（分钟），建议 30 */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  AUTH_ACCESS_TTL_MINUTES: number = 30;
+
+  /** 刷新令牌（会话）有效期（天），建议 7 */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  @Max(90)
+  AUTH_REFRESH_TTL_DAYS: number = 7;
+
+  /** 多长时间不操作自动退出（分钟），0 表示不启用 */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(0)
+  AUTH_IDLE_MINUTES: number = 0;
+
+  /** 同一账号只允许一处登录：新登录挤掉旧会话 */
+  @Transform(toBool)
+  @IsOptional()
+  @IsBoolean()
+  AUTH_SINGLE_SESSION?: boolean;
+
+  /** 同一账号连续输错几次锁定 */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  AUTH_LOCK_MAX_FAILS: number = 5;
+
+  /** 同一 IP 连续输错几次锁定（防止一个 IP 轮流试很多账号） */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  AUTH_LOCK_IP_MAX_FAILS: number = 20;
+
+  /** 锁定时长（分钟）；失败计数也在这段时间后清零 */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  AUTH_LOCK_MINUTES: number = 15;
+
+  /** 允许调用刷新、退出、切换组织的后台前端地址（Origin），多个用逗号分隔。生产环境必填 */
+  @IsOptional()
+  @IsString()
+  AUTH_ADMIN_ORIGINS?: string;
+
+  /** 人机验证出现时机：always 每次登录都要；after-failure 同一账号或 IP 输错过才要 */
+  @IsIn(['always', 'after-failure'])
+  AUTH_CAPTCHA_MODE: 'always' | 'after-failure' = 'always';
+
+  /** ALTCHA 两个签名密钥，各至少 32 个字符，只放环境变量 */
+  @IsString()
+  @MinLength(32)
+  ALTCHA_HMAC_SECRET!: string;
+
+  @IsString()
+  @MinLength(32)
+  ALTCHA_HMAC_KEY_SECRET!: string;
+
+  /** 题目难度基数（PBKDF2 迭代次数）；输错后在此基础上提高计数器范围 */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  ALTCHA_COST: number = 5000;
+
   /** 只给接口文档导出脚本用：导出时不连数据库。不要手动设置 */
   @Transform(toBool)
   @IsOptional()
@@ -125,6 +243,15 @@ export function validateEnv(
   if (env.DB_SYNCHRONIZE && !env.DB_NAME.endsWith('_test')) {
     throw new Error(
       `环境变量校验失败，服务不能启动：\nDB_SYNCHRONIZE 打开时 DB_NAME 必须以 _test 结尾（现在是 ${env.DB_NAME}）`,
+    );
+  }
+  if (
+    env.NODE_ENV === NodeEnv.Production &&
+    !env.OPENAPI_EXPORT &&
+    !env.AUTH_ADMIN_ORIGINS?.trim()
+  ) {
+    throw new Error(
+      '环境变量校验失败，服务不能启动：\n生产环境必须设置 AUTH_ADMIN_ORIGINS（后台前端地址）',
     );
   }
   if (env.SWAGGER_ENABLED === undefined) {

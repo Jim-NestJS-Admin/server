@@ -1,5 +1,4 @@
 import type { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
@@ -18,6 +17,7 @@ import {
   DemoOrderNoteEntity,
   DemoOrderTagEntity,
 } from './fixtures/demo-order.js';
+import { createTestModule } from './support/test-auth.js';
 
 const ENTITIES = [
   DemoOrderEntity,
@@ -90,7 +90,7 @@ describe('主子表聚合保存（验收点②）', () => {
   };
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
+    const moduleRef = await createTestModule({
       imports: [AppModule, TypeOrmModule.forFeature(ENTITIES)],
       controllers: [DemoOrderController],
     }).compile();
@@ -829,7 +829,7 @@ describe('主子表聚合保存（验收点②）', () => {
 
 describe('子表只有主表一个写入口', () => {
   it('子表实体自己开放修改接口：启动失败', async () => {
-    const moduleRef = await Test.createTestingModule({
+    const moduleRef = await createTestModule({
       imports: [AppModule, TypeOrmModule.forFeature(ENTITIES)],
       controllers: [DemoOrderController, DemoOrderItemWriteController],
     }).compile();
@@ -850,7 +850,7 @@ describe('子表只有主表一个写入口：Service 层', () => {
   ])(
     '%s：只读子表资源可以查，但它的 Service 新增、修改、删除都被拒，数据不变',
     async (_name, controllers) => {
-      const moduleRef = await Test.createTestingModule({
+      const moduleRef = await createTestModule({
         imports: [AppModule, TypeOrmModule.forFeature(ENTITIES)],
         controllers,
         providers: [DemoOrderItemReadService],

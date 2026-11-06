@@ -1,7 +1,4 @@
 import { ClsService, ClsServiceManager } from 'nestjs-cls';
-import { NodeEnv } from '../config/env.validation.js';
-import type { AppConfigService } from '../config/app-config.service.js';
-import { PhaseOneAdminAuth } from '../endpoint/endpoint-auth.js';
 import { MissingContextError, RequestContext } from './request-context.js';
 
 const cls = (): ClsService => ClsServiceManager.getClsService();
@@ -75,28 +72,6 @@ describe('请求上下文 RequestContext', () => {
         (snap as { ignoreTenant: boolean }).ignoreTenant = false;
       }).toThrow(TypeError);
       expect(c.current()).toMatchObject({ tenantId: '0', ignoreTenant: true });
-    });
-  });
-});
-
-describe('阶段 1 后台认证占位', () => {
-  const auth = (nodeEnv: NodeEnv) =>
-    new PhaseOneAdminAuth({
-      isProduction: nodeEnv === NodeEnv.Production,
-    } as AppConfigService);
-
-  it('生产环境启动时直接拒绝', () => {
-    expect(() => auth(NodeEnv.Production).onModuleInit()).toThrow(
-      /生产环境不能启动/,
-    );
-    expect(() => auth(NodeEnv.Development).onModuleInit()).not.toThrow();
-  });
-
-  it('开发和测试里返回默认租户的匿名用户', async () => {
-    await expect(auth(NodeEnv.Test).authenticate()).resolves.toEqual({
-      tenantId: '1',
-      userId: null,
-      orgId: null,
     });
   });
 });

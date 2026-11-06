@@ -58,14 +58,20 @@ export function ApiResult(model?: Type): MethodDecorator {
   );
 }
 
-const ERROR_DESCRIPTIONS: Record<number, string> = {
+const ERROR_DESCRIPTIONS = {
   400: '4000：参数有误、唯一冲突等，字段错误在 data.errors',
+  401: '4001：没有登录、访问令牌无效或会话已失效',
+  403: '4003：没有权限',
   404: '4004：数据不存在或无权访问',
   409: '4009：数据已被他人修改，请刷新后重试',
-};
+  429: '4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试',
+  503: '5003：服务暂不可用',
+} as const;
 
 /** 失败响应：真实 HTTP 状态 + 数字业务码 */
-export function ApiErrors(...statuses: (400 | 404 | 409)[]): MethodDecorator {
+export function ApiErrors(
+  ...statuses: (keyof typeof ERROR_DESCRIPTIONS)[]
+): MethodDecorator {
   return applyDecorators(
     ApiExtraModels(ApiErrorBody, ApiErrorData, ApiFieldError),
     ...statuses.map((status) =>

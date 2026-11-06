@@ -34,6 +34,7 @@ function routes(
   return out;
 }
 import {
+  ANONYMOUS_KEY,
   ENDPOINT_KEY,
   ENDPOINT_PREFIX,
   IGNORE_TENANT_KEY,
@@ -67,6 +68,22 @@ export class EndpointCheck implements OnModuleInit {
           throw new Error(
             `${name}.${r.method} 上加了 @Public：@Public 只能加在控制器上，不能在某个端的控制器里开免登录的方法`,
           );
+      for (const r of list)
+        if (Reflect.getMetadata(ANONYMOUS_KEY, r.fn) === true)
+          throw new Error(
+            `${name}.${r.method} 上加了 @Anonymous：@Anonymous 只能加在控制器上，免登录的接口单独放一个控制器`,
+          );
+      const isAnonymous = Reflect.getMetadata(ANONYMOUS_KEY, cls) === true;
+      if (isAnonymous && !endpoint)
+        throw new Error(
+          `${name} 是 @Anonymous，但没有指定所属的端：用 @AdminController 等，不需要端的基础接口用 @Public`,
+        );
+      if (isAnonymous)
+        for (const r of list)
+          if (Reflect.getMetadata(IGNORE_TENANT_KEY, r.fn))
+            throw new Error(
+              `${name}.${r.method} 是 @Anonymous 接口，不能用 @IgnoreTenant`,
+            );
       if (isPublic && endpoint)
         throw new Error(`${name} 不能同时属于端 ${endpoint} 又标成 @Public`);
       if (!isPublic && !endpoint)

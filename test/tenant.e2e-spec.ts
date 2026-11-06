@@ -45,6 +45,10 @@ import {
 /** 测试用后台认证：从请求头取租户和用户，代替 T05 的正式登录；没带就是没登录 */
 @Injectable()
 class HeaderAdminAuth extends AdminAuth {
+  async resolveTenant(): Promise<string> {
+    return '1';
+  }
+
   async authenticate(req: Request): Promise<Principal> {
     const tenantId = req.header('x-test-tenant');
     if (!tenantId)

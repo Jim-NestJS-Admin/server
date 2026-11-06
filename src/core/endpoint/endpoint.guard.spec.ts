@@ -20,6 +20,9 @@ class InfraController {
 
 class DenyAuth extends AdminAuth {
   calls = 0;
+  async resolveTenant(): Promise<string> {
+    return '1';
+  }
   async authenticate(): Promise<never> {
     this.calls++;
     throw new Error('denied');

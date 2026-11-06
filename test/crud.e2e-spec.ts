@@ -1,5 +1,4 @@
 import type { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
@@ -16,6 +15,7 @@ import {
   DemoUserEntity,
   DemoUserService,
 } from './fixtures/demo-resources.js';
+import { createTestModule } from './support/test-auth.js';
 
 /**
  * T03 验收点①：基础 CRUD 与页面描述，连真实 MySQL 测试库。
@@ -33,7 +33,7 @@ describe('通用 CRUD（验收点①）', () => {
   const add = (data: Record<string, unknown>) => post('add', { data });
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
+    const moduleRef = await createTestModule({
       imports: [
         AppModule,
         TypeOrmModule.forFeature([DemoUserEntity, DemoLogEntity]),
@@ -712,7 +712,7 @@ describe('通用 CRUD（验收点①）', () => {
 
 describe('一个 Service 只能服务一个资源', () => {
   it('同一实体的两个资源共用一个 Service：启动失败，不会静默互相覆盖规则', async () => {
-    const moduleRef = await Test.createTestingModule({
+    const moduleRef = await createTestModule({
       imports: [AppModule, TypeOrmModule.forFeature([DemoUserEntity])],
       controllers: [DemoUserController, DemoUserCopyController],
       providers: [DemoUserService],

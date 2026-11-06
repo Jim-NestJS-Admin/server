@@ -16,6 +16,7 @@ import {
 import { PLATFORM_TENANT_ID } from '../tenant/tenant.constants.js';
 import { AdminAuth } from './endpoint-auth.js';
 import {
+  ANONYMOUS_KEY,
   ENDPOINT_KEY,
   IGNORE_TENANT_KEY,
   PUBLIC_KEY,
@@ -52,7 +53,14 @@ export class EndpointGuard implements CanActivate {
         HttpStatus.NOT_FOUND,
       );
 
-    const principal = await this.adminAuth.authenticate(req);
+    // 同样只认控制器上的 @Anonymous
+    const principal = this.reflector.get<boolean>(ANONYMOUS_KEY, ctx.getClass())
+      ? {
+          tenantId: await this.adminAuth.resolveTenant(req),
+          userId: null,
+          orgId: null,
+        }
+      : await this.adminAuth.authenticate(req);
     this.context.establish(endpoint, principal);
 
     if (this.reflector.get<boolean>(IGNORE_TENANT_KEY, ctx.getHandler())) {
