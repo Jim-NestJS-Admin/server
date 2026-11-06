@@ -1,5 +1,6 @@
 import { escapeSpreadsheetCell, sanitizeRichText } from './sanitize.js';
 import { assertPublicUrl, isPrivateAddress } from './ssrf.js';
+import { signOpenRequest, verifyOpenSignature } from './open-signature.js';
 
 describe('安全工具（T25）', () => {
   it('富文本：去掉脚本、事件属性和 javascript: 链接', () => {
@@ -39,5 +40,32 @@ describe('安全工具（T25）', () => {
     await expect(assertPublicUrl('http://u:p@8.8.8.8/')).rejects.toThrow(
       '账号密码',
     );
+  });
+
+  it('开放接口签名：测试向量和契约一致，时间窗口、篡改都拒绝', () => {
+    const req = {
+      method: 'POST',
+      path: '/open/v1/orders?x=1',
+      appId: 'demo-app',
+      timestamp: '1793900000',
+      nonce: 'abcdef0123456789',
+      body: '{"a":1}',
+    };
+    const sig = signOpenRequest(req, 'test-secret-0123456789');
+    expect(sig).toBe('iic-p5gFu_vr3uEVT6zX5gvCDqSVA_YsgeuTg0TpbOQ');
+    expect(
+      verifyOpenSignature(req, sig, 'test-secret-0123456789', 1793900100),
+    ).toEqual({ ok: true });
+    expect(
+      verifyOpenSignature(req, sig, 'test-secret-0123456789', 1793900400),
+    ).toEqual({ ok: false, reason: 'expired' });
+    expect(
+      verifyOpenSignature(
+        { ...req, body: '{"a":2}' },
+        sig,
+        'test-secret-0123456789',
+        1793900000,
+      ),
+    ).toEqual({ ok: false, reason: 'bad_signature' });
   });
 });
