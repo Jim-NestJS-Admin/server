@@ -15,6 +15,7 @@ import {
 } from '../tenant/request-context.js';
 import { PLATFORM_TENANT_ID } from '../tenant/tenant.constants.js';
 import { AdminAuth, AdminAuthorizer } from './endpoint-auth.js';
+import { LOGIN_ONLY_KEY, PERMS_KEY } from '../permission/perms.decorator.js';
 import {
   ANONYMOUS_KEY,
   ENDPOINT_KEY,
@@ -59,6 +60,21 @@ export class EndpointGuard implements CanActivate {
       ANONYMOUS_KEY,
       ctx.getClass(),
     );
+    // 免登录接口上出现权限声明是矛盾的（启动检查会拦，这里第二道）：拒绝，不按免登录放行
+    if (
+      anonymous &&
+      (this.reflector.get(PERMS_KEY, ctx.getHandler()) ||
+        this.reflector.getAllAndOverride(LOGIN_ONLY_KEY, [
+          ctx.getHandler(),
+          ctx.getClass(),
+        ]) ||
+        this.reflector.get(PERMS_KEY, ctx.getClass()))
+    )
+      throw new BusinessException(
+        ErrorCode.Forbidden,
+        '没有权限',
+        HttpStatus.FORBIDDEN,
+      );
     const principal = anonymous
       ? {
           tenantId: await this.adminAuth.resolveTenant(req),

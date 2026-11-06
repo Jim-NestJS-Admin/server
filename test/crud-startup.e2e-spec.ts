@@ -200,6 +200,38 @@ class ClassPermController {
   }
 }
 
+@Anonymous()
+@AdminController('anon-perms')
+class AnonymousPermsController {
+  @Get()
+  @Perms('test:anon:secret')
+  secret() {
+    return 1;
+  }
+}
+
+@Anonymous()
+@LoginOnly()
+@AdminController('anon-login-only')
+class AnonymousLoginOnlyController {
+  @Get()
+  ok() {
+    return 1;
+  }
+}
+
+class AnonBase {
+  @Get('inherited')
+  @Perms('test:anon:inherited')
+  inherited() {
+    return 1;
+  }
+}
+
+@Anonymous()
+@AdminController('anon-inherit')
+class AnonymousInheritedPermsController extends AnonBase {}
+
 describe('启动检查：多端接口', () => {
   it.each([
     [
@@ -262,6 +294,21 @@ describe('启动检查：多端接口', () => {
       '@Perms 加在控制器上',
       ClassPermController,
       /ClassPermController 上加了 @Perms/,
+    ],
+    [
+      '@Anonymous 控制器的方法上加 @Perms',
+      AnonymousPermsController,
+      /AnonymousPermsController.secret 在 @Anonymous 控制器里却声明了权限/,
+    ],
+    [
+      '@Anonymous 和 @LoginOnly 加在同一个控制器上',
+      AnonymousLoginOnlyController,
+      /AnonymousLoginOnlyController 是 @Anonymous，不能同时加/,
+    ],
+    [
+      '@Anonymous 控制器继承来的方法带 @Perms',
+      AnonymousInheritedPermsController,
+      /AnonymousInheritedPermsController.inherited 在 @Anonymous 控制器里却声明了权限/,
     ],
   ])('%s：启动失败', async (_name, controller, error) => {
     const moduleRef = await createTestModule({
