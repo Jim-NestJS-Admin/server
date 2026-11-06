@@ -63,3 +63,28 @@ export function fieldVerdict(
   }
   return best ?? { state: 'hidden', mask: null };
 }
+
+/**
+ * 能不能按这个字段的原值排序、筛选、搜索（架构「字段权限 · 边界规则」第 1 条）：
+ * 本次有效角色**全部**能看原值（可编辑或只读）才行，只看角色配置、不看具体行和查询结果，避免一位一位猜出原值。
+ */
+export function rawVisibleToAll(
+  authz: Readonly<Authorization>,
+  resource: string,
+  entity: Function,
+  field: string,
+): boolean {
+  const key = `${resource}.${field}`;
+  const code = fieldPermOf(entity, field);
+  const fallback =
+    asState(authz.fields.defaults[key]?.state) ??
+    code?.default ??
+    ('editable' as FieldState);
+  if (authz.roles.length === 0) return false;
+  return authz.roles.every((role) => {
+    if (role.superAdmin) return true;
+    const s =
+      asState(authz.fields.roles[role.roleId]?.[key]?.state) ?? fallback;
+    return s === 'editable' || s === 'readonly';
+  });
+}

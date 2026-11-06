@@ -215,6 +215,17 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     TransformType(() => Eq),
   ]);
 
+  prop(PageBody, 'where', Object, [
+    ApiPropertyOptional({
+      description:
+        '高级查询：{ op: and|or, items: [{ field, op, value } | 子分组] }，最多 3 层 30 个条件；' +
+        'op 可选 eq ne gt gte lt lte in notIn contains startsWith between isNull notNull（契约 query.md）',
+      type: Object,
+    }),
+    IsOptional(),
+    IsObject(),
+  ]);
+
   const InfoBody = named(class {}, `${n}InfoBody`);
   prop(InfoBody, 'id', String, [
     ApiProperty({ type: String, example: '1' }),

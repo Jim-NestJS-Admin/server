@@ -29,13 +29,17 @@ import { clearTestRedis, rawRedis } from './support/test-redis.js';
 
 @Entity('demo_client')
 class DemoClientEntity extends BaseEntity {
-  @CrudField({ label: '名称', form: { required: true } })
+  @CrudField({
+    label: '名称',
+    form: { required: true },
+    list: { sortable: true },
+  })
   @IsString()
   @Length(1, 50)
   @Column({ type: 'varchar', length: 50 })
   name: string;
 
-  @CrudField({ label: '手机号' })
+  @CrudField({ label: '手机号', list: { sortable: true } })
   @FieldPerm({ label: '手机号', default: 'masked', mask: 'phone' })
   @IsOptional()
   @IsString()
@@ -56,6 +60,10 @@ class DemoClientEntity extends BaseEntity {
   entity: DemoClientEntity,
   api: ['page', 'info', 'update'],
   dataScope: true,
+  pageQuery: {
+    keyWords: ['name', 'phone'],
+    fieldEq: ['name', 'phone'],
+  },
 })
 class DemoClientController extends BaseController<DemoClientEntity> {}
 
@@ -239,6 +247,66 @@ describe('字段权限（T16）', () => {
     expect(s2.fieldPerms).toMatchObject({
       phone: { state: 'masked', mask: 'phone' },
       cost: { state: 'hidden' },
+    });
+  });
+
+  describe('查询（T18）：脱敏、隐藏字段不能按原值排序、筛选、搜索', () => {
+    it('只要有一个本次有效角色看不到原值就不行；搜索框自动跳过这个字段', async () => {
+      await seed('alpha', '11');
+      // 小王：客服看手机号是脱敏 → 不能按手机号筛选、排序
+      await as('100', '11', 'page', { eq: { phone: '13812345678' } }).expect(
+        400,
+      );
+      await as('100', '11', 'page', {
+        sort: [{ field: 'phone', order: 'asc' }],
+      }).expect(400);
+      await as('100', '11', 'page', {
+        where: {
+          op: 'and',
+          items: [{ field: 'phone', op: 'startsWith', value: '138' }],
+        },
+      }).expect(400);
+      const r = await as('100', '11', 'page', { keyword: '138' }).expect(200);
+      expect(r.body.data.total).toBe(0);
+    });
+
+    it('高级查询：且 / 或分组、白名单运算符，值参数化', async () => {
+      await seed('alpha', '11');
+      await seed('beta', '11');
+      await seed('gamma', '20');
+      const r = await as('100', '11', 'page', {
+        where: {
+          op: 'or',
+          items: [
+            { field: 'name', op: 'eq', value: 'alpha' },
+            {
+              op: 'and',
+              items: [
+                { field: 'name', op: 'startsWith', value: 'g' },
+                { field: 'name', op: 'ne', value: 'x' },
+              ],
+            },
+          ],
+        },
+      }).expect(200);
+      expect(
+        r.body.data.list.map((x: { name: string }) => x.name).sort(),
+      ).toEqual(['alpha', 'gamma']);
+      await as('100', '11', 'page', {
+        where: {
+          op: 'and',
+          items: [{ field: 'name', op: 'regexp', value: '.*' }],
+        },
+      }).expect(400);
+      await as('100', '11', 'page', {
+        where: { op: 'and', items: [{ field: 'cost', op: 'eq', value: '1' }] },
+      }).expect(400);
+      await as('100', '11', 'page', {
+        where: {
+          op: 'and',
+          items: [{ field: 'name', op: 'eq', value: "x' OR 1=1 --" }],
+        },
+      }).expect(200);
     });
   });
 });
