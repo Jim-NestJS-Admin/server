@@ -154,7 +154,7 @@ export class SystemRole extends BaseEntity {
 export class SystemUserRole extends BaseEntity {
   @Column({
     type: 'bigint',
-    unsigned: true,
+    nullable: true,
     generatedType: 'STORED',
     asExpression: 'IFNULL(`scope_org_id`, 0)',
     insert: false,

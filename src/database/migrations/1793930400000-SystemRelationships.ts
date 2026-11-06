@@ -15,7 +15,7 @@ export class SystemRelationships1793930400000 implements MigrationInterface {
         new TableColumn({
           name: 'scope_guard',
           type: 'bigint',
-          unsigned: true,
+          isNullable: true,
           generatedType: 'STORED',
           asExpression: 'IFNULL(`scope_org_id`, 0)',
         }),
