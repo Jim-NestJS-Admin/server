@@ -276,6 +276,15 @@ describe('后台登录认证（T05）', () => {
     });
   });
 
+  describe('限流（T25）', () => {
+    it('同一 IP 一分钟内登录超过 20 次：429，带 Retry-After', async () => {
+      for (let i = 0; i < 20; i++) await login('nobody' + i, 'x');
+      const res = await login('nobody', 'x').expect(429);
+      expect(res.body.code).toBe(4029);
+      expect(Number(res.headers['retry-after'])).toBeGreaterThan(0);
+    });
+  });
+
   describe('验证码：全部在核对密码之前拒绝，不计失败次数', () => {
     const rejected = async (res: request.Response) => {
       expect(res.status).toBe(400);

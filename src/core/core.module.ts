@@ -21,6 +21,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { EndpointCheck } from './endpoint/endpoint-check.js';
 import { EndpointGuard } from './endpoint/endpoint.guard.js';
+import { RateLimitGuard } from './security/rate-limit.js';
 import { RequestContext } from './tenant/request-context.js';
 import { TenantGuardSubscriber } from './tenant/tenant-guard.subscriber.js';
 import { TenantRepositoryFactory } from './tenant/tenant-repository.js';
@@ -63,6 +64,8 @@ import { TenantRepositoryFactory } from './tenant/tenant-repository.js';
     TenantRepositoryFactory,
     TenantGuardSubscriber,
     EndpointCheck,
+    // 限流排在认证前面：没登录的请求也计数
+    { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: EndpointGuard },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

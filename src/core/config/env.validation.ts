@@ -191,6 +191,23 @@ export class EnvironmentVariables {
   @IsIn(['always', 'after-failure'])
   AUTH_CAPTCHA_MODE: 'always' | 'after-failure' = 'always';
 
+  /** 前面有几层受控的反向代理（0 表示直连，不信 X-Forwarded-For）。限流、登录计数按它取来源 IP */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(0)
+  @Max(5)
+  TRUST_PROXY: number = 0;
+
+  /** 每个来源 IP 每分钟最多请求次数（总闸） */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(10)
+  RATE_LIMIT_IP_PER_MINUTE: number = 600;
+
   /** 只给接口文档导出脚本用：导出时不连数据库。不要手动设置 */
   @Transform(toBool)
   @IsOptional()

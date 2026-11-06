@@ -74,6 +74,13 @@ export class AppConfigService {
     };
   }
 
+  get security(): { trustProxy: number; ipPerMinute: number } {
+    return {
+      trustProxy: this.config.get('TRUST_PROXY', { infer: true }),
+      ipPerMinute: this.config.get('RATE_LIMIT_IP_PER_MINUTE', { infer: true }),
+    };
+  }
+
   get auth(): AuthConfig {
     const g = <K extends keyof EnvironmentVariables>(k: K) =>
       this.config.get(k, { infer: true }) as EnvironmentVariables[K];
