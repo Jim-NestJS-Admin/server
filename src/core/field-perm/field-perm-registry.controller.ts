@@ -1,5 +1,10 @@
 import { Get } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiProperty,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CrudRuntime } from '../crud/crud.runtime.js';
 import { SYSTEM_FIELDS } from '../crud/base.entity.js';
 import { AdminController } from '../endpoint/endpoint.decorators.js';
@@ -9,6 +14,42 @@ import { fieldPermOf } from './field-perm.decorator.js';
 import { MASK_RULES } from './masks.js';
 
 const SYSTEM = new Set<string>([...SYSTEM_FIELDS, 'version', 'deletedAt']);
+const STATES = ['editable', 'readonly', 'masked', 'hidden'];
+const MASKS = ['phone', 'email', 'idcard', 'last4', 'all'];
+
+class FieldPermFieldDto {
+  @ApiProperty({ description: '实体属性名' }) field!: string;
+  @ApiProperty() label!: string;
+  @ApiProperty({ enum: STATES, description: '代码默认状态' }) default!: string;
+  @ApiProperty({ enum: MASKS, nullable: true, type: String }) mask!:
+    string | null;
+  @ApiProperty({
+    enum: STATES,
+    nullable: true,
+    type: String,
+    description: '可委派上限',
+  })
+  delegable!: string | null;
+  @ApiProperty() configurable!: boolean;
+}
+
+class FieldPermResourceDto {
+  @ApiProperty({ description: '资源（权限码前缀），如 system:user' })
+  resource!: string;
+  @ApiProperty() label!: string;
+  @ApiProperty({ type: [FieldPermFieldDto] }) fields!: FieldPermFieldDto[];
+}
+
+class MaskRuleDto {
+  @ApiProperty({ enum: MASKS }) code!: string;
+  @ApiProperty() label!: string;
+}
+
+class FieldPermRegistryDto {
+  @ApiProperty({ type: [FieldPermResourceDto] })
+  resources!: FieldPermResourceDto[];
+  @ApiProperty({ type: [MaskRuleDto] }) masks!: MaskRuleDto[];
+}
 
 /**
  * 字段权限清单（契约 field-perm.md 第 3 节）：启动时注册的全部 CRUD 资源的业务字段和代码默认值。
@@ -26,9 +67,9 @@ export class FieldPermRegistryController {
     operationId: 'systemFieldPermRegistry',
     summary: '字段权限清单（代码默认值）',
   })
-  @ApiResult()
+  @ApiResult(FieldPermRegistryDto)
   @ApiErrors(401, 403, 503)
-  registry() {
+  registry(): FieldPermRegistryDto {
     return {
       resources: this.crud.list().map((meta) => ({
         resource: meta.permPrefix,

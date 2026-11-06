@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
 import type { CrudContext } from './crud.types.js';
 
@@ -31,11 +31,29 @@ export abstract class CrudAudit {
  * 默认实现：写结构化日志（敏感字段由日志清洗规则隐去）。T08 操作日志模块接入后替换成落库实现。
  * 日志在事务提交前写出，删除如果随后回滚，这条日志只表示「准备删除」。
  */
+/**
+ * 落库实现的注册口（T08）：全局模块 `{ provide: CRUD_AUDIT_WRITER, useClass: SystemCrudAudit }` 并导出，
+ * 默认实现就把留底委派给它（同一事务）；没有注册时照旧只写日志。
+ */
+export const CRUD_AUDIT_WRITER = 'jna:crud-audit-writer';
+
 @Injectable()
 export class LoggerCrudAudit extends CrudAudit {
   private readonly logger = new Logger('CrudAudit');
 
-  async hardDeleted(event: HardDeleteEvent): Promise<void> {
+  constructor(
+    @Optional()
+    @Inject(CRUD_AUDIT_WRITER)
+    private readonly writer?: CrudAudit,
+  ) {
+    super();
+  }
+
+  async hardDeleted(
+    event: HardDeleteEvent,
+    manager: EntityManager,
+  ): Promise<void> {
+    if (this.writer) return this.writer.hardDeleted(event, manager);
     this.logger.log({
       event: 'crud.hard-delete',
       resource: event.resource,

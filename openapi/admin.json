@@ -743,6 +743,105 @@
         ],
         "type": "object"
       },
+      "FieldPermFieldDto": {
+        "properties": {
+          "configurable": {
+            "type": "boolean"
+          },
+          "default": {
+            "description": "代码默认状态",
+            "enum": [
+              "editable",
+              "readonly",
+              "masked",
+              "hidden"
+            ],
+            "type": "string"
+          },
+          "delegable": {
+            "description": "可委派上限",
+            "enum": [
+              "editable",
+              "readonly",
+              "masked",
+              "hidden"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "field": {
+            "description": "实体属性名",
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "mask": {
+            "enum": [
+              "phone",
+              "email",
+              "idcard",
+              "last4",
+              "all"
+            ],
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "label",
+          "default",
+          "mask",
+          "delegable",
+          "configurable"
+        ],
+        "type": "object"
+      },
+      "FieldPermRegistryDto": {
+        "properties": {
+          "masks": {
+            "items": {
+              "$ref": "#/components/schemas/MaskRuleDto"
+            },
+            "type": "array"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/FieldPermResourceDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resources",
+          "masks"
+        ],
+        "type": "object"
+      },
+      "FieldPermResourceDto": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldPermFieldDto"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "resource": {
+            "description": "资源（权限码前缀），如 system:user",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "label",
+          "fields"
+        ],
+        "type": "object"
+      },
       "LoginDto": {
         "properties": {
           "captchaCode": {
@@ -766,6 +865,28 @@
         "required": [
           "username",
           "password"
+        ],
+        "type": "object"
+      },
+      "MaskRuleDto": {
+        "properties": {
+          "code": {
+            "enum": [
+              "phone",
+              "email",
+              "idcard",
+              "last4",
+              "all"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label"
         ],
         "type": "object"
       },
@@ -1219,6 +1340,18 @@
       },
       "SystemDictItemRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "createdAt": {
             "description": "创建时间",
             "format": "date-time",
@@ -1281,10 +1414,7 @@
           "updatedBy",
           "createdAt",
           "updatedAt",
-          "version",
-          "typeId",
-          "value",
-          "label"
+          "version"
         ],
         "type": "object"
       },
@@ -1502,6 +1632,18 @@
       },
       "SystemDictTypeRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "code": {
             "description": "字典标识",
             "type": "string"
@@ -1556,9 +1698,7 @@
           "updatedBy",
           "createdAt",
           "updatedAt",
-          "version",
-          "code",
-          "name"
+          "version"
         ],
         "type": "object"
       },
@@ -1814,6 +1954,18 @@
       },
       "SystemFieldRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "configurable": {
             "description": "允许配置",
             "type": "boolean"
@@ -1909,10 +2061,7 @@
           "updatedBy",
           "createdAt",
           "updatedAt",
-          "version",
-          "resource",
-          "field",
-          "state"
+          "version"
         ],
         "type": "object"
       },
@@ -2099,6 +2248,18 @@
       },
       "SystemLoginLogRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "createdAt": {
             "description": "创建时间",
             "format": "date-time",
@@ -2379,6 +2540,18 @@
       },
       "SystemMenuRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "component": {
             "description": "页面组件",
             "nullable": true,
@@ -2470,9 +2643,7 @@
           "updatedBy",
           "createdAt",
           "updatedAt",
-          "version",
-          "type",
-          "title"
+          "version"
         ],
         "type": "object"
       },
@@ -2678,6 +2849,18 @@
       },
       "SystemOperationLogRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "action": {
             "description": "动作",
             "type": "string"
@@ -2936,6 +3119,18 @@
       },
       "SystemOrgRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "createdAt": {
             "description": "创建时间",
             "format": "date-time",
@@ -2995,8 +3190,7 @@
           "updatedBy",
           "createdAt",
           "updatedAt",
-          "version",
-          "name"
+          "version"
         ],
         "type": "object"
       },
@@ -3214,6 +3408,18 @@
       },
       "SystemParameterRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "createdAt": {
             "description": "创建时间",
             "format": "date-time",
@@ -3269,8 +3475,7 @@
           "updatedBy",
           "createdAt",
           "updatedAt",
-          "version",
-          "key"
+          "version"
         ],
         "type": "object"
       },
@@ -3604,6 +3809,18 @@
       },
       "SystemRoleFieldRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "createdAt": {
             "description": "创建时间",
             "format": "date-time",
@@ -3680,11 +3897,7 @@
           "updatedBy",
           "createdAt",
           "updatedAt",
-          "version",
-          "resource",
-          "field",
-          "state",
-          "roleId"
+          "version"
         ],
         "type": "object"
       },
@@ -3852,6 +4065,18 @@
       },
       "SystemRoleRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "allPermissions": {
             "description": "内置超级管理员",
             "type": "boolean"
@@ -3935,11 +4160,7 @@
           "updatedBy",
           "createdAt",
           "updatedAt",
-          "version",
-          "code",
-          "name",
-          "permissions",
-          "dataScope"
+          "version"
         ],
         "type": "object"
       },
@@ -4353,6 +4574,18 @@
       },
       "SystemUserRoleRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "createdAt": {
             "description": "创建时间",
             "format": "date-time",
@@ -4408,9 +4641,7 @@
           "updatedBy",
           "createdAt",
           "updatedAt",
-          "version",
-          "userId",
-          "roleId"
+          "version"
         ],
         "type": "object"
       },
@@ -4457,6 +4688,18 @@
       },
       "SystemUserRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "avatar": {
             "description": "头像",
             "nullable": true,
@@ -4525,9 +4768,7 @@
           "updatedBy",
           "createdAt",
           "updatedAt",
-          "version",
-          "username",
-          "nickname"
+          "version"
         ],
         "type": "object"
       },
@@ -4701,6 +4942,18 @@
       },
       "SystemUserSupervisorRow": {
         "properties": {
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
           "createdAt": {
             "description": "创建时间",
             "format": "date-time",
@@ -4751,9 +5004,7 @@
           "updatedBy",
           "createdAt",
           "updatedAt",
-          "version",
-          "userId",
-          "supervisorId"
+          "version"
         ],
         "type": "object"
       },
@@ -6325,8 +6576,7 @@
                       "type": "integer"
                     },
                     "data": {
-                      "nullable": true,
-                      "type": "object"
+                      "$ref": "#/components/schemas/FieldPermRegistryDto"
                     },
                     "message": {
                       "example": "ok",
