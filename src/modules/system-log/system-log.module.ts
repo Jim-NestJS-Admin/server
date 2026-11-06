@@ -40,6 +40,6 @@ import {
     SystemOperationRecorder,
     { provide: APP_INTERCEPTOR, useClass: SystemOperationInterceptor },
   ],
-  exports: [SystemAuthEvents, SystemCrudAudit],
+  exports: [SystemAuthEvents, SystemCrudAudit, SystemOperationRecorder],
 })
 export class SystemLogModule {}

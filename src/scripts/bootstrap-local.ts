@@ -16,6 +16,7 @@ import {
 import { PermissionService } from '../core/permission/permission.service.js';
 import { InitialSystem1793926800000 } from '../database/migrations/1793926800000-InitialSystem.js';
 import { SystemRelationships1793930400000 } from '../database/migrations/1793930400000-SystemRelationships.js';
+import { SystemLogs1793937600000 } from '../database/migrations/1793937600000-SystemLogs.js';
 import {
   SystemOrg,
   SystemRole,
@@ -52,7 +53,11 @@ async function bootstrapLocal(): Promise<void> {
     username: env.DB_USER,
     password: env.DB_PASSWORD,
     database: env.DB_NAME,
-    migrations: [InitialSystem1793926800000, SystemRelationships1793930400000],
+    migrations: [
+      InitialSystem1793926800000,
+      SystemRelationships1793930400000,
+      SystemLogs1793937600000,
+    ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,
     logging: false,
