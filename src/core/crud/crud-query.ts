@@ -3,7 +3,7 @@ import { crudErrors } from './crud.errors.js';
 
 /**
  * 高级查询统一格式（T18，契约 docs/contracts/query.md）：
- * `{ op: 'and' | 'or', items: [ { field, op, value } | 子分组 ] }`，最多 3 层、共 30 个条件。
+ * `{ op: 'and' | 'or', items: [ { field, op, value } | 子分组 ] }`，最多 3 层、共 20 个条件。
  * 运算符走白名单，值一律参数化，字段只能是资源声明可筛选、且本次有效角色全部能看原值的字段。
  */
 export type QueryOp =
@@ -48,7 +48,7 @@ const OPS = new Set<QueryOp>([
   'notNull',
 ]);
 const MAX_DEPTH = 3;
-const MAX_CONDITIONS = 30;
+const MAX_CONDITIONS = 20;
 const MAX_IN = 100;
 
 const bad = (msg: string) =>

@@ -1,3 +1,4 @@
+import { FieldPermStateDto, QUERY_OPS } from './crud-query.dto.js';
 import {
   ApiProperty,
   ApiPropertyOptional,
@@ -60,10 +61,16 @@ export class CrudSchemaQueryItem {
   @ApiProperty() field: string;
   @ApiProperty() label: string;
   @ApiProperty({
-    type: [String],
-    description: '可用的运算符；高级查询在 T18 扩展',
+    enum: QUERY_OPS,
+    isArray: true,
+    description: '这个字段可用的运算符',
   })
   operators: string[];
+  @ApiProperty({
+    enum: ['string', 'number', 'boolean', 'date'],
+    description: '值的类型，前端据此选输入控件',
+  })
+  type: string;
 }
 
 export class CrudSchemaDictItem {
@@ -156,6 +163,13 @@ export class CrudSchema {
     description: '子表；没有子表时为空数组',
   })
   children: CrudSchemaChild[];
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: { $ref: getSchemaPath('FieldPermStateDto') },
+    description:
+      '每个业务字段在本页面（列表权限的本次有效角色）下的最宽字段权限状态；逐行以 _fieldState 为准',
+  })
+  fieldPerms?: Record<string, FieldPermStateDto>;
 }
 
 export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
@@ -193,11 +207,30 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
       };
     });
 
-  const query: CrudSchemaQueryItem[] = meta.fieldEq.map((p) => ({
-    field: p,
-    label: label(p),
-    operators: ['eq'],
-  }));
+  // 可筛选字段和运算符（T18）：文字可以模糊匹配，数字和日期可以比大小和区间
+  const query: CrudSchemaQueryItem[] = meta.fieldEq.map((p) => {
+    const t = Reflect.getMetadata(
+      'design:type',
+      meta.entity.prototype,
+      p,
+    ) as unknown;
+    const type =
+      t === Number
+        ? 'number'
+        : t === Boolean
+          ? 'boolean'
+          : t === Date
+            ? 'date'
+            : 'string';
+    const common = ['eq', 'ne', 'in', 'notIn', 'isNull', 'notNull'];
+    const operators =
+      type === 'string'
+        ? [...common, 'contains', 'startsWith']
+        : type === 'boolean'
+          ? ['eq', 'ne', 'isNull', 'notNull']
+          : [...common, 'gt', 'gte', 'lt', 'lte', 'between'];
+    return { field: p, label: label(p), operators, type };
+  });
 
   const actions: CrudSchemaActions = {};
   if (meta.api.includes('page'))

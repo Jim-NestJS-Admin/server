@@ -197,6 +197,13 @@
             },
             "type": "object"
           },
+          "fieldPerms": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FieldPermStateDto"
+            },
+            "description": "每个业务字段在本页面（列表权限的本次有效角色）下的最宽字段权限状态；逐行以 _fieldState 为准",
+            "type": "object"
+          },
           "form": {
             "items": {
               "$ref": "#/components/schemas/CrudSchemaFormItem"
@@ -461,17 +468,43 @@
             "type": "string"
           },
           "operators": {
-            "description": "可用的运算符；高级查询在 T18 扩展",
+            "description": "这个字段可用的运算符",
             "items": {
+              "enum": [
+                "eq",
+                "ne",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "in",
+                "notIn",
+                "contains",
+                "startsWith",
+                "between",
+                "isNull",
+                "notNull"
+              ],
               "type": "string"
             },
             "type": "array"
+          },
+          "type": {
+            "description": "值的类型，前端据此选输入控件",
+            "enum": [
+              "string",
+              "number",
+              "boolean",
+              "date"
+            ],
+            "type": "string"
           }
         },
         "required": [
           "field",
           "label",
-          "operators"
+          "operators",
+          "type"
         ],
         "type": "object"
       },
@@ -842,6 +875,35 @@
         ],
         "type": "object"
       },
+      "FieldPermStateDto": {
+        "properties": {
+          "mask": {
+            "enum": [
+              "phone",
+              "email",
+              "idcard",
+              "last4",
+              "all"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "editable",
+              "readonly",
+              "masked",
+              "hidden"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "mask"
+        ],
+        "type": "object"
+      },
       "LoginDto": {
         "properties": {
           "captchaCode": {
@@ -1090,6 +1152,70 @@
         ],
         "type": "object"
       },
+      "QueryConditionDto": {
+        "properties": {
+          "field": {
+            "description": "可筛选字段（页面描述 query[].field）",
+            "type": "string"
+          },
+          "op": {
+            "enum": [
+              "eq",
+              "ne",
+              "gt",
+              "gte",
+              "lt",
+              "lte",
+              "in",
+              "notIn",
+              "contains",
+              "startsWith",
+              "between",
+              "isNull",
+              "notNull"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "description": "值：eq…lte 是简单值；in / notIn 是数组；between 是 [下限, 上限]；isNull / notNull 不要",
+            "type": "object"
+          }
+        },
+        "required": [
+          "field",
+          "op"
+        ],
+        "type": "object"
+      },
+      "QueryGroupDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueryConditionDto"
+                },
+                {
+                  "$ref": "#/components/schemas/QueryGroupDto"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "op": {
+            "enum": [
+              "and",
+              "or"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "op",
+          "items"
+        ],
+        "type": "object"
+      },
       "ResetSystemPassword": {
         "properties": {
           "id": {
@@ -1269,6 +1395,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -1566,6 +1700,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -1880,6 +2022,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -2178,6 +2328,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -2463,6 +2621,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -2783,6 +2949,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -3047,6 +3221,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -3347,6 +3529,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -3735,6 +3925,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -3999,6 +4197,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -4324,6 +4530,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -4499,6 +4713,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -4872,6 +5094,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
