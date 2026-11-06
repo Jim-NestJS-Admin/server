@@ -1593,7 +1593,12 @@
           },
           "type": {
             "description": "类型",
-            "type": "object"
+            "enum": [
+              "directory",
+              "page",
+              "button"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -1687,7 +1692,12 @@
           },
           "type": {
             "description": "类型",
-            "type": "object"
+            "enum": [
+              "directory",
+              "page",
+              "button"
+            ],
+            "type": "string"
           }
         },
         "type": "object"
@@ -1808,7 +1818,12 @@
           },
           "type": {
             "description": "类型",
-            "type": "object"
+            "enum": [
+              "directory",
+              "page",
+              "button"
+            ],
+            "type": "string"
           },
           "updatedAt": {
             "description": "修改时间",
@@ -1909,7 +1924,12 @@
           },
           "type": {
             "description": "类型",
-            "type": "object"
+            "enum": [
+              "directory",
+              "page",
+              "button"
+            ],
+            "type": "string"
           }
         },
         "type": "object"
