@@ -15,7 +15,8 @@ export type CrudApi =
   | 'delete'
   | 'recycle'
   | 'restore'
-  | 'purge';
+  | 'purge'
+  | 'export';
 export const CRUD_APIS: readonly CrudApi[] = [
   'page',
   'info',
@@ -25,6 +26,7 @@ export const CRUD_APIS: readonly CrudApi[] = [
   'recycle',
   'restore',
   'purge',
+  'export',
 ];
 
 export type CrudAction = CrudApi;

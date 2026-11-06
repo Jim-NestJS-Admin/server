@@ -15,6 +15,7 @@ import {
   type RowOwner,
 } from '../field-perm/field-policy.js';
 import { mask } from '../field-perm/masks.js';
+import { escapeSpreadsheetCell } from '../security/sanitize.js';
 import { crudErrors, translateDbError } from './crud.errors.js';
 import type { CrudAudit } from './crud-audit.js';
 import type { AuthzContext } from '../permission/authz-context.js';
@@ -129,11 +130,42 @@ export class BaseService<T extends BaseEntity> {
 
   // ---------- 读 ----------
 
-  async page(query: PageQuery): Promise<PageResult<CrudRow<T>>> {
+  /** 导出（T18）：最多这么多行，超过时只导出前面的 */
+  static readonly EXPORT_MAX_ROWS = 10000;
+
+  /** 导出 CSV：列是可读的业务字段，值已按字段权限处理（隐藏留空、脱敏是打码值），单元格防公式注入 */
+  async exportCsv(query: PageQuery): Promise<string> {
+    const { list } = await this.page(query, BaseService.EXPORT_MAX_ROWS);
+    const cols = this.meta.readable.filter((f) => f !== 'version');
+    const label = (f: string) =>
+      this.meta.fields.find((x) => x.property === f)?.label ?? f;
+    const cell = (v: unknown) => {
+      const s = escapeSpreadsheetCell(
+        v === null || v === undefined
+          ? ''
+          : v instanceof Date
+            ? v.toISOString()
+            : typeof v === 'object'
+              ? JSON.stringify(v)
+              : String(v as string),
+      ) as string;
+      return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [cols.map((c) => cell(label(c))).join(',')];
+    for (const row of list as Record<string, unknown>[])
+      lines.push(cols.map((c) => cell(row[c])).join(','));
+    // 带 BOM，Excel 打开中文不乱码
+    return '\uFEFF' + lines.join('\r\n');
+  }
+
+  async page(
+    query: PageQuery,
+    exportLimit?: number,
+  ): Promise<PageResult<CrudRow<T>>> {
     const meta = this.meta;
-    const page = query.page ?? 1;
-    const size = query.size ?? 20;
-    if (size > meta.maxSize)
+    const page = exportLimit ? 1 : (query.page ?? 1);
+    const size = exportLimit ?? query.size ?? 20;
+    if (!exportLimit && size > meta.maxSize)
       throw crudErrors.badRequest(`每页最多 ${meta.maxSize} 条`, [
         { field: 'size', messages: [`每页最多 ${meta.maxSize} 条`] },
       ]);

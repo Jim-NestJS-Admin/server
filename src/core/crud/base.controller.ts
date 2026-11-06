@@ -1,4 +1,10 @@
-import { Inject, type OnModuleInit, type Type, Optional } from '@nestjs/common';
+import {
+  Inject,
+  type OnModuleInit,
+  type Type,
+  Optional,
+  StreamableFile,
+} from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { EntityMetadata } from 'typeorm';
 import type { BaseEntity } from './base.entity.js';
@@ -152,6 +158,15 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
    * 页面描述 + fieldPerms：本页面（列表权限的本次有效角色）下每个字段可能的最宽状态，
    * 前端据此决定列和表单项是否出现、是否只读；逐行的真实状态以数据为准（契约 field-perm.md）。
    */
+  /** 导出 CSV（T18）：和列表同样的查询条件和数据范围，逐行按字段权限隐藏 / 打码，单元格防公式注入 */
+  async export(body: PageQuery) {
+    const csv = await this.service.exportCsv(body);
+    return new StreamableFile(Buffer.from(csv, 'utf8'), {
+      type: 'text/csv; charset=utf-8',
+      disposition: `attachment; filename="${this.service.meta.permPrefix.replace(/:/g, '-')}.csv"`,
+    });
+  }
+
   async schema() {
     const meta = this.service.meta as CrudResourceMeta;
     const authz = this.crudRuntime.authz.get();

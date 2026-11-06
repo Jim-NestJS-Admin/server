@@ -14,6 +14,8 @@ import {
 } from '@nestjs/swagger';
 import { AdminController } from '../endpoint/endpoint.decorators.js';
 import { Perms } from '../permission/perms.decorator.js';
+import { RawResponse } from '../decorators/raw-response.decorator.js';
+import { UserRateLimit } from '../security/user-rate-limit.js';
 import { ApiErrors, ApiResult } from '../swagger/api-result.js';
 import type { BaseEntity } from './base.entity.js';
 import { CRUD_RESOURCE } from './base.controller.js';
@@ -31,6 +33,7 @@ type Method =
   | 'recyclePage'
   | 'restore'
   | 'purge'
+  | 'export'
   | 'schema';
 
 interface RouteSpec {
@@ -43,7 +46,7 @@ interface RouteSpec {
   summary: string;
   body?: Type;
   result?: Type;
-  errors: (400 | 404 | 409)[];
+  errors: (400 | 404 | 409 | 429)[];
 }
 
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -142,6 +145,15 @@ export function CrudController<T extends BaseEntity>(
         result: dtos.DeleteResult,
         errors: [400, 404, 409],
       },
+      {
+        api: 'export',
+        method: 'export',
+        http: 'post',
+        summary: `导出${label}（CSV，按列表的查询条件，最多 1 万行）`,
+        body: dtos.PageBody,
+        result: undefined,
+        errors: [400, 429],
+      },
     ];
     const enabled = specs.filter((s) => s.api && meta.api.includes(s.api));
     enabled.push({
@@ -190,6 +202,9 @@ export function CrudController<T extends BaseEntity>(
         ApiResult(spec.result),
         ...(spec.errors.length ? [ApiErrors(...spec.errors)] : []),
       ];
+      // 导出：原样返回文件，按用户限流（每人每小时 20 次）
+      if (spec.method === 'export')
+        decorators.push(RawResponse(), UserRateLimit('export', 20, 3600));
       // 页面描述里字典项是按 $ref 引用的，要单独登记模型，否则文档里是悬空引用
       if (spec.method === 'schema')
         decorators.push(ApiExtraModels(CrudSchemaDictItem));
