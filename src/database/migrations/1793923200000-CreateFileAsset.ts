@@ -3,6 +3,21 @@ import { Table, type MigrationInterface, type QueryRunner } from 'typeorm';
 /** 仅定义迁移，不在模块启动时自动执行；由 T10 迁移入口统一登记。 */
 export class CreateFileAsset1793923200000 implements MigrationInterface {
   async up(queryRunner: QueryRunner): Promise<void> {
+    // 当前迁移时间早于system初始迁移；MySQL生成列需要先有元数据表。
+    await queryRunner.createTable(
+      new Table({
+        name: 'typeorm_metadata',
+        columns: ['type', 'database', 'schema', 'table', 'name', 'value'].map(
+          (name) => ({
+            name,
+            type: name === 'value' ? 'text' : 'varchar',
+            ...(name === 'value' ? {} : { length: '255' }),
+            isNullable: name !== 'type',
+          }),
+        ),
+      }),
+      true,
+    );
     await queryRunner.createTable(
       new Table({
         name: 'file_asset',

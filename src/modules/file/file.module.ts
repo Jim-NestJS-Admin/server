@@ -29,7 +29,7 @@ export interface FileModuleOptions {
   /** 必须接 core 的租户隔离和数据库事务，默认503，禁止内存替代。 */
   catalog?: FileCatalog | 'database';
 }
-/** 独立可装配模块，当前未注册到 AppModule；正式持久化/认证接入后再统一导出正式接口。 */
+/** 可装配存储适配器；实际应用显式选择session/database，独立使用仍默认拒绝。 */
 @Module({})
 export class FileModule {
   static register(options: FileModuleOptions): DynamicModule {

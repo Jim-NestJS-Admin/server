@@ -18,6 +18,8 @@ import { InitialSystem1793926800000 } from '../database/migrations/1793926800000
 import { SystemRelationships1793930400000 } from '../database/migrations/1793930400000-SystemRelationships.js';
 import { SystemLogs1793937600000 } from '../database/migrations/1793937600000-SystemLogs.js';
 import { SystemFields1793941200000 } from '../database/migrations/1793941200000-SystemFields.js';
+import { CreateFileAsset1793923200000 } from '../database/migrations/1793923200000-CreateFileAsset.js';
+import { FileAssetOrganization1793934000000 } from '../database/migrations/1793934000000-FileAssetOrganization.js';
 import {
   SystemOrg,
   SystemRole,
@@ -55,8 +57,10 @@ async function bootstrapLocal(): Promise<void> {
     password: env.DB_PASSWORD,
     database: env.DB_NAME,
     migrations: [
+      CreateFileAsset1793923200000,
       InitialSystem1793926800000,
       SystemRelationships1793930400000,
+      FileAssetOrganization1793934000000,
       SystemLogs1793937600000,
       SystemFields1793941200000,
     ],

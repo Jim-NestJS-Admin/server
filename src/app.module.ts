@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { resolve } from 'node:path';
+import { FileModule } from './modules/file/file.module.js';
+import { LocalBlobStore } from './modules/file/storage/local.store.js';
 import { AuthModule } from './core/auth/auth.module.js';
 import { CoreModule } from './core/core.module.js';
 import { PermissionModule } from './core/permission/permission.module.js';
@@ -14,6 +17,15 @@ import {
 @Module({
   imports: [
     CoreModule,
+    FileModule.register({
+      store: new LocalBlobStore(resolve(process.cwd(), 'deploy/data/files')),
+      policy: {
+        maxBytes: 10 * 1024 * 1024,
+        mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'],
+      },
+      access: 'session',
+      catalog: 'database',
+    }),
     AuthModule.forRoot({
       userStore: SystemAuthUserStore,
       events: SystemAuthEvents,

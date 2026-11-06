@@ -13,6 +13,7 @@ import {
 } from '../../core/crud/crud-scope.js';
 import { SnakeNamingStrategy } from '../../core/database/naming.strategy.js';
 import { RequestContext } from '../../core/tenant/request-context.js';
+import { AuthzContext } from '../../core/permission/authz-context.js';
 import { ScopedSelectQueryBuilder } from '../../core/tenant/scoped-query-builder.js';
 import { CreateFileAsset1793923200000 } from '../../database/migrations/1793923200000-CreateFileAsset.js';
 import { FileAssetEntity } from './entity/file-asset.entity.js';
@@ -58,6 +59,7 @@ beforeAll(async () => {
     meta,
     childOwner: () => undefined,
     audit: { beforeHardDelete: async () => {} } as never,
+    authz: new AuthzContext(ClsServiceManager.getClsService()),
   });
 });
 afterEach(() => vi.restoreAllMocks());
