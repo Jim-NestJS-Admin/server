@@ -1,15 +1,19 @@
 import { Body, Get, HttpCode, Post, Query, Req, Res } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AppConfigService } from '../../../config/app-config.service.js';
-import { RawResponse } from '../../../decorators/raw-response.decorator.js';
 import {
   AdminController,
   Anonymous,
 } from '../../../endpoint/endpoint.decorators.js';
 import { ApiErrors, ApiResult } from '../../../swagger/api-result.js';
 import { AuthService } from '../../auth.service.js';
-import { CaptchaQueryDto, LoginDto, TokenResult } from '../../dto/auth.dto.js';
+import {
+  CaptchaQueryDto,
+  CaptchaResultDto,
+  LoginDto,
+  TokenResult,
+} from '../../dto/auth.dto.js';
 import {
   assertAdminOrigin,
   clearRefreshCookie,
@@ -32,14 +36,13 @@ export class AuthController {
   ) {}
 
   @Get('captcha')
-  @RawResponse()
   @ApiOperation({
     operationId: 'authCaptcha',
-    summary: '出人机验证题',
+    summary: '获取图形验证码',
     description:
-      '直接返回 ALTCHA 题目对象（不包统一结构），给前端 altcha 组件用；出错时照常返回统一结构',
+      '字母数字验证码，2 分钟有效，只能用一次（答错也作废，要重新获取）；account 传用户输入的账号',
   })
-  @ApiOkResponse({ description: 'ALTCHA 题目对象', schema: { type: 'object' } })
+  @ApiResult(CaptchaResultDto)
   @ApiErrors(400, 503)
   captcha(@Query() q: CaptchaQueryDto, @Req() req: Request) {
     return this.auth.createLoginChallenge(q.account, req);

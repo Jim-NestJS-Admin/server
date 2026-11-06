@@ -23,11 +23,7 @@ export default defineConfig({
       // Redis 和开发共用同一个服务，测试只用自己的前缀，清理时也只删这个前缀下的键
       REDIS_KEY_PREFIX: 'jna-test:',
       AUTH_JWT_SECRET: 'e2e-jwt-secret-0123456789abcdefghijklmnop',
-      ALTCHA_HMAC_SECRET: 'e2e-altcha-hmac-secret-0123456789abcdef',
-      ALTCHA_HMAC_KEY_SECRET: 'e2e-altcha-key-secret-0123456789abcdef',
       AUTH_ADMIN_ORIGINS: 'http://localhost:8848',
-      // 测试里人机验证的难度调低，保证真算一遍又不拖慢测试
-      ALTCHA_COST: '10',
     },
     root: './',
     include: ['**/*.e2e-spec.ts'],
