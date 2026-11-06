@@ -5,9 +5,17 @@ import {
   SYSTEM_FIELDS,
   type BaseEntity,
 } from './base.entity.js';
+import { Logger } from '@nestjs/common';
 import { ScopedSelectQueryBuilder } from '../tenant/scoped-query-builder.js';
+import {
+  fieldVerdict,
+  type FieldVerdict,
+  type RowOwner,
+} from '../field-perm/field-policy.js';
+import { mask } from '../field-perm/masks.js';
 import { crudErrors, translateDbError } from './crud.errors.js';
 import type { CrudAudit } from './crud-audit.js';
+import type { AuthzContext } from '../permission/authz-context.js';
 import {
   childRowsOf,
   deleteChildrenOf,
@@ -46,10 +54,15 @@ export interface CrudBinding<T extends BaseEntity> {
   childOwner: (entity: Function) => string | undefined;
   /** 硬删除前留底 */
   audit: CrudAudit;
+  /** 本次请求的授权（字段权限按行裁剪用） */
+  authz: AuthzContext;
 }
 
 const ALIAS = 'e';
 const SYSTEM = new Set<string>(SYSTEM_FIELDS);
+/** 不受字段权限控制的输出字段：系统字段、版本号 */
+const FIELD_PERM_EXEMPT = new Set<string>([...SYSTEM_FIELDS, 'version']);
+const fieldLogger = new Logger('FieldPerm');
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 /**
@@ -185,6 +198,11 @@ export class BaseService<T extends BaseEntity> {
     );
     return this.transaction(async (tx) => {
       const values = this.pick(data, this.meta.addable);
+      // 字段权限：新增的这一行属于当前组织、创建人是自己
+      this.dropNotEditable(values, {
+        orgId: tx.ctx.orgId,
+        createdBy: tx.ctx.userId,
+      });
       this.assertNullable(values);
       await this.beforeAdd(values, tx);
       const id = await this.insertRow(tx, values);
@@ -230,6 +248,7 @@ export class BaseService<T extends BaseEntity> {
       if (!existing) throw crudErrors.notFound();
       if (existing.version !== version) throw crudErrors.versionConflict();
       const changes = this.pick(data, this.meta.updatable);
+      this.dropNotEditable(changes, existing as unknown as RowOwner);
       this.assertNullable(changes);
       await this.beforeUpdate(changes, existing, tx);
       const clean = this.stripSystem(changes);
@@ -633,6 +652,57 @@ export class BaseService<T extends BaseEntity> {
     const src = row as Record<string, unknown>;
     const out: Record<string, unknown> = {};
     for (const k of this.meta.readable) if (k in src) out[k] = src[k];
+    // T16 逐行字段权限：隐藏的不返回，脱敏的打码
+    const verdict = this.fieldAccess({
+      orgId: (src.orgId as string | null | undefined) ?? null,
+      createdBy: (src.createdBy as string | null | undefined) ?? null,
+    });
+    if (verdict)
+      for (const k of Object.keys(out)) {
+        if (FIELD_PERM_EXEMPT.has(k)) continue;
+        const v = verdict(k);
+        if (v.state === 'hidden') delete out[k];
+        else if (v.state === 'masked') out[k] = mask(out[k], v.mask);
+      }
     return out as CrudRow<T>;
+  }
+
+  /**
+   * 这一行的字段权限判断函数；后台任务（system 端）不受字段权限限制，返回 null。
+   * 后台请求没有授权结果（@LoginOnly 接口）时一律隐藏（失败关闭）。
+   */
+  private fieldAccess(row: RowOwner): ((field: string) => FieldVerdict) | null {
+    const ctx = this.crud.context.current();
+    if (ctx.endpoint === 'system') return null;
+    const authz = this.crud.authz.get();
+    return (field) =>
+      authz
+        ? fieldVerdict(
+            authz,
+            ctx.userId,
+            this.meta.permPrefix,
+            this.meta.entity,
+            field,
+            this.meta.dataScope,
+            row,
+          )
+        : { state: 'hidden', mask: null };
+  }
+
+  /** 写入前剔除这一行上不可编辑的字段，并记日志（架构「字段权限 · 后端强制执行」） */
+  private dropNotEditable(data: Partial<T>, row: RowOwner): void {
+    const verdict = this.fieldAccess(row);
+    if (!verdict) return;
+    const values = data as Record<string, unknown>;
+    const dropped = Object.keys(values).filter(
+      (k) => !FIELD_PERM_EXEMPT.has(k) && verdict(k).state !== 'editable',
+    );
+    for (const k of dropped) delete values[k];
+    if (dropped.length)
+      fieldLogger.warn({
+        event: 'field-perm.write-dropped',
+        resource: this.meta.permPrefix,
+        fields: dropped,
+      });
   }
 }

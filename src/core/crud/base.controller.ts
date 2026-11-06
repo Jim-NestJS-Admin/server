@@ -4,6 +4,8 @@ import type { EntityMetadata } from 'typeorm';
 import type { BaseEntity } from './base.entity.js';
 import { BaseService, type PageQuery } from './base.service.js';
 import { buildCrudSchema } from './crud-schema.js';
+import { SYSTEM_FIELDS } from './base.entity.js';
+import { fieldVerdict } from '../field-perm/field-policy.js';
 import { CrudRuntime } from './crud.runtime.js';
 import type { CrudControllerOptions, CrudResourceMeta } from './crud.types.js';
 
@@ -95,6 +97,7 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
       meta: meta as CrudResourceMeta<T>,
       childOwner: (entity) => this.crudRuntime.childOwner(entity),
       audit: this.crudRuntime.audit,
+      authz: this.crudRuntime.authz,
     });
     this.crudRuntime.register(meta);
     this.service = service;
@@ -139,8 +142,34 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
     return this.service.purge(body.items);
   }
 
+  /**
+   * 页面描述 + fieldPerms：本页面（列表权限的本次有效角色）下每个字段可能的最宽状态，
+   * 前端据此决定列和表单项是否出现、是否只读；逐行的真实状态以数据为准（契约 field-perm.md）。
+   */
   schema() {
-    return buildCrudSchema(this.service.meta as CrudResourceMeta);
+    const meta = this.service.meta as CrudResourceMeta;
+    const authz = this.crudRuntime.authz.get();
+    const ctx = this.crudRuntime.context.current();
+    const exempt = new Set<string>([...SYSTEM_FIELDS, 'version']);
+    const fieldPerms = Object.fromEntries(
+      meta.readable
+        .filter((f) => !exempt.has(f))
+        .map((f) => [
+          f,
+          authz
+            ? fieldVerdict(
+                authz,
+                ctx.userId,
+                meta.permPrefix,
+                meta.entity,
+                f,
+                meta.dataScope,
+                null,
+              )
+            : { state: 'hidden', mask: null },
+        ]),
+    );
+    return Object.assign(buildCrudSchema(meta), { fieldPerms });
   }
 }
 
