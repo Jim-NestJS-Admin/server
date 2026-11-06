@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ClsService } from 'nestjs-cls';
-import { DEFAULT_TENANT_ID } from './base.entity.js';
+import { RequestContext } from '../tenant/request-context.js';
 import type {
   CrudAction,
   CrudContext,
@@ -15,7 +14,8 @@ export interface ScopeCondition {
 
 /**
  * 读、改、删时框架自动附加的条件（租户、数据范围）。
- * 现在只有租户；T04 接租户上下文，T06 在这里加「本次有效角色的数据范围」。
+ * 现在只有租户（平台管理员的 @IgnoreTenant 请求不加租户条件，且只能读）；
+ * T06 在这里加「本次有效角色的数据范围」。
  * 所有 CRUD 读写都必须经过它，不允许业务代码绕开。
  */
 export abstract class CrudScope {
@@ -39,6 +39,7 @@ export class TenantOnlyScope extends CrudScope {
     _action: CrudAction,
     alias?: string,
   ): ScopeCondition[] {
+    if (ctx.ignoreTenant) return [];
     return [
       {
         sql: `${col(alias, 'tenant_id')} = :__tenantId`,
@@ -48,18 +49,18 @@ export class TenantOnlyScope extends CrudScope {
   }
 }
 
-/** 从请求上下文取租户和当前用户；没有登录时 userId 为空 */
+/** 从请求上下文取租户、当前用户和当前组织；没有上下文直接报错（不再默认落到某个租户） */
 @Injectable()
 export class CrudContextProvider {
-  constructor(private readonly cls: ClsService) {}
+  constructor(private readonly context: RequestContext) {}
 
   current(): CrudContext {
-    const active = this.cls.isActive();
+    const c = this.context.current();
     return {
-      tenantId:
-        (active ? this.cls.get<string>('tenantId') : undefined) ??
-        DEFAULT_TENANT_ID,
-      userId: (active ? this.cls.get<string>('userId') : undefined) ?? null,
+      tenantId: c.tenantId,
+      userId: c.userId,
+      orgId: c.orgId,
+      ignoreTenant: c.ignoreTenant,
     };
   }
 }

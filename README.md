@@ -49,7 +49,7 @@ pnpm start:dev                                         # 开发模式，改代�
 
 ## 当前状态
 
-已完成 T01（项目骨架）、T02（server 骨架），T03（通用 CRUD）进行中：
+已完成 T01（项目骨架）、T02（server 骨架）、T03（通用 CRUD），T04（租户与多端）待审查：
 
 - 启动时校验环境变量，缺项或格式不对直接启动失败（`src/core/config/`）
 - 结构化日志（Pino），带请求 ID，授权头、Cookie、密码、令牌、密钥自动隐去
@@ -59,6 +59,7 @@ pnpm start:dev                                         # 开发模式，改代�
 - 接口文档：开发环境访问 `/docs`，生产环境默认关闭
 - 健康检查 `GET /health`（已注册数据库检查；Redis 在 T04 接入后注册）
 - 数据库：MySQL + TypeORM，表名、列名小写下划线，bigint 一律按字符串返回（`src/core/database/`）
+- 租户与多端（T04，`src/core/tenant/`、`src/core/endpoint/`）：控制器用 `@AdminController` 等声明所属的端，全局守卫按端认证后把租户、用户、组织写进请求上下文（没有上下文的读写直接报错，后台任务用 `RequestContext.run`）；`TenantRepositoryFactory` 给不走通用 CRUD 的实体自动带租户；`@IgnoreTenant` 只给平台租户、只能读；写入保险拦住往别的租户写或改租户。后台登录（T05）接入前用阶段 1 占位认证（默认租户匿名用户），生产环境不能启动
 - 通用 CRUD 验收点③：删除方式与回收站。软删除表的唯一约束建在「租户 + 业务字段 + activeGuard」上（`activeGuard` 是基类里的生成列，未删除为 1、已删除为空），删掉的业务键可以重用；`api` 里开 `recycle` / `restore` / `purge` 得到回收站列表、恢复、彻底删除，恢复撞名整批回滚；删除批次让恢复主表时只恢复同批子行；真删前整行留底（`CrudAudit`，现在写日志，T08 改为落库）；唯一约束写错启动时报错
 - 通用 CRUD 验收点②：主子表聚合保存。`children` 配置多个子表；新增时每个子表提交 `added`，修改时提交 `added` / `updated` / `deleted` 三组，没提交的行不动；子行归属、clientId、行数上下限、单据内唯一都在同一事务里检查，主表版本号统一控制并发；详情返回 `children`；子表实体不能有自己的写接口
 - 通用 CRUD 验收点①（`src/core/crud/`）：`@CrudController` 按配置生成分页、详情、新增、修改、删除接口和页面描述 `GET /admin/<资源>/schema`；乐观锁（编号 + 旧版本号 + 范围条件一条更新）、批量删除整批成败、软删除 / 硬删除、钩子在事务里执行；不存在和无权访问统一 404 / 4004，版本冲突 409 / 4009，参数和唯一冲突 400 / 4000

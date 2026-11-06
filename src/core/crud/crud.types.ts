@@ -123,10 +123,13 @@ export interface CrudResourceMeta<T extends BaseEntity = BaseEntity> {
   children: CrudChildMeta[];
 }
 
-/** 请求上下文：租户和当前用户。T04 / T05 接入后由认证守卫写入 */
+/** 请求上下文：租户、当前用户、当前组织，由端的认证守卫写入（见 core/tenant/request-context） */
 export interface CrudContext {
   tenantId: string;
   userId: string | null;
+  orgId: string | null;
+  /** 平台管理员跨租户查询（@IgnoreTenant）：不加租户条件，只能读 */
+  ignoreTenant: boolean;
 }
 
 /** 钩子拿到的事务环境：只能用这里的 manager 读写，保证在同一个事务里 */

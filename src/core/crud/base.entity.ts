@@ -1,3 +1,4 @@
+import { DEFAULT_TENANT_ID } from '../tenant/tenant.constants.js';
 import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
 import {
   Column,
@@ -9,8 +10,7 @@ import {
   VersionColumn,
 } from 'typeorm';
 
-/** 阶段 1 只有一个默认租户，T04 接入租户上下文后由框架按请求填充 */
-export const DEFAULT_TENANT_ID = '1';
+export { DEFAULT_TENANT_ID };
 
 /**
  * 所有业务表的基类（架构「核心框架层 · 实体基类」）。

@@ -18,6 +18,7 @@ import { ClsService } from 'nestjs-cls';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
+import { Public } from '../src/core/endpoint/endpoint.decorators.js';
 import { configureApp } from '../src/app.setup.js';
 import { BusinessException } from '../src/core/exceptions/business.exception.js';
 import { ErrorCode } from '../src/core/exceptions/error-code.js';
@@ -34,6 +35,7 @@ class CreateDemoDto {
   qty!: number;
 }
 
+@Public()
 @Controller('demo')
 class DemoController {
   constructor(private readonly cls: ClsService) {}

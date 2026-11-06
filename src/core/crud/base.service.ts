@@ -191,19 +191,7 @@ export class BaseService<T extends BaseEntity> {
       const values = this.pick(data, this.meta.addable);
       this.assertNullable(values);
       await this.beforeAdd(values, tx);
-      const clean = this.stripSystem(values);
-      const result = await tx.manager
-        .createQueryBuilder()
-        .insert()
-        .into(this.meta.entity)
-        .values({
-          ...clean,
-          tenantId: tx.ctx.tenantId,
-          createdBy: tx.ctx.userId,
-          updatedBy: tx.ctx.userId,
-        } as never)
-        .execute();
-      const id = String(result.identifiers[0]?.id);
+      const id = await this.insertRow(tx, values);
       // 没提交的子表也要按「空」检查行数下限
       const all = this.meta.children.map(
         (child) =>
@@ -504,10 +492,33 @@ export class BaseService<T extends BaseEntity> {
       .andWhere(`${ALIAS}.\`deleted_at\` IS NOT NULL`);
   }
 
-  /** 开一个事务；里面的读写都要用 tx.manager */
+  /**
+   * 第 4 级定制用：在事务里插入一行，由框架填租户、创建人、修改人，剔除系统字段，返回新编号。
+   * 业务代码不给 tenantId 赋值，也不能借 values 改它。
+   */
+  protected async insertRow(tx: CrudTx, values: Partial<T>): Promise<string> {
+    const result = await tx.manager
+      .createQueryBuilder()
+      .insert()
+      .into(this.meta.entity)
+      .values({
+        ...this.stripSystem(values),
+        tenantId: tx.ctx.tenantId,
+        createdBy: tx.ctx.userId,
+        updatedBy: tx.ctx.userId,
+      } as never)
+      .execute();
+    return String(result.identifiers[0]?.id);
+  }
+
+  /** 开一个事务；里面的读写都要用 tx.manager。跨租户查询模式（@IgnoreTenant）只能读，不能开写事务 */
   protected async transaction<R>(fn: (tx: CrudTx) => Promise<R>): Promise<R> {
     const { dataSource, context, meta } = this.crud;
     const ctx = context.current();
+    if (ctx.ignoreTenant)
+      throw new Error(
+        '跨租户查询模式（@IgnoreTenant）只能读，不能新增、修改、删除',
+      );
     try {
       return await dataSource.transaction((manager) =>
         fn({ manager, ctx, meta: meta as CrudResourceMeta }),

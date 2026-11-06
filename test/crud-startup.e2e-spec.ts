@@ -1,9 +1,15 @@
 import { IsString } from 'class-validator';
 import { Column, Entity, Index } from 'typeorm';
+import { Controller, Get } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
+import {
+  AppController,
+  IgnoreTenant,
+  Public,
+} from '../src/core/endpoint/endpoint.decorators.js';
 import {
   BaseController,
   BaseEntity,
@@ -70,6 +76,68 @@ describe('启动检查：唯一约束', () => {
     await expect(app.init()).rejects.toThrow(
       /唯一约束 uk_demo_bad_code（tenantId, code）缺少 activeGuard/,
     );
+    await app.close().catch(() => undefined);
+  });
+});
+
+@Controller('plain')
+class PlainController {
+  @Get() ok() {
+    return 1;
+  }
+}
+
+@AppController('member')
+class MemberController {
+  @Get() ok() {
+    return 1;
+  }
+}
+
+@Public()
+@Controller('admin/sneaky')
+class SneakyPublicController {
+  @Get() ok() {
+    return 1;
+  }
+}
+
+@Public()
+@Controller('ping')
+class PublicIgnoreController {
+  @Get()
+  @IgnoreTenant()
+  ok() {
+    return 1;
+  }
+}
+
+describe('启动检查：多端接口', () => {
+  it.each([
+    [
+      '用普通 @Controller，没指定端',
+      PlainController,
+      /PlainController 没有指定所属的端/,
+    ],
+    ['APP 端还没接入认证', MemberController, /app 端，这个端还没有接入认证/],
+    [
+      '@Public 的路径放在 /admin 下',
+      SneakyPublicController,
+      /是 @Public，路径不能在 \/admin 下/,
+    ],
+    [
+      '@Public 接口用 @IgnoreTenant',
+      PublicIgnoreController,
+      /不能用 @IgnoreTenant/,
+    ],
+  ])('%s：启动失败', async (_name, controller, error) => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+      controllers: [controller],
+    }).compile();
+    const app = moduleRef.createNestApplication();
+    configureApp(app);
+    await expect(app.init()).rejects.toThrow(error);
     await app.close().catch(() => undefined);
   });
 });
