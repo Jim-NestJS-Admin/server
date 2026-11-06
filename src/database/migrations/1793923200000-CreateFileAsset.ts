@@ -16,6 +16,7 @@ export class CreateFileAsset1793923200000 implements MigrationInterface {
             generationStrategy: 'increment',
           },
           { name: 'tenant_id', type: 'bigint', unsigned: true, default: "'1'" },
+          { name: 'org_id', type: 'bigint', unsigned: true, isNullable: true },
           {
             name: 'created_by',
             type: 'bigint',
@@ -68,6 +69,7 @@ export class CreateFileAsset1793923200000 implements MigrationInterface {
           { name: 'sha256', type: 'char', length: '64' },
         ],
         indices: [
+          { name: 'idx_file_asset_org', columnNames: ['org_id'] },
           {
             name: 'IDX_a3d31b2addc6e59905c43d1602',
             columnNames: ['tenant_id'],

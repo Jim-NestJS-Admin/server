@@ -19,12 +19,13 @@ import {
 import { FileService } from './service/file.service.js';
 import { FileAssetService } from './service/file-asset.service.js';
 import { BlobStore } from './storage/blob-store.js';
+import { SessionFileAccess } from './session-file-access.js';
 
 export interface FileModuleOptions {
   store: BlobStore;
   policy: FilePolicy;
   /** 只能由 T05/T06 后台认证/权限实现提供，默认拒绝访问。 */
-  access?: FileAccess;
+  access?: FileAccess | 'session';
   /** 必须接 core 的租户隔离和数据库事务，默认503，禁止内存替代。 */
   catalog?: FileCatalog | 'database';
 }
@@ -55,10 +56,12 @@ export class FileModule {
         FileGuard,
         { provide: FILE_POLICY, useValue: policy },
         { provide: BlobStore, useValue: options.store },
-        {
-          provide: FileAccess,
-          useValue: options.access ?? new DenyFileAccess(),
-        },
+        options.access === 'session'
+          ? { provide: FileAccess, useClass: SessionFileAccess }
+          : {
+              provide: FileAccess,
+              useValue: options.access ?? new DenyFileAccess(),
+            },
         database
           ? { provide: FileCatalog, useExisting: FileAssetService }
           : {

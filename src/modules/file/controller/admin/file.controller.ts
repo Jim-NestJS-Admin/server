@@ -15,7 +15,6 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiConsumes,
-  ApiExtension,
   ApiOperation,
   ApiProduces,
   ApiResponse,
@@ -35,6 +34,7 @@ import type {} from 'multer';
 import { FileIdBody, FileReceipt } from '../../dto/file.dto.js';
 import { FileGuard, FileOperation } from '../../file.guard.js';
 import { FileService } from '../../service/file.service.js';
+import { Perms } from '../../../../core/permission/perms.decorator.js';
 const FileErrors = () =>
   applyDecorators(
     ApiErrors(400, 404),
@@ -52,7 +52,7 @@ export class FileController {
   @Post('upload')
   @HttpCode(200)
   @FileOperation('upload')
-  @ApiExtension('x-permissions', ['file:asset:upload'])
+  @Perms('file:asset:upload')
   @ApiOperation({ operationId: 'fileAssetUpload', summary: '上传文件' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -75,7 +75,7 @@ export class FileController {
   @Post('download')
   @HttpCode(200)
   @FileOperation('read')
-  @ApiExtension('x-permissions', ['file:asset:read'])
+  @Perms('file:asset:read')
   @ApiOperation({ operationId: 'fileAssetDownload', summary: '鉴权下载文件' })
   @ApiBody({ type: FileIdBody })
   @ApiProduces('application/octet-stream')
