@@ -657,13 +657,20 @@ export class BaseService<T extends BaseEntity> {
       orgId: (src.orgId as string | null | undefined) ?? null,
       createdBy: (src.createdBy as string | null | undefined) ?? null,
     });
-    if (verdict)
+    if (verdict) {
+      // _fieldState：这一行上不是「可编辑」的字段及其状态（契约 field-perm.md 3.1），前端据此逐行禁用编辑、标出打码
+      const states: Record<string, string> = {};
       for (const k of Object.keys(out)) {
         if (FIELD_PERM_EXEMPT.has(k)) continue;
         const v = verdict(k);
+        if (v.state === 'editable') continue;
+        states[k] = v.state;
         if (v.state === 'hidden') delete out[k];
         else if (v.state === 'masked') out[k] = mask(out[k], v.mask);
       }
+      // 全部可编辑时不带这个键
+      if (Object.keys(states).length) out._fieldState = states;
+    }
     return out as CrudRow<T>;
   }
 

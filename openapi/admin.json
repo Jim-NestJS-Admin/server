@@ -92,6 +92,105 @@
         ],
         "type": "object"
       },
+      "FieldPermFieldDto": {
+        "properties": {
+          "configurable": {
+            "type": "boolean"
+          },
+          "default": {
+            "description": "代码默认状态",
+            "enum": [
+              "editable",
+              "readonly",
+              "masked",
+              "hidden"
+            ],
+            "type": "string"
+          },
+          "delegable": {
+            "description": "可委派上限",
+            "enum": [
+              "editable",
+              "readonly",
+              "masked",
+              "hidden"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "field": {
+            "description": "实体属性名",
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "mask": {
+            "enum": [
+              "phone",
+              "email",
+              "idcard",
+              "last4",
+              "all"
+            ],
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "label",
+          "default",
+          "mask",
+          "delegable",
+          "configurable"
+        ],
+        "type": "object"
+      },
+      "FieldPermRegistryDto": {
+        "properties": {
+          "masks": {
+            "items": {
+              "$ref": "#/components/schemas/MaskRuleDto"
+            },
+            "type": "array"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/FieldPermResourceDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resources",
+          "masks"
+        ],
+        "type": "object"
+      },
+      "FieldPermResourceDto": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldPermFieldDto"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "resource": {
+            "description": "资源（权限码前缀），如 system:user",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "label",
+          "fields"
+        ],
+        "type": "object"
+      },
       "LoginDto": {
         "properties": {
           "captchaCode": {
@@ -115,6 +214,28 @@
         "required": [
           "username",
           "password"
+        ],
+        "type": "object"
+      },
+      "MaskRuleDto": {
+        "properties": {
+          "code": {
+            "enum": [
+              "phone",
+              "email",
+              "idcard",
+              "last4",
+              "all"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label"
         ],
         "type": "object"
       },
@@ -892,8 +1013,7 @@
                       "type": "integer"
                     },
                     "data": {
-                      "nullable": true,
-                      "type": "object"
+                      "$ref": "#/components/schemas/FieldPermRegistryDto"
                     },
                     "message": {
                       "example": "ok",

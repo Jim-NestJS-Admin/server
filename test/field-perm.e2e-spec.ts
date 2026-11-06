@@ -187,6 +187,8 @@ describe('字段权限（T16）', () => {
     expect(r.mine).toMatchObject({ phone: '13812345678', cost: '99.5' });
     expect(r.other.phone).toBe('138****5678');
     expect(r.other).not.toHaveProperty('cost');
+    expect(r.mine).not.toHaveProperty('_fieldState');
+    expect(r.other._fieldState).toEqual({ phone: 'masked', cost: 'hidden' });
   });
 
   it('只有客服：手机号脱敏，成本价不返回', async () => {
