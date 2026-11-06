@@ -118,7 +118,19 @@ export class EndpointCheck implements OnModuleInit {
           `${name} 属于 ${endpoint} 端，这个端还没有接入认证，不能注册`,
         );
       // 需要登录的接口必须声明权限：方法上的 @Perms，或者 @LoginOnly（方法或控制器上）
-      if (isAnonymous) continue;
+      if (isAnonymous) {
+        if (
+          Reflect.getMetadata(PERMS_KEY, cls) ||
+          Reflect.getMetadata(LOGIN_ONLY_KEY, cls) ||
+          list.some(
+            (r) =>
+              Reflect.getMetadata(PERMS_KEY, r.fn) ||
+              Reflect.getMetadata(LOGIN_ONLY_KEY, r.fn),
+          )
+        )
+          throw new Error(`${name} 免登录控制器不能混用 @Perms 或 @LoginOnly`);
+        continue;
+      }
       const classLoginOnly = Reflect.getMetadata(LOGIN_ONLY_KEY, cls) as
         object | undefined;
       if (Reflect.getMetadata(PERMS_KEY, cls))

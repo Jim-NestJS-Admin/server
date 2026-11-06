@@ -2,11 +2,23 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from './core/auth/auth.module.js';
 import { CoreModule } from './core/core.module.js';
 import { PermissionModule } from './core/permission/permission.module.js';
+import { SystemModule } from './modules/system/system.module.js';
+import {
+  SystemAuthUserStore,
+  SystemPermissionSource,
+} from './modules/system/service/system-auth.adapters.js';
 
 @Module({
-  // T07 接入后：
-  //   AuthModule.forRoot({ userStore: SystemAuthUserStore, imports: [SystemModule] })
-  //   PermissionModule.forRoot({ source: SystemPermissionSource, imports: [SystemModule] })
-  imports: [CoreModule, AuthModule.forRoot(), PermissionModule.forRoot()],
+  imports: [
+    CoreModule,
+    AuthModule.forRoot({
+      userStore: SystemAuthUserStore,
+      imports: [SystemModule],
+    }),
+    PermissionModule.forRoot({
+      source: SystemPermissionSource,
+      imports: [SystemModule],
+    }),
+  ],
 })
 export class AppModule {}
