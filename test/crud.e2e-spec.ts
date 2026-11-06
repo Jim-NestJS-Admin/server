@@ -82,7 +82,7 @@ describe('通用 CRUD（验收点①）', () => {
         nickname: '爱丽丝',
         status: 'enabled',
         version: 1,
-        createdBy: null,
+        createdBy: '1',
       });
       expect(typeof row.id).toBe('string');
       expect(row).not.toHaveProperty('tenantId');
@@ -182,19 +182,19 @@ describe('通用 CRUD（验收点①）', () => {
         username: 'zhang',
         nickname: '张三',
         status: 'enabled',
-        orgId: '10',
+        deptId: '10',
       });
       await add({
         username: 'li',
         nickname: '李四',
         status: 'disabled',
-        orgId: '20',
+        deptId: '20',
       });
       await add({
         username: 'wang',
         nickname: '王五',
         status: 'enabled',
-        orgId: '10',
+        deptId: '10',
       });
       await add({ username: 'pct_x', nickname: '百分号', status: 'enabled' });
       await insertOtherTenant('zhang-other');
@@ -223,7 +223,7 @@ describe('通用 CRUD（验收点①）', () => {
 
     it('等于筛选、多列排序、翻页', async () => {
       const res = await post('page', {
-        eq: { status: 'enabled', orgId: '10' },
+        eq: { status: 'enabled', deptId: '10' },
         sort: [{ field: 'nickname', order: 'asc' }],
         page: 1,
         size: 1,
@@ -231,7 +231,7 @@ describe('通用 CRUD（验收点①）', () => {
       expect(res.body.data.total).toBe(2);
       expect(res.body.data.list).toHaveLength(1);
       const p2 = await post('page', {
-        eq: { status: 'enabled', orgId: '10' },
+        eq: { status: 'enabled', deptId: '10' },
         sort: [{ field: 'nickname', order: 'asc' }],
         page: 2,
         size: 1,
@@ -473,6 +473,7 @@ describe('通用 CRUD（验收点①）', () => {
       ).toEqual([
         'createdAt',
         'createdBy',
+        'deptId',
         'id',
         'nickname',
         'orgId',
@@ -531,7 +532,7 @@ describe('通用 CRUD（验收点①）', () => {
         username: 'n2',
         nickname: '名',
         remark: '备注',
-        orgId: '10',
+        deptId: '10',
       });
       const res = await post('update', {
         id: body.data.id,
@@ -540,7 +541,7 @@ describe('通用 CRUD（验收点①）', () => {
       }).expect(200);
       expect(res.body.data).toMatchObject({
         remark: null,
-        orgId: '10',
+        deptId: '10',
         nickname: '名',
         version: 2,
       });
@@ -581,6 +582,7 @@ describe('通用 CRUD（验收点①）', () => {
       expect(s.columns.map((c: { field: string }) => c.field)).toEqual([
         'id',
         'version',
+        'orgId',
         'createdBy',
         'updatedBy',
         'createdAt',
@@ -607,14 +609,14 @@ describe('通用 CRUD（验收点①）', () => {
       expect(s.actions.update.writable).toEqual([
         'nickname',
         'status',
-        'orgId',
+        'deptId',
         'remark',
       ]);
       expect(s.actions.add.writable).toEqual([
         'username',
         'nickname',
         'status',
-        'orgId',
+        'deptId',
         'remark',
       ]);
       expect(s.actions.page.sortable).toEqual([
@@ -626,7 +628,7 @@ describe('通用 CRUD（验收点①）', () => {
       ]);
       expect(s.query.map((q: { field: string }) => q.field)).toEqual([
         'status',
-        'orgId',
+        'deptId',
       ]);
     });
   });
@@ -700,8 +702,8 @@ describe('通用 CRUD（验收点①）', () => {
         properties: Record<string, unknown>;
       };
       expect(Object.keys(addData.properties).sort()).toEqual([
+        'deptId',
         'nickname',
-        'orgId',
         'remark',
         'status',
         'username',

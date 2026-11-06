@@ -15,6 +15,7 @@ const PREFIX = /^[a-z][a-z0-9-]*(\/[a-z][a-z0-9-]*)+$/;
 const BASE_READABLE = [
   'id',
   'version',
+  'orgId',
   'createdBy',
   'updatedBy',
   'createdAt',
@@ -32,6 +33,7 @@ const pascal = (prefix: string) =>
 /** 子表每行对外的基础字段：子表不单独做并发控制，不暴露版本号 */
 const CHILD_BASE_READABLE = [
   'id',
+  'orgId',
   'createdBy',
   'updatedBy',
   'createdAt',
@@ -225,6 +227,7 @@ export function resolveCrudMeta<T extends BaseEntity>(
     label: options.label,
     name,
     permPrefix: options.prefix.replace(/\//g, ':'),
+    dataScope: options.dataScope ?? false,
     entity: options.entity,
     api: [...options.api],
     deleteMode,

@@ -808,6 +808,7 @@ describe('主子表聚合保存（验收点②）', () => {
       ]);
       expect(items.columns.map((c: { field: string }) => c.field)).toEqual([
         'id',
+        'orgId',
         'createdBy',
         'updatedBy',
         'createdAt',

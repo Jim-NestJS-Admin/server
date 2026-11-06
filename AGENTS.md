@@ -24,3 +24,7 @@
 16. Redis 统一用 `RedisService`（`src/core/redis/`）：按租户的键用 `redis.tenantKey(租户, ...)` 拼，操作包在 `redis.call(...)` 里，Redis 不可用时自动变成 503，不要自己 new 连接。
 17. 后台登录认证在 `src/core/auth/`（T05）。用户和组织由 system 模块实现 `AuthUserStore` 提供，并在 `AppModule` 里 `AuthModule.forRoot({ userStore, imports })` 接入；**改密码、重置密码、停用或删除账号时，先提交数据库、再调用 `SessionService.revokeUser`**（顺序反了在途的旧密码登录能成功），`findForLogin` 不要缓存。密码用 `PasswordHasher` 和 `checkPasswordPolicy`（最多 72 字节，超长拒绝不截断），账号用 `normalizeUsername` 规范化后再存和查。
 18. 端到端测试不关心登录时用 `test/support/test-auth.ts` 的 `createTestModule` 代替 `Test.createTestingModule`（从请求头取身份）；测试用 Redis 前缀 `jna-test:`，用 `clearTestRedis` 只清自己的键。
+19. 后台接口必须声明权限（T06，`src/core/permission/`）：方法上加 `@Perms('模块:资源:动作')`（高风险加 `{ risk: 'high' }`），登录就能用的加 `@LoginOnly()`，都没有启动时报错；通用 CRUD 按「前缀:动作」自动生成（页面描述用列表的码，删除和彻底删除是高风险）。`@Perms` 只能加在方法上。
+20. 要按部门过滤数据的资源在 `@CrudController` 里写 `dataScope: true`：读、改、删、回收站和 `BaseService.select` 都按本次有效角色的数据范围过滤，新增时所属组织（`orgId`，基类字段）取当前组织。`@LoginOnly` 接口没有数据范围，查这种资源什么都看不到，要查数据就用 `@Perms`。
+21. 角色、组织、菜单由 system 模块实现 `PermissionSource` 提供，`PermissionModule.forRoot({ source, imports })` 接入；**改角色、角色分配、组织树、组织成员、菜单后，数据库提交了再调用 `PermissionService.bumpVersion(租户)`**，权限缓存立即失效。
+

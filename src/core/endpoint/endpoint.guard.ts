@@ -14,7 +14,7 @@ import {
   type EndpointKind,
 } from '../tenant/request-context.js';
 import { PLATFORM_TENANT_ID } from '../tenant/tenant.constants.js';
-import { AdminAuth } from './endpoint-auth.js';
+import { AdminAuth, AdminAuthorizer } from './endpoint-auth.js';
 import {
   ANONYMOUS_KEY,
   ENDPOINT_KEY,
@@ -35,6 +35,7 @@ export class EndpointGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly context: RequestContext,
     private readonly adminAuth: AdminAuth,
+    private readonly authorizer: AdminAuthorizer,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -54,7 +55,11 @@ export class EndpointGuard implements CanActivate {
       );
 
     // 同样只认控制器上的 @Anonymous
-    const principal = this.reflector.get<boolean>(ANONYMOUS_KEY, ctx.getClass())
+    const anonymous = this.reflector.get<boolean>(
+      ANONYMOUS_KEY,
+      ctx.getClass(),
+    );
+    const principal = anonymous
       ? {
           tenantId: await this.adminAuth.resolveTenant(req),
           userId: null,
@@ -62,6 +67,8 @@ export class EndpointGuard implements CanActivate {
         }
       : await this.adminAuth.authenticate(req);
     this.context.establish(endpoint, principal);
+    // 权限码和本次有效角色（T06）。免登录的接口没有用户，不核对
+    if (!anonymous) await this.authorizer.authorize(ctx);
 
     if (this.reflector.get<boolean>(IGNORE_TENANT_KEY, ctx.getHandler())) {
       if (principal.tenantId !== PLATFORM_TENANT_ID)

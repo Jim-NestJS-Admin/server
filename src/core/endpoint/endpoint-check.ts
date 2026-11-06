@@ -41,6 +41,7 @@ import {
   PUBLIC_KEY,
 } from './endpoint.decorators.js';
 import type { EndpointKind } from '../tenant/request-context.js';
+import { LOGIN_ONLY_KEY, PERMS_KEY } from '../permission/perms.decorator.js';
 
 /** 阶段 1 已经接入认证的端 */
 const ENABLED: EndpointKind[] = ['admin'];
@@ -116,6 +117,23 @@ export class EndpointCheck implements OnModuleInit {
         throw new Error(
           `${name} 属于 ${endpoint} 端，这个端还没有接入认证，不能注册`,
         );
+      // 需要登录的接口必须声明权限：方法上的 @Perms，或者 @LoginOnly（方法或控制器上）
+      if (isAnonymous) continue;
+      const classLoginOnly = Reflect.getMetadata(LOGIN_ONLY_KEY, cls) as
+        object | undefined;
+      if (Reflect.getMetadata(PERMS_KEY, cls))
+        throw new Error(
+          `${name} 上加了 @Perms：权限码只能加在方法上，一个接口一个权限码`,
+        );
+      for (const r of list)
+        if (
+          !Reflect.getMetadata(PERMS_KEY, r.fn) &&
+          !Reflect.getMetadata(LOGIN_ONLY_KEY, r.fn) &&
+          !classLoginOnly
+        )
+          throw new Error(
+            `${name}.${r.method} 没有声明权限：加 @Perms('模块:资源:动作')，登录就能用的接口加 @LoginOnly()`,
+          );
     }
   }
 }

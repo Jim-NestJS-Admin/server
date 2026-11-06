@@ -44,6 +44,7 @@ describe('EndpointGuard：@Public 只认控制器上的', () => {
       new Reflector(),
       new RequestContext(ClsServiceManager.getClsService()),
       auth,
+      { authorize: async () => undefined } as never,
     );
     return { auth, guard };
   };

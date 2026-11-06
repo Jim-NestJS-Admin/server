@@ -1,3 +1,4 @@
+import type { ExecutionContext } from '@nestjs/common';
 import type { Request } from 'express';
 import type { Principal } from '../tenant/request-context.js';
 
@@ -9,4 +10,12 @@ export abstract class AdminAuth {
   abstract authenticate(req: Request): Promise<Principal>;
   /** 免登录的后台接口（@Anonymous）：只确定租户。阶段 1 固定默认租户，以后按域名解析 */
   abstract resolveTenant(req: Request): Promise<string>;
+}
+
+/**
+ * 后台端授权：认证通过、身份写进上下文之后调用，核对这个接口的权限码（T06 的 PermissionAuthorizer）。
+ * 免登录（@Anonymous）的接口不调用。
+ */
+export abstract class AdminAuthorizer {
+  abstract authorize(ctx: ExecutionContext): Promise<void>;
 }

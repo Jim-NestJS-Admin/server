@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { AppConfigService } from '../../../config/app-config.service.js';
 import { AdminController } from '../../../endpoint/endpoint.decorators.js';
+import { LoginOnly } from '../../../permission/perms.decorator.js';
 import { ApiErrors, ApiResult } from '../../../swagger/api-result.js';
 import { AuthService } from '../../auth.service.js';
 import {
@@ -17,9 +18,11 @@ import {
   type AuthedRequest,
 } from '../../http.js';
 
-/** 当前登录用户：个人信息、当前组织、切换组织。菜单和权限（sessionMenu）在 T06 */
+/** 当前登录用户：个人信息、当前组织、切换组织。菜单和权限（sessionMenu）在 permission 的 MenuController */
 @ApiTags('auth 登录认证')
 @ApiBearerAuth()
+// 当前组织失效（被移出、角色收回）时也要能看个人信息、切到别的组织
+@LoginOnly({ orgCheck: false })
 @AdminController('session')
 export class SessionController {
   constructor(

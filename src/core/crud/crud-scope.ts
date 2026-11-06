@@ -61,6 +61,7 @@ export class CrudContextProvider {
       userId: c.userId,
       orgId: c.orgId,
       ignoreTenant: c.ignoreTenant,
+      endpoint: c.endpoint,
     };
   }
 }

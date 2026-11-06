@@ -14,6 +14,7 @@ import {
 /** 基础字段在页面上的显示名称 */
 const BASE_LABELS: Record<string, string> = {
   id: '编号',
+  orgId: '所属组织',
   createdBy: '创建人',
   updatedBy: '修改人',
   createdAt: '创建时间',

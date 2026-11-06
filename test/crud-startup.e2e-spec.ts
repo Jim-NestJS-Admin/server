@@ -24,6 +24,7 @@ import {
   DemoOrderNoteEntity,
 } from './fixtures/demo-order.js';
 import { createTestModule } from './support/test-auth.js';
+import { LoginOnly, Perms } from '../src/core/permission/perms.decorator.js';
 
 // 单独一个文件：@nestjs/typeorm 的 autoLoadEntities 在同一进程里会累积之前测试模块注册过的实体，
 // 和别的用例放在一起时「没注册」的实体会被之前的模块带进来
@@ -180,6 +181,25 @@ class AnonymousIgnoreController {
   }
 }
 
+@AdminController('no-perm')
+class NoPermController {
+  @Get()
+  ok() {
+    return 1;
+  }
+}
+
+// 类型上已经不允许（MethodDecorator），这里强转，测启动检查这道防线
+@(Perms('test:class:perm') as ClassDecorator)
+@AdminController('class-perm')
+class ClassPermController {
+  @Get()
+  @LoginOnly()
+  ok() {
+    return 1;
+  }
+}
+
 describe('启动检查：多端接口', () => {
   it.each([
     [
@@ -232,6 +252,16 @@ describe('启动检查：多端接口', () => {
       '@Anonymous 接口用 @IgnoreTenant',
       AnonymousIgnoreController,
       /是 @Anonymous 接口，不能用 @IgnoreTenant/,
+    ],
+    [
+      '后台接口没有声明权限',
+      NoPermController,
+      /NoPermController.ok 没有声明权限/,
+    ],
+    [
+      '@Perms 加在控制器上',
+      ClassPermController,
+      /ClassPermController 上加了 @Perms/,
     ],
   ])('%s：启动失败', async (_name, controller, error) => {
     const moduleRef = await createTestModule({

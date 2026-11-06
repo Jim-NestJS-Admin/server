@@ -27,6 +27,15 @@ export abstract class BaseEntity {
   @Column({ type: 'bigint', unsigned: true, default: DEFAULT_TENANT_ID })
   tenantId: string;
 
+  @ApiProperty({
+    description: '所属组织（新增时取当前组织，数据权限按它过滤）',
+    type: String,
+    nullable: true,
+  })
+  @Index()
+  @Column({ type: 'bigint', unsigned: true, nullable: true })
+  orgId: string | null;
+
   @ApiProperty({ description: '创建人', type: String, nullable: true })
   @Column({ type: 'bigint', unsigned: true, nullable: true })
   createdBy: string | null;
@@ -87,6 +96,7 @@ export abstract class BaseEntity {
 export const SYSTEM_FIELDS = [
   'id',
   'tenantId',
+  'orgId',
   'createdBy',
   'updatedBy',
   'createdAt',
