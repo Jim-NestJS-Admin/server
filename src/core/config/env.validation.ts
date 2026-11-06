@@ -208,6 +208,22 @@ export class EnvironmentVariables {
   @Min(10)
   RATE_LIMIT_IP_PER_MINUTE: number = 600;
 
+  /** 代码生成器（T21）：只在开发环境生效；还要配两个输出根目录 */
+  @Transform(toBool)
+  @IsOptional()
+  @IsBoolean()
+  CODEGEN_ENABLED?: boolean;
+
+  /** 代码生成写入的后端项目根目录（服务端写死，浏览器不能传路径） */
+  @IsOptional()
+  @IsString()
+  CODEGEN_SERVER_ROOT?: string;
+
+  /** 代码生成写入的前端项目根目录 */
+  @IsOptional()
+  @IsString()
+  CODEGEN_ADMIN_ROOT?: string;
+
   /** 只给接口文档导出脚本用：导出时不连数据库。不要手动设置 */
   @Transform(toBool)
   @IsOptional()
