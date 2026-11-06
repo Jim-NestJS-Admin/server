@@ -12,6 +12,7 @@
   "packageManager": "pnpm@10.28.0",
   "scripts": {
     "bootstrap:local": "nest build && node dist/scripts/bootstrap-local.js",
+    "migration:local": "nest build && node dist/scripts/bootstrap-local.js --migrate-only",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",

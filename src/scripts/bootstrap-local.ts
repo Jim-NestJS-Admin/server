@@ -39,9 +39,10 @@ async function bootstrapLocal(): Promise<void> {
   const username = normalizeUsername(process.env.BOOTSTRAP_USERNAME ?? '');
   const password = process.env.BOOTSTRAP_PASSWORD ?? '';
   if (
-    !/^[a-z][a-z0-9_.-]{2,63}$/.test(username) ||
-    !password ||
-    passwordBytes(password) > PASSWORD_MAX_BYTES
+    !process.argv.includes('--migrate-only') &&
+    (!/^[a-z][a-z0-9_.-]{2,63}$/.test(username) ||
+      !password ||
+      passwordBytes(password) > PASSWORD_MAX_BYTES)
   )
     throw new Error('请通过本地环境变量提供合法初始化账号和符合密码规则的密码');
   const migration = new DataSource({
@@ -61,6 +62,10 @@ async function bootstrapLocal(): Promise<void> {
     await migration.runMigrations();
   } finally {
     await migration.destroy();
+  }
+  if (process.argv.includes('--migrate-only')) {
+    console.log('本地版本化迁移完成，未创建或重置账号');
+    return;
   }
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: false,
