@@ -2,9 +2,11 @@ import type { Type } from '@nestjs/common';
 import {
   ApiProperty,
   ApiPropertyOptional,
+  IntersectionType,
   PartialType,
   PickType,
 } from '@nestjs/swagger';
+import { SYSTEM_FIELDS } from './base.entity.js';
 import { Type as TransformType } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -264,17 +266,34 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     Matches(ID_PATTERN, { each: true, message: ID_MESSAGE }),
   ]);
 
-  // 响应：一行只含资源定义里的可读字段，和 BaseService.toRow 的输出一致
-  const Row = named(
-    PickType(entity, meta.readable as never[]) as Type,
-    `${n}Row`,
-  );
+  // 响应：一行只含资源定义里的可读字段，和 BaseService.toRow 的输出一致。
+  // 业务字段可能因字段权限被隐藏（不返回），所以是可选的；_fieldState 列出这一行不可编辑的字段
+  const exempt = new Set<string>([...SYSTEM_FIELDS, 'version']);
+  const fixed = meta.readable.filter((f) => exempt.has(f));
+  const business = meta.readable.filter((f) => !exempt.has(f));
+  const rowType = () => {
+    const t = IntersectionType(
+      PickType(entity, fixed as never[]),
+      PartialType(PickType(entity, business as never[])),
+    ) as Type;
+    prop(t, '_fieldState', Object, [
+      ApiProperty({
+        required: false,
+        description:
+          '这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）',
+        type: Object,
+        additionalProperties: {
+          type: 'string',
+          enum: ['readonly', 'masked', 'hidden'],
+        },
+      }),
+    ]);
+    return t;
+  };
+  const Row = named(rowType(), `${n}Row`);
   let Detail = Row;
   if (hasChildren) {
-    Detail = named(
-      PickType(entity, meta.readable as never[]) as Type,
-      `${n}Detail`,
-    );
+    Detail = named(rowType(), `${n}Detail`);
     prop(Detail, 'children', Object, [ApiProperty({ type: DetailChildren })]);
   }
   const PageResult = named(class {}, `${n}PageResult`);

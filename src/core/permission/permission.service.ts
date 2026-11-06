@@ -3,7 +3,12 @@ import { BusinessException } from '../exceptions/business.exception.js';
 import { ErrorCode } from '../exceptions/error-code.js';
 import { RedisService } from '../redis/redis.service.js';
 import { RequestContext } from '../tenant/request-context.js';
-import { AuthzContext, type DataScopeGrant } from './authz-context.js';
+import {
+  AuthzContext,
+  type DataScopeGrant,
+  type FieldRules,
+} from './authz-context.js';
+import { FieldPermSource } from '../field-perm/field-perm-source.js';
 import { PermissionRegistry } from './permission-registry.js';
 import {
   PermissionSource,
@@ -87,7 +92,47 @@ export class PermissionService {
     private readonly registry: PermissionRegistry,
     private readonly context: RequestContext,
     private readonly authz: AuthzContext,
+    private readonly fieldSource: FieldPermSource,
   ) {}
+
+  /** 租户的字段权限配置（按授权版本缓存），只留本次有效角色的 */
+  private async fieldRules(
+    tenantId: string,
+    roleIds: string[],
+  ): Promise<FieldRules> {
+    const version = await this.version(tenantId);
+    const key = this.redis.tenantKey(tenantId, 'fieldperm', `v${version}`);
+    type Cached = {
+      defaults: FieldRules['defaults'];
+      roles: FieldRules['roles'];
+    };
+    let all: Cached;
+    const cached = await this.redis.call((r) => r.get(key));
+    if (cached) all = JSON.parse(cached) as Cached;
+    else {
+      const [defaults, roleRules] = await Promise.all([
+        this.fieldSource.loadFieldDefaults(tenantId),
+        this.fieldSource.loadRoleFields(tenantId),
+      ]);
+      all = { defaults: {}, roles: {} };
+      for (const d of defaults)
+        all.defaults[`${d.resource}.${d.field}`] = {
+          state: d.state,
+          mask: d.mask ?? null,
+        };
+      for (const r of roleRules)
+        (all.roles[r.roleId] ??= {})[`${r.resource}.${r.field}`] = {
+          state: r.state,
+          mask: r.mask ?? null,
+        };
+      await this.redis.call((r) =>
+        r.set(key, JSON.stringify(all), 'EX', CACHE_TTL),
+      );
+    }
+    const roles: FieldRules['roles'] = {};
+    for (const id of roleIds) if (all.roles[id]) roles[id] = all.roles[id];
+    return { defaults: all.defaults, roles };
+  }
 
   private versionKey(tenantId: string) {
     return this.redis.tenantKey(tenantId, 'perm', 'ver');
@@ -194,9 +239,16 @@ export class PermissionService {
     if (effective.length === 0) throw forbidden();
     const orgIds = new Set<string>();
     for (const r of effective) for (const id of r.scope.orgIds) orgIds.add(id);
+    const roleIds = effective.map((r) => r.roleId);
     this.authz.set({
       permission: code,
-      roleIds: effective.map((r) => r.roleId),
+      roleIds,
+      roles: effective.map((r) => ({
+        roleId: r.roleId,
+        superAdmin: r.all,
+        scope: r.scope,
+      })),
+      fields: await this.fieldRules(tenantId, roleIds),
       dataScope: {
         all: effective.some((r) => r.scope.all),
         orgIds: [...orgIds].sort(),

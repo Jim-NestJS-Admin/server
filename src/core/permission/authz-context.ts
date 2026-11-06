@@ -9,11 +9,30 @@ export interface DataScopeGrant {
   self: boolean;
 }
 
-/** 权限守卫算出的本次授权，供 CRUD 的数据范围条件使用 */
+/** 本次有效角色之一：字段权限按行合并时要知道每个角色自己的数据范围 */
+export interface EffectiveRole {
+  roleId: string;
+  superAdmin: boolean;
+  scope: DataScopeGrant;
+}
+
+/** 字段权限配置：key 是「资源.字段」 */
+export interface FieldRules {
+  defaults: Record<string, { state: string; mask?: string | null }>;
+  /** 只含本次有效角色 */
+  roles: Record<
+    string,
+    Record<string, { state: string; mask?: string | null }>
+  >;
+}
+
+/** 权限守卫算出的本次授权，供 CRUD 的数据范围条件和字段权限使用 */
 export interface Authorization {
   permission: string;
   roleIds: string[];
   dataScope: DataScopeGrant;
+  roles: EffectiveRole[];
+  fields: FieldRules;
 }
 
 const KEY = 'jna:authz';
@@ -34,6 +53,18 @@ export class AuthzContext {
           ...authz.dataScope,
           orgIds: Object.freeze([...authz.dataScope.orgIds]),
         }),
+        roles: Object.freeze(
+          authz.roles.map((r) =>
+            Object.freeze({
+              ...r,
+              scope: Object.freeze({
+                ...r.scope,
+                orgIds: Object.freeze([...r.scope.orgIds]),
+              }),
+            }),
+          ),
+        ),
+        fields: Object.freeze(authz.fields),
       }),
     );
   }

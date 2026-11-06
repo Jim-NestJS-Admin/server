@@ -14,9 +14,6 @@ export interface AuthConfig {
   lockSeconds: number;
   adminOrigins: string[];
   captchaMode: 'always' | 'after-failure';
-  altchaHmacSecret: string;
-  altchaHmacKeySecret: string;
-  altchaCost: number;
 }
 
 /** 带类型的配置读取。业务代码不要直接读 process.env */
@@ -94,9 +91,6 @@ export class AppConfigService {
         .map((o) => o.trim().replace(/\/+$/, ''))
         .filter(Boolean),
       captchaMode: g('AUTH_CAPTCHA_MODE'),
-      altchaHmacSecret: g('ALTCHA_HMAC_SECRET'),
-      altchaHmacKeySecret: g('ALTCHA_HMAC_KEY_SECRET'),
-      altchaCost: g('ALTCHA_COST'),
     };
   }
 

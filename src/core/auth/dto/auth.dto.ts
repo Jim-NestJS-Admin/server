@@ -31,11 +31,19 @@ export class LoginDto {
   @MaxLength(128)
   password!: string;
 
-  @ApiPropertyOptional({ description: 'altcha 组件给出的结果' })
+  @ApiPropertyOptional({
+    description: '验证码编号（出题接口返回的 captchaId）',
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(8192)
-  altcha?: string;
+  @MaxLength(64)
+  captchaId?: string;
+
+  @ApiPropertyOptional({ description: '用户看图输入的验证码，不区分大小写' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  captchaCode?: string;
 }
 
 export class SwitchOrgDto {
@@ -44,6 +52,16 @@ export class SwitchOrgDto {
   @IsNotEmpty()
   @MaxLength(32)
   orgId!: string;
+}
+
+export class CaptchaResultDto {
+  @ApiProperty({ description: '验证码编号，登录时原样带上' })
+  captchaId!: string;
+  @ApiProperty({
+    description:
+      '验证码图片（data:image/svg+xml;base64,...），直接放进 img 的 src',
+  })
+  image!: string;
 }
 
 export class TokenResult {

@@ -11,6 +11,8 @@
   },
   "packageManager": "pnpm@10.28.0",
   "scripts": {
+    "bootstrap:local": "nest build && node dist/scripts/bootstrap-local.js",
+    "migration:local": "nest build && node dist/scripts/bootstrap-local.js --migrate-only",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
@@ -28,17 +30,17 @@
     "openapi:export": "nest build && node dist/scripts/export-openapi.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1162.0",
     "@nestjs/common": "^12.0.1",
     "@nestjs/config": "^12.1.0",
     "@nestjs/core": "^12.0.1",
     "@nestjs/platform-express": "^12.0.1",
     "@nestjs/swagger": "^12.1.0",
     "@nestjs/typeorm": "12.0.2",
-    "ali-oss": "^6.23.0",
+    "bcryptjs": "3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
-    "file-type": "^22.3.0",
+    "ioredis": "6.0.0",
+    "jose": "6.2.15",
     "mysql2": "3.24.6",
     "nestjs-cls": "^7.0.2",
     "nestjs-pino": "^5.3.1",
@@ -46,19 +48,17 @@
     "pino-http": "^11.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "svg-captcha": "1.4.0",
     "typeorm": "1.1.2",
-    "altcha-lib": "2.8.0",
-    "bcryptjs": "3.0.3",
-    "ioredis": "6.0.0",
-    "jose": "6.2.15"
+    "@aws-sdk/client-s3": "^3.1162.0",
+    "ali-oss": "^6.23.0",
+    "file-type": "^22.3.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",
     "@nestjs/schematics": "^12.0.0",
     "@nestjs/testing": "^12.0.1",
-    "@types/ali-oss": "^6.23.4",
     "@types/express": "^5.0.0",
-    "@types/multer": "^2.3.0",
     "@types/node": "^24.0.0",
     "@types/supertest": "^7.0.0",
     "@vitest/coverage-v8": "^4.1.2",
@@ -70,6 +70,8 @@
     "supertest": "^7.0.0",
     "typescript": "^6.0.2",
     "vite": "^8.0.0",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "@types/ali-oss": "^6.23.4",
+    "@types/multer": "^2.3.0"
   }
 }
