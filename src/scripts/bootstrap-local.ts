@@ -9,11 +9,13 @@ import { TenantRepositoryFactory } from '../core/tenant/tenant-repository.js';
 import { DEFAULT_TENANT_ID } from '../core/tenant/tenant.constants.js';
 import {
   PasswordHasher,
-  checkPasswordPolicy,
+  passwordBytes,
+  PASSWORD_MAX_BYTES,
   normalizeUsername,
 } from '../core/auth/password.js';
 import { PermissionService } from '../core/permission/permission.service.js';
 import { InitialSystem1793926800000 } from '../database/migrations/1793926800000-InitialSystem.js';
+import { SystemRelationships1793930400000 } from '../database/migrations/1793930400000-SystemRelationships.js';
 import {
   SystemOrg,
   SystemRole,
@@ -38,7 +40,8 @@ async function bootstrapLocal(): Promise<void> {
   const password = process.env.BOOTSTRAP_PASSWORD ?? '';
   if (
     !/^[a-z][a-z0-9_.-]{2,63}$/.test(username) ||
-    checkPasswordPolicy(password, username).length
+    !password ||
+    passwordBytes(password) > PASSWORD_MAX_BYTES
   )
     throw new Error('请通过本地环境变量提供合法初始化账号和符合密码规则的密码');
   const migration = new DataSource({
@@ -48,7 +51,7 @@ async function bootstrapLocal(): Promise<void> {
     username: env.DB_USER,
     password: env.DB_PASSWORD,
     database: env.DB_NAME,
-    migrations: [InitialSystem1793926800000],
+    migrations: [InitialSystem1793926800000, SystemRelationships1793930400000],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,
     logging: false,

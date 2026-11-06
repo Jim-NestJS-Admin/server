@@ -10,6 +10,7 @@ import {
 } from '../entity/system.entity.js';
 import type { AuthOrg } from '../../../core/auth/auth-user.store.js';
 import type { RoleGrant } from '../../../core/permission/permission-source.js';
+import { validOrganizations } from './organization-policy.js';
 
 /** 认证和权限只读数据来源，不向外开放用户、角色写接口。 */
 @Injectable()
@@ -59,9 +60,13 @@ export class SystemDirectory {
       .andWhere('r.enabled = :enabled', { enabled: true })
       .getMany();
     const map = new Map(roles.map((role) => [role.id, role]));
+    const validOrgIds = new Set(
+      (await this.orgs(tenantId)).map((org) => org.id),
+    );
     return assignments.flatMap((grant) => {
       const role = map.get(grant.roleId);
-      return role
+      return role &&
+        (grant.scopeOrgId === null || validOrgIds.has(grant.scopeOrgId))
         ? [
             {
               roleId: role.id,
@@ -78,13 +83,14 @@ export class SystemDirectory {
 
   async orgs(tenantId: string) {
     this.check(tenantId);
-    return this.repos
+    const rows = await this.repos
       .for(SystemOrg)
       .query('o')
       .where('o.enabled = :enabled', { enabled: true })
       .orderBy('o.rank', 'ASC')
       .addOrderBy('o.id', 'ASC')
       .getMany();
+    return validOrganizations(rows);
   }
 
   async userOrgs(tenantId: string, userId: string): Promise<AuthOrg[]> {
