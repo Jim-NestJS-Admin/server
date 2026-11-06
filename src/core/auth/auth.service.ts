@@ -30,7 +30,7 @@ const credentialsError = () =>
 
 /**
  * 后台登录认证流程（架构「认证与权限 · 登录认证」、契约 auth-session.md）。
- * 登录顺序：锁定检查 → 人机验证（含难度、一次性认领）→ 账号密码 → 建会话。
+ * 登录顺序：锁定检查 → 人机验证（含难度、一次性认领）→ 账号密码 → 读失效版本、复核账号 → 原子建会话。
  * 题目不对不核对密码、不计失败次数；账号不存在、密码错、已停用一律「账号或密码错误」并计数。
  */
 @Injectable()
@@ -127,16 +127,36 @@ export class AuthService {
       throw credentialsError();
     }
 
-    await this.attempts.reset(tenantId, username);
+    // 防在途登录：先读失效版本，再重新读一次账号确认仍可用、密码没换，最后建会话时原子核对版本。
+    // T07 改密、停用的顺序是「数据库提交 → revokeUser（版本加 1）」，所以要么这里读到的是新数据，
+    // 要么版本在读之后变了、建会话失败，不会有用旧密码或已停用账号建出来的会话。
+    const epoch = await this.sessions.userEpoch(tenantId, user.id);
+    const again = await this.users.findForLogin(tenantId, username);
+    if (
+      !again?.enabled ||
+      again.id !== user.id ||
+      again.passwordHash !== user.passwordHash
+    )
+      throw credentialsError();
     const orgs = await this.users.listOrgs(tenantId, user.id);
     const org = orgs.find((o) => o.id === user.defaultOrgId) ?? orgs[0] ?? null;
-    const { session, refreshToken } = await this.sessions.create({
+    const created = await this.sessions.create({
       tenantId,
       userId: user.id,
       orgId: org?.id ?? null,
       ip,
       userAgent: ev.userAgent,
+      expectedEpoch: epoch,
     });
+    if (!created)
+      throw new BusinessException(
+        ErrorCode.BadRequest,
+        '登录失败，请重试',
+        400,
+        null,
+      );
+    const { session, refreshToken } = created;
+    await this.attempts.reset(tenantId, username);
     await this.emit(() =>
       this.events.loginSucceeded({
         ...ev,

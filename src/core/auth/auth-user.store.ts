@@ -33,8 +33,11 @@ export interface AuthProfile {
  * 认证读取用户和组织的接口，由 system 模块（T07）实现并提供：
  * `{ provide: AuthUserStore, useClass: SystemAuthUserStore }`。
  *
- * 实现方的义务（否则「改密、停用后旧令牌立即失效」不成立）：
- * 改密码、管理员重置密码、停用账号、删除账号时，调用 SessionService.revokeUser(tenantId, userId)。
+ * 实现方的义务（否则「改密、停用后旧令牌立即失效、在途登录不成功」不成立）：
+ * - 改密码、管理员重置密码、停用账号、删除账号时，**先提交数据库，再**调用
+ *   SessionService.revokeUser(tenantId, userId)；顺序反了会让在途的旧密码登录成功。
+ * - findForLogin 每次都读数据库最新值（不要缓存）：登录会在读到失效版本之后再读一次复核。
+ * - 存密码只用 PasswordHasher.hash，设置前用 checkPasswordPolicy 检查（含 72 字节上限）。
  * 用户被移出某个组织或收回该组织下全部角色时，权限守卫（T06）每次请求都会核对组织归属。
  */
 export abstract class AuthUserStore {

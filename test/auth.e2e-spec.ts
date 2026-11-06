@@ -16,6 +16,7 @@ import {
 import { CaptchaProvider } from '../src/core/auth/captcha/captcha.provider.js';
 import { PasswordHasher } from '../src/core/auth/password.js';
 import { SessionService } from '../src/core/auth/session.service.js';
+import { AppConfigService } from '../src/core/config/app-config.service.js';
 import { RedisService } from '../src/core/redis/redis.service.js';
 import { clearTestRedis, rawRedis } from './support/test-redis.js';
 
@@ -34,13 +35,22 @@ const ORG_SG: AuthOrg = {
   path: ['集团', '新加坡站'],
 };
 const users = new Map<string, FakeUser>();
+/** 测试在登录途中插入动作（模拟 T07 这时改密、停用） */
+const hooks: {
+  afterFind?: () => Promise<void>;
+  beforeListOrgs?: () => Promise<void>;
+} = {};
 
-/** 测试用用户来源：代替 system 模块（T07） */
+/** 测试用用户来源：代替 system 模块（T07）。每次返回当时的快照，和读数据库一样 */
 @Injectable()
 class FakeUserStore extends AuthUserStore {
   async findForLogin(tenantId: string, username: string) {
     const u = tenantId === '1' ? users.get(username) : undefined;
-    return u ?? null;
+    const snapshot = u ? { ...u } : null;
+    const hook = hooks.afterFind;
+    hooks.afterFind = undefined;
+    if (hook) await hook();
+    return snapshot;
   }
   async findProfile(
     tenantId: string,
@@ -57,6 +67,9 @@ class FakeUserStore extends AuthUserStore {
     };
   }
   async listOrgs(_t: string, userId: string) {
+    const hook = hooks.beforeListOrgs;
+    hooks.beforeListOrgs = undefined;
+    if (hook) await hook();
     return [...users.values()].find((x) => x.id === userId)?.orgs ?? [];
   }
 }
@@ -140,6 +153,8 @@ describe('后台登录认证（T05）', () => {
   beforeEach(async () => {
     await clearTestRedis(raw);
     users.clear();
+    hooks.afterFind = undefined;
+    hooks.beforeListOrgs = undefined;
     users.set('admin', {
       id: '1',
       username: 'admin',
@@ -382,6 +397,123 @@ describe('后台登录认证（T05）', () => {
         await client.connect();
       }
       await profile(token).expect(200);
+    });
+  });
+
+  describe('用户失效版本：吊销和建会话怎么交错都不漏', () => {
+    const base = {
+      tenantId: '1',
+      userId: '1',
+      orgId: null,
+      ip: 'x',
+      userAgent: 'ua',
+    };
+    const valid = (svc: SessionService, sid: string) =>
+      svc.verify('1', sid, '1', 1).then((r) => r !== null);
+
+    it('吊销后，用吊销前读到的版本建会话失败；之后新建的会话能被列出、能被再次吊销', async () => {
+      const svc = app.get(SessionService);
+      const epoch = await svc.userEpoch('1', '1');
+      const a = (await svc.create({ ...base, expectedEpoch: epoch }))!;
+      await svc.revokeUser('1', '1');
+      expect(await valid(svc, a.session.sessionId)).toBe(false);
+      expect(await svc.create({ ...base, expectedEpoch: epoch })).toBeNull();
+      const b = (await svc.create({
+        ...base,
+        expectedEpoch: await svc.userEpoch('1', '1'),
+      }))!;
+      expect(await valid(svc, b.session.sessionId)).toBe(true);
+      expect(
+        (await svc.listUserSessions('1', '1')).map((x) => x.sessionId),
+      ).toEqual([b.session.sessionId]);
+      await svc.revokeUser('1', '1');
+      expect(await valid(svc, b.session.sessionId)).toBe(false);
+      expect(await svc.listUserSessions('1', '1')).toEqual([]);
+    });
+
+    it('吊销和建会话并发交错多轮：最后再吊销一次，没有任何会话还有效', async () => {
+      const svc = app.get(SessionService);
+      const sids: string[] = [];
+      for (let i = 0; i < 30; i++) {
+        const epoch = await svc.userEpoch('1', '1');
+        const [, created] = await Promise.all([
+          svc.revokeUser('1', '1'),
+          svc.create({ ...base, expectedEpoch: epoch }),
+          svc
+            .create({ ...base, expectedEpoch: epoch })
+            .then((c) => c && sids.push(c.session.sessionId)),
+        ]);
+        if (created) sids.push(created.session.sessionId);
+      }
+      const listed = (await svc.listUserSessions('1', '1')).map(
+        (x) => x.sessionId,
+      );
+      for (const sid of sids)
+        if (await valid(svc, sid)) expect(listed).toContain(sid);
+      await svc.revokeUser('1', '1');
+      for (const sid of sids) expect(await valid(svc, sid)).toBe(false);
+    });
+
+    it('单处登录：并发登录只有一个会话有效；再登录一次，之前的失效', async () => {
+      const config = app.get(AppConfigService);
+      const single = new SessionService(
+        { auth: { ...config.auth, singleSession: true } } as AppConfigService,
+        app.get(RedisService),
+      );
+      const epoch = await single.userEpoch('1', '1');
+      const all = await Promise.all(
+        Array.from({ length: 5 }, () =>
+          single.create({ ...base, expectedEpoch: epoch }),
+        ),
+      );
+      const ok = all.filter((x) => x !== null);
+      expect(ok).toHaveLength(1);
+      const first = ok[0]!.session.sessionId;
+      expect(await valid(single, first)).toBe(true);
+      const next = (await single.create({
+        ...base,
+        expectedEpoch: await single.userEpoch('1', '1'),
+      }))!;
+      expect(await valid(single, first)).toBe(false);
+      expect(await valid(single, next.session.sessionId)).toBe(true);
+      expect(
+        (await single.listUserSessions('1', '1')).map((x) => x.sessionId),
+      ).toEqual([next.session.sessionId]);
+    });
+  });
+
+  describe('登录途中账号被停用或改密（T07 先提交数据库再 revokeUser）：这次登录建不成会话', () => {
+    const noSession = async () =>
+      expect(await app.get(SessionService).listUserSessions('1', '1')).toEqual(
+        [],
+      );
+    const t07 = (change: (u: FakeUser) => void) => async () => {
+      change(users.get('admin')!);
+      await app.get(SessionService).revokeUser('1', '1');
+    };
+
+    it('核对密码时读到的还是旧数据，之后被停用', async () => {
+      hooks.afterFind = t07((u) => (u.enabled = false));
+      await login('admin', PASSWORD, await altchaFor('admin')).expect(400);
+      await noSession();
+    });
+
+    it('核对密码时读到的还是旧密码，之后改了密码', async () => {
+      const newHash = await PasswordHasher.hash('N3w-passw0rd');
+      hooks.afterFind = t07((u) => (u.passwordHash = newHash));
+      await login('admin', PASSWORD, await altchaFor('admin')).expect(400);
+      await noSession();
+    });
+
+    it('账号复核之后、建会话之前被停用', async () => {
+      hooks.beforeListOrgs = t07((u) => (u.enabled = false));
+      const res = await login(
+        'admin',
+        PASSWORD,
+        await altchaFor('admin'),
+      ).expect(400);
+      expect(res.body.message).toBe('登录失败，请重试');
+      await noSession();
     });
   });
 
