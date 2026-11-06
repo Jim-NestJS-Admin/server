@@ -1,6 +1,17 @@
 # T09 文件模块 · 独立部分
 
-本批在 `codex/T09-file-module`，基于已通过的 T03①② `133a76f`，只修改 `modules/file` 和必要依赖。包含实际内容检测、本地/OSS/S3 适配器、鉴权前置 multipart 上传、私有附件下载与失败补偿。**未注册到正式 AppModule，T09 整体仍在进行中**。
+本批在 `codex/T09-file-module`，已将已审 server main `679dbe7`（T03 全部及 T04）合入自己的独立分支。包含实际内容检测、本地/OSS/S3 适配器、鉴权前置 multipart 上传、私有附件下载与失败补偿；本轮补齐文件元数据实体、迁移和持久化接入口。**未注册到正式 AppModule，T09 整体仍在进行中**。
+
+## 本轮：元数据持久化接入
+
+- `FileAssetEntity extends BaseEntity`，新增 `file_asset`；文件名、类型、大小只读。对象名和 SHA256 不在可读字段白名单内，SQL 默认也不选出它们，不进入页面描述/分页/详情响应。
+- `FileAssetService extends BaseService` 实现 `FileCatalog`。插入经 `transaction` / `insertRow`，身份与审计字段由 core 填写；查询用 `select(..., 'info')` 的租户与软删除范围，仅内部下载查询额外选择对象名和摘要。输入只取文件元数据白名单，不接受身份、编号或版本字段。
+- `FileModule.register({ store, policy, catalog: 'database' })` 显式开启持久化，自动登记实体及只读 CRUD 控制器（`page`、`info`）；不开放通用新增/修改/删除。未选择数据库目录时保持原有未配置503或显式适配器行为。上传控制器已改为 `@AdminController('file/asset')`，符合 T04 启动检查。
+- 新增元数据控制器也经过 `FileGuard`；没有正式 `FileAccess` 时仍默认401拒绝，不能因为注册了目录就免登录读列表。T05/T06 接入后才替换该临时边界，本轮没有自行实现或修改 core 的认证/权限。
+- 迁移在 `src/database/migrations/1793923200000-CreateFileAsset.ts`，含基类列、软删除生成列及租户索引。**本轮只定义迁移，没有执行DDL**；等 T10 统一迁移入口登记后执行，不在模块启动时自动建表。
+- `test/file.e2e-spec.ts` 补充独立测试库用例：真实目录持久化、上下文身份、公开响应裁剪、跨租户详情/下载与不存在一致、列表隔离、无通用写路由。它使用合成文件和测试认证/存储，不能代表真实认证或云存储已联调；本机尚未执行这组数据库用例。
+
+本轮没有增加依赖。集中验证：新增7项元数据检查与既有20项文件检查通过（定向分批执行），类型、lint、构建和格式检查通过；导出正式 OpenAPI 无差异，因为尚未注册正式 AppModule。真实 MySQL/认证/云联调、正式配置、T06 权限及 T25 限流/幂等仍待后续完成。
 
 ## 已实现
 
@@ -21,11 +32,11 @@ S3 适配器通过 `PutObject` 的 `IfNoneMatch: '*'` 条件写入防止覆盖�
 `FileModule.register` 可在装配时传入存储和策略；不读 process.env，不新增绕过启动校验的环境变量。
 
 - `FileAccess.current('upload'|'read')`：由 T05/T06 的 core 适配器每次核对后台会话、当前组织和 `file:asset:upload` / `file:asset:read`，返回可信租户/用户（字符串编号）。默认 DenyFileAccess 返回401，不能用未验证JWT或请求体身份代替。
-- `FileCatalog.ready/insert/find`：待 T04 稳定后由本模块的 BaseService 子类实现数据库持久化。新增实体继承 BaseEntity，附 migration；查询通过 core 的当前上下文/范围，插入由 core 填租户/审计字段。接口不接受 tenantId 参数。默认 UnconfiguredFileCatalog 返回503，在写存储之前拒绝；**没有生产内存替身、默认租户回退**。
+- `FileCatalog.ready/insert/find`：本轮已提供 BaseService 数据库实现，见上文显式 `catalog: 'database'` 选项；未配置目录仍返回503。没有生产内存替身或默认租户回退。
 - T25：统一上传限流、幂等入口和维护任务；T09 不另开跳过这些要求的通道。
 - 正式配置接 AppConfigService + 启动校验，AppModule 注册、正式 OpenAPI 导出和 T12 生成客户端；按部署规定将上传内容放独立存储域/私有桶，不作为后台同源可执行静态资源。
 
-上述接入完成前不开放正式接口、不标记整体验收通过。本批没有新建实体/表，不生成虚假的迁移或操作真实用户数据。不能用测试中的内存 Catalog 作为正式实现。
+上述接入完成前不开放正式接口、不标记整体验收通过。本轮已定义实体和迁移，尚未执行建表或操作真实用户数据。不能用测试中的内存 Catalog 作为正式实现。
 
 ## 独立测试应用中的接口契约
 

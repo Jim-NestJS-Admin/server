@@ -17,10 +17,10 @@ export class FileGuard implements CanActivate {
     @Inject(Reflector) private readonly reflector: Reflector,
   ) {}
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const action = this.reflector.get<FileAction>(
-      FILE_ACTION,
+    const action = this.reflector.getAllAndOverride<FileAction>(FILE_ACTION, [
       context.getHandler(),
-    );
+      context.getClass(),
+    ]);
     if (!action) return false;
     // Guard 在上传解析器之前执行，匿名请求不能先占用文件缓存。
     assertPrincipal(await this.access.current(action));

@@ -1,6 +1,9 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { FileAssetController } from './controller/admin/file-asset.controller.js';
 import { FileController } from './controller/admin/file.controller.js';
+import { FileAssetEntity } from './entity/file-asset.entity.js';
 import { FileGuard } from './file.guard.js';
 import {
   DenyFileAccess,
@@ -14,6 +17,7 @@ import {
   type FilePolicy,
 } from './file.policy.js';
 import { FileService } from './service/file.service.js';
+import { FileAssetService } from './service/file-asset.service.js';
 import { BlobStore } from './storage/blob-store.js';
 
 export interface FileModuleOptions {
@@ -22,16 +26,18 @@ export interface FileModuleOptions {
   /** 只能由 T05/T06 后台认证/权限实现提供，默认拒绝访问。 */
   access?: FileAccess;
   /** 必须接 core 的租户隔离和数据库事务，默认503，禁止内存替代。 */
-  catalog?: FileCatalog;
+  catalog?: FileCatalog | 'database';
 }
 /** 独立可装配模块，当前未注册到 AppModule；正式持久化/认证接入后再统一导出正式接口。 */
 @Module({})
 export class FileModule {
   static register(options: FileModuleOptions): DynamicModule {
     const policy = validateFilePolicy(options.policy);
+    const database = options.catalog === 'database';
     return {
       module: FileModule,
       imports: [
+        ...(database ? [TypeOrmModule.forFeature([FileAssetEntity])] : []),
         MulterModule.register({
           limits: {
             files: 1,
@@ -42,8 +48,9 @@ export class FileModule {
           },
         }),
       ],
-      controllers: [FileController],
+      controllers: [FileController, ...(database ? [FileAssetController] : [])],
       providers: [
+        ...(database ? [FileAssetService] : []),
         FileService,
         FileGuard,
         { provide: FILE_POLICY, useValue: policy },
@@ -52,10 +59,12 @@ export class FileModule {
           provide: FileAccess,
           useValue: options.access ?? new DenyFileAccess(),
         },
-        {
-          provide: FileCatalog,
-          useValue: options.catalog ?? new UnconfiguredFileCatalog(),
-        },
+        database
+          ? { provide: FileCatalog, useExisting: FileAssetService }
+          : {
+              provide: FileCatalog,
+              useValue: options.catalog ?? new UnconfiguredFileCatalog(),
+            },
       ],
       exports: [FileService],
     };

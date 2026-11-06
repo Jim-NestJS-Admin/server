@@ -1,7 +1,6 @@
 import {
   applyDecorators,
   Body,
-  Controller,
   Header,
   HttpCode,
   Inject,
@@ -24,6 +23,7 @@ import {
   getSchemaPath,
 } from '@nestjs/swagger';
 import { RawResponse } from '../../../../core/decorators/raw-response.decorator.js';
+import { AdminController } from '../../../../core/endpoint/endpoint.decorators.js';
 import { BusinessException } from '../../../../core/exceptions/business.exception.js';
 import { ErrorCode } from '../../../../core/exceptions/error-code.js';
 import {
@@ -46,7 +46,7 @@ const FileErrors = () =>
 @ApiTags('文件')
 @ApiBearerAuth()
 @UseGuards(FileGuard)
-@Controller('admin/file/asset')
+@AdminController('file/asset')
 export class FileController {
   constructor(@Inject(FileService) private readonly files: FileService) {}
   @Post('upload')
