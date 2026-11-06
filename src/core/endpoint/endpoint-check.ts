@@ -2,7 +2,8 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { PATH_METADATA } from '@nestjs/common/constants.js';
 
-const trim = (p: string) => p.replace(/^\/+|\/+$/g, '');
+// Express 默认路由不区分大小写：比较前一律转小写，否则 @Public 的 'AdMiN/x' 能绕过前缀检查
+const trim = (p: string) => p.replace(/^\/+|\/+$/g, '').toLowerCase();
 const asList = (v: unknown): string[] =>
   (Array.isArray(v) ? v : [v ?? '']).map((p) => trim(String(p)));
 

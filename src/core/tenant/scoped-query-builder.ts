@@ -15,8 +15,14 @@ export interface QueryScope {
  * 和软删除条件一样：业务条件整体加括号，再 AND 范围条件。clone（分页计数会用）也会带上。
  * 范围条件的参数在组装时重新写入，setParameter 改保留参数直接报错。
  *
+ * 它只能读：转成写操作的方法一律报错。
  * 注意：qb.subQuery() 建的子查询是普通查询构造器，不带范围条件；需要子查询时用另一个 repo.query(...)。
  */
+const readOnly = (op: string) =>
+  new Error(
+    `带范围条件的查询只能读，不能调用 ${op}()：写入请用 TenantRepository 的 insert / update / remove 或通用 CRUD`,
+  );
+
 export class ScopedSelectQueryBuilder<
   T extends ObjectLiteral,
 > extends SelectQueryBuilder<T> {
@@ -32,6 +38,28 @@ export class ScopedSelectQueryBuilder<
       for (const [k, v] of Object.entries(this.scope.params))
         super.setParameter(k, v);
     this.sealed = true;
+  }
+
+  // 只读：不能从查询构造器转成写操作（insert / update / delete / softDelete / restore / relation），
+  // 否则转出来的是不带范围条件的普通写构造器，能改别的租户的数据，也能绕过跨租户模式的只读。
+  // 写入走 TenantRepository 的 insert / update / remove 或通用 CRUD。
+  override insert(): never {
+    throw readOnly('insert');
+  }
+  override update(): never {
+    throw readOnly('update');
+  }
+  override delete(): never {
+    throw readOnly('delete');
+  }
+  override softDelete(): never {
+    throw readOnly('softDelete');
+  }
+  override restore(): never {
+    throw readOnly('restore');
+  }
+  override relation(): never {
+    throw readOnly('relation');
   }
 
   override setParameter(key: string, value: unknown): this {

@@ -11,7 +11,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
-import { DataSource } from 'typeorm';
+import { DataSource, type SelectQueryBuilder } from 'typeorm';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import { AdminAuth } from '../src/core/endpoint/endpoint-auth.js';
@@ -57,6 +57,46 @@ class HeaderAdminAuth extends AdminAuth {
   }
 }
 
+/** 把带范围条件的查询转成各种写构造器并执行，收集每一步的报错（没报错就记成 'ok'） */
+async function convertAll(
+  repos: TenantRepositoryFactory,
+  otherId: string,
+): Promise<Record<string, string>> {
+  // 编译期已经禁止（返回 never）；这里强转回父类型，模拟绕过类型检查硬调
+  const q = () =>
+    repos
+      .for(DemoUserEntity)
+      .query() as unknown as SelectQueryBuilder<DemoUserEntity>;
+  const attempts: Record<string, () => Promise<unknown>> = {
+    update: () =>
+      q()
+        .update()
+        .set({ nickname: 'hacked' })
+        .where('id = :id', { id: otherId })
+        .execute(),
+    delete: () => q().delete().where('id = :id', { id: otherId }).execute(),
+    softDelete: () =>
+      q().softDelete().where('id = :id', { id: otherId }).execute(),
+    restore: () => q().restore().where('id = :id', { id: otherId }).execute(),
+    insert: () =>
+      q()
+        .insert()
+        .values({ username: 'sneak', nickname: 'x', tenantId: '2' } as never)
+        .execute(),
+    relation: () => Promise.resolve(q().relation(DemoUserEntity, 'id')),
+  };
+  const out: Record<string, string> = {};
+  for (const [k, run] of Object.entries(attempts)) {
+    try {
+      await run();
+      out[k] = 'ok';
+    } catch (e) {
+      out[k] = (e as Error).message;
+    }
+  }
+  return out;
+}
+
 /** 平台接口和租户感知 Repository 的演示 */
 @AdminController('test/platform')
 class PlatformController {
@@ -82,6 +122,24 @@ class PlatformController {
   @IgnoreTenant()
   async writeAcross() {
     return this.users.add({ username: 'cross', nickname: 'x' });
+  }
+
+  @HttpCode(200)
+  @Post('convert-across')
+  @IgnoreTenant()
+  async convertAcross(@Body() body: { otherId: string }) {
+    return { errors: await convertAll(this.repos, body.otherId) };
+  }
+
+  @HttpCode(200)
+  @Post('service-convert')
+  async serviceConvert(@Body() body: { otherId: string }) {
+    try {
+      await this.users.convertProbe(body.otherId);
+      return { error: 'ok' };
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
   }
 
   @HttpCode(200)
@@ -150,6 +208,13 @@ class PlatformController {
       tamper,
       viaService,
     };
+  }
+
+  /** 把带范围条件的查询转成写操作：每一种都要报错，库里什么都不变 */
+  @HttpCode(200)
+  @Post('repo-convert')
+  async repoConvert(@Body() body: { otherId: string }) {
+    return { errors: await convertAll(this.repos, body.otherId) };
   }
 
   @HttpCode(200)
@@ -445,6 +510,61 @@ describe('多租户隔离（T04）', () => {
       expect(d.paramError).toMatch(/__tenantId 是框架保留的/);
       expect(d.tamper).not.toContain(other.id);
       expect(d.viaService).toEqual([]);
+    });
+  });
+
+  describe('查询构造器只能读：转不成写操作', () => {
+    const OPS = [
+      'update',
+      'delete',
+      'softDelete',
+      'restore',
+      'insert',
+      'relation',
+    ];
+    let other: { id: string; nickname: string };
+    beforeEach(async () => {
+      other = (
+        await user('2', 'add', {
+          data: { username: 'victim', nickname: 'orig' },
+        }).expect(200)
+      ).body.data;
+    });
+    const unchanged = async () => {
+      const rows = await ds.query(
+        'SELECT tenant_id, nickname, deleted_at FROM demo_user ORDER BY id',
+      );
+      expect(rows).toEqual([
+        { tenant_id: '2', nickname: 'orig', deleted_at: null },
+      ]);
+    };
+
+    it('普通租户：每种写转换都报错，别的租户的数据没变，也没插进新行', async () => {
+      const res = await as('1', '/admin/test/platform/repo-convert', {
+        otherId: other.id,
+      }).expect(200);
+      const errors = res.body.data.errors as Record<string, string>;
+      expect(Object.keys(errors)).toEqual(OPS);
+      for (const op of OPS)
+        expect(errors[op]).toMatch(new RegExp(`只能读，不能调用 ${op}\\(\\)`));
+      await unchanged();
+    });
+
+    it('跨租户模式（平台租户）：同样转不成写操作', async () => {
+      const res = await as('0', '/admin/test/platform/convert-across', {
+        otherId: other.id,
+      }).expect(200);
+      const errors = res.body.data.errors as Record<string, string>;
+      for (const op of OPS) expect(errors[op]).toMatch(/只能读/);
+      await unchanged();
+    });
+
+    it('经 BaseService.select 拿到的查询：同样只能读', async () => {
+      const res = await as('1', '/admin/test/platform/service-convert', {
+        otherId: other.id,
+      }).expect(200);
+      expect(res.body.data.error).toMatch(/只能读，不能调用 update\(\)/);
+      await unchanged();
     });
   });
 

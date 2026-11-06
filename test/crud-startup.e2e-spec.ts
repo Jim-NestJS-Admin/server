@@ -142,6 +142,15 @@ class BaseWithPublicRoute {
 @Controller('')
 class InheritedPublicController extends BaseWithPublicRoute {}
 
+// Express 路由不区分大小写：/AdMiN/review-case 实际就是 /admin/review-case
+@Public()
+@Controller('AdMiN/review-case')
+class MixedCasePublicController {
+  @Get() ok() {
+    return 1;
+  }
+}
+
 describe('启动检查：多端接口', () => {
   it.each([
     [
@@ -174,6 +183,11 @@ describe('启动检查：多端接口', () => {
       '继承来的方法路径落在 /admin 下',
       InheritedPublicController,
       /路径 \/admin\/inherited 不能在 \/admin 下/,
+    ],
+    [
+      '@Public 路径用大小写混写绕过 /admin',
+      MixedCasePublicController,
+      /路径 \/admin\/review-case 不能在 \/admin 下/,
     ],
   ])('%s：启动失败', async (_name, controller, error) => {
     const moduleRef = await Test.createTestingModule({

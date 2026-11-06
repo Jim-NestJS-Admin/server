@@ -7,7 +7,7 @@ import {
   Matches,
   MaxLength,
 } from 'class-validator';
-import { Column, Entity, Index } from 'typeorm';
+import { Column, Entity, Index, type SelectQueryBuilder } from 'typeorm';
 import {
   BaseController,
   BaseEntity,
@@ -127,6 +127,19 @@ export class DemoUserService extends BaseService<DemoUserEntity> {
       .where('e.id = :pid', { pid: id })
       .getMany();
     return rows.map((r) => r.id);
+  }
+
+  /** 测试用：把 select() 拿到的查询转成 update，应该直接报错 */
+  async convertProbe(id: string): Promise<void> {
+    const qb = this.select(
+      this.crud.dataSource.manager,
+      'update',
+    ) as unknown as SelectQueryBuilder<DemoUserEntity>;
+    await qb
+      .update()
+      .set({ nickname: 'hacked' })
+      .where('id = :id', { id })
+      .execute();
   }
 
   protected override async beforeDelete(rows: DemoUserEntity[]): Promise<void> {
