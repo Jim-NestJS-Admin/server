@@ -66,6 +66,26 @@ export abstract class SystemCrudService<
 
 @Injectable()
 export class SystemUserService extends BaseService<SystemUser> {
+  async selfAccount(): Promise<{
+    id: string;
+    username: string;
+    nickname: string;
+    version: number;
+  }> {
+    const id = this.context.current().userId;
+    const row = await this.repos
+      .for(SystemUser)
+      .query('u')
+      .where('u.id = :id', { id })
+      .getOne();
+    if (!row?.enabled) throw crudErrors.notFound();
+    return {
+      id: row.id,
+      username: row.username,
+      nickname: row.nickname,
+      version: row.version,
+    };
+  }
   @Inject(TenantRepositoryFactory)
   private readonly repos: TenantRepositoryFactory;
   @Inject(SessionService) private readonly sessions: SessionService;

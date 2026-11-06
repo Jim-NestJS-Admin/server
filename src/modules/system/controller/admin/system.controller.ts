@@ -31,6 +31,7 @@ import {
   ChangeSystemPassword,
   ResetSystemPassword,
   SystemMutationResult,
+  SystemSelfAccount,
 } from '../../dto/system.dto.js';
 
 /** 权限与组织配置的增改同样声明高风险，不只依赖通用删除的默认值。 */
@@ -64,6 +65,16 @@ function sensitiveWrites(prefix: string): ClassDecorator {
   },
 })
 export class SystemUserController extends BaseController<SystemUser> {
+  @Get('me')
+  @LoginOnly()
+  @ApiResult(SystemSelfAccount)
+  @ApiOperation({
+    operationId: 'systemUserMe',
+    summary: '本人账号与当前版本，不依赖用户管理权限',
+  })
+  selfAccount() {
+    return this.users.selfAccount();
+  }
   constructor(
     private readonly users: SystemUserService,
     private readonly context: RequestContext,

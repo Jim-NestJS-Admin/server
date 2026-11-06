@@ -3045,6 +3045,29 @@
         },
         "type": "object"
       },
+      "SystemSelfAccount": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "nickname": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "nickname",
+          "version"
+        ],
+        "type": "object"
+      },
       "SystemUserDeleteBody": {
         "properties": {
           "ids": {
@@ -8548,6 +8571,48 @@
           "code": "system:user:info",
           "risk": "normal"
         }
+      }
+    },
+    "/admin/system/user/me": {
+      "get": {
+        "operationId": "systemUserMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SystemSelfAccount"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "本人账号与当前版本，不依赖用户管理权限",
+        "tags": [
+          "system/user 用户"
+        ]
       }
     },
     "/admin/system/user/page": {
