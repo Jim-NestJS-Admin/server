@@ -7,8 +7,10 @@ import {
 } from './base.entity.js';
 import { Logger } from '@nestjs/common';
 import { ScopedSelectQueryBuilder } from '../tenant/scoped-query-builder.js';
+import { applyWhere } from './crud-query.js';
 import {
   fieldVerdict,
+  rawVisibleToAll,
   type FieldVerdict,
   type RowOwner,
 } from '../field-perm/field-policy.js';
@@ -40,6 +42,8 @@ export interface PageQuery {
   keyword?: string;
   sort?: SortItem[];
   eq?: Record<string, unknown>;
+  /** 高级查询（T18，crud-query.ts） */
+  where?: unknown;
 }
 
 /** 接口响应里的一行：去掉租户、删除标记这类内部字段 */
@@ -135,11 +139,14 @@ export class BaseService<T extends BaseEntity> {
       ]);
     const qb = this.select(this.crud.dataSource.manager, 'page');
 
+    // 脱敏、隐藏的字段不能按原值搜索：从搜索框的字段里去掉
+    const canQuery = this.queryableByAll();
+    const keyFields = meta.keyWords.filter(canQuery);
     const keyword = query.keyword?.trim();
-    if (keyword && meta.keyWords.length) {
+    if (keyword && keyFields.length) {
       qb.andWhere(
         new Brackets((b) => {
-          for (const f of meta.keyWords)
+          for (const f of keyFields)
             b.orWhere(`${ALIAS}.\`${this.column(f)}\` LIKE :__kw`);
         }),
         { __kw: `%${escapeLike(keyword)}%` },
@@ -149,7 +156,7 @@ export class BaseService<T extends BaseEntity> {
     let i = 0;
     for (const [field, value] of Object.entries(query.eq ?? {})) {
       if (value === undefined) continue;
-      if (!meta.fieldEq.includes(field))
+      if (!meta.fieldEq.includes(field) || !canQuery(field))
         throw crudErrors.badRequest('筛选字段不允许', [
           { field: `eq.${field}`, messages: ['这个字段不能用来筛选'] },
         ]);
@@ -159,9 +166,17 @@ export class BaseService<T extends BaseEntity> {
       i++;
     }
 
+    applyWhere(qb, query.where, (field) => {
+      if (!meta.fieldEq.includes(field) || !canQuery(field))
+        throw crudErrors.badRequest('筛选字段不允许', [
+          { field: 'where', messages: [`不能按 ${field} 筛选`] },
+        ]);
+      return `${ALIAS}.\`${this.column(field)}\``;
+    });
+
     const sort = query.sort?.length ? query.sort : meta.defaultSort;
     for (const s of sort) {
-      if (!meta.sortable.includes(s.field))
+      if (!meta.sortable.includes(s.field) || !canQuery(s.field))
         throw crudErrors.badRequest('排序字段不允许', [
           { field: 'sort', messages: [`不能按 ${s.field} 排序`] },
         ]);
@@ -694,6 +709,20 @@ export class BaseService<T extends BaseEntity> {
             row,
           )
         : { state: 'hidden', mask: null };
+  }
+
+  /**
+   * 这个字段能不能用来排序、筛选、搜索：后台任务不限；系统字段不受字段权限控制；
+   * 其他字段要本次有效角色全部能看原值（T18）。没有授权结果时一律不行。
+   */
+  private queryableByAll(): (field: string) => boolean {
+    const ctx = this.crud.context.current();
+    if (ctx.endpoint === 'system') return () => true;
+    const authz = this.crud.authz.get();
+    return (field) =>
+      FIELD_PERM_EXEMPT.has(field) ||
+      (!!authz &&
+        rawVisibleToAll(authz, this.meta.permPrefix, this.meta.entity, field));
   }
 
   /** 写入前剔除这一行上不可编辑的字段，并记日志（架构「字段权限 · 后端强制执行」） */
