@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CRUD_AUDIT_WRITER } from '../../core/crud/crud-audit.js';
 import { SYSTEM_LOG_ENTITIES } from './entity/system-log.entity.js';
 import {
   SystemDictTypeService,
@@ -37,9 +38,15 @@ import {
     SystemParameterService,
     SystemAuthEvents,
     SystemCrudAudit,
+    { provide: CRUD_AUDIT_WRITER, useExisting: SystemCrudAudit },
     SystemOperationRecorder,
     { provide: APP_INTERCEPTOR, useClass: SystemOperationInterceptor },
   ],
-  exports: [SystemAuthEvents, SystemCrudAudit, SystemOperationRecorder],
+  exports: [
+    SystemAuthEvents,
+    SystemCrudAudit,
+    SystemOperationRecorder,
+    CRUD_AUDIT_WRITER,
+  ],
 })
 export class SystemLogModule {}
