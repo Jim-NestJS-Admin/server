@@ -186,6 +186,7 @@ export class SystemMenu extends BaseEntity {
   @Matches(ID_PATTERN)
   @Column({ type: 'bigint', unsigned: true, nullable: true })
   parentId: string | null;
+  @ApiProperty({ enum: ['directory', 'page', 'button'] })
   @CrudField({ label: '类型', form: { required: true } })
   @IsIn(['directory', 'page', 'button'])
   @Column({ type: 'varchar', length: 16 })
