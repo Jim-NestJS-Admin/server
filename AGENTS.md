@@ -18,6 +18,13 @@
 10. 普通增删改查模块用 `@CrudController` + `BaseController`（`src/core/crud/`），业务字段用 `@CrudField` 声明，可写字段必须写 class-validator 校验；需要钩子时继承 `BaseService` 并放进模块 providers。自定义接口查数据用 `BaseService` 的 `select()`，**禁止**直接用 Repository 绕开租户和数据范围条件。
 11. 端到端测试连真实 MySQL 的测试库 `<DB_NAME>_test`（`deploy/docker-compose.yml` 首次启动时自动建好），测试会清空这个库，绝不能指向开发库或生产库。
 12. 唯一约束必须带租户：`@Index('uk_表_字段', ['tenantId', '业务字段', 'activeGuard'], { unique: true })`；软删除的表必须带 `activeGuard`，硬删除的表可以不带。写错启动时会报错。
-13. 控制器必须属于一个端：用 `@AdminController('模块/资源')`（以后还有 `@AppController`、`@WebController`、`@OpenController`），放在 `controller/{admin,app,web,open}/` 下；不需要身份的基础接口（健康检查）才用 `@Public()`，而且不能放在各端前缀下。写错启动时报错。
+13. 控制器必须属于一个端：用 `@AdminController('模块/资源')`（以后还有 `@AppController`、`@WebController`、`@OpenController`），放在 `controller/{admin,app,web,open}/` 下；不需要身份的基础接口（健康检查）才用 `@Public()`，而且不能放在各端前缀下。端里免登录的接口（登录、出题、刷新）在控制器上加 `@Anonymous()`，只确定租户、没有当前用户，和需要登录的接口分开放两个控制器。两者都只能加在控制器上，写错启动时报错。
 14. 租户和当前用户只从请求上下文取（`RequestContext` / `CrudContextProvider`），由端的认证守卫写入，**禁止**从请求体、请求头自行读取。后台任务、消息消费、脚本用 `RequestContext.run({ tenantId }, fn)` 指定租户，没有上下文时读写会直接报错。
 15. 不走通用 CRUD 的实体用 `TenantRepositoryFactory.for(实体)` 读写，自动带租户；**禁止**直接用 TypeORM 的 Repository、manager 或原生 SQL 改业务表。跨租户查询只能用在平台管理员接口上（`@IgnoreTenant()`），而且只能读。
+16. Redis 统一用 `RedisService`（`src/core/redis/`）：按租户的键用 `redis.tenantKey(租户, ...)` 拼，操作包在 `redis.call(...)` 里，Redis 不可用时自动变成 503，不要自己 new 连接。
+17. 后台登录认证在 `src/core/auth/`（T05）。用户和组织由 system 模块实现 `AuthUserStore` 提供，并在 `AppModule` 里 `AuthModule.forRoot({ userStore, imports })` 接入；**改密码、重置密码、停用或删除账号时，先提交数据库、再调用 `SessionService.revokeUser`**（顺序反了在途的旧密码登录能成功），`findForLogin` 不要缓存。密码用 `PasswordHasher` 和 `checkPasswordPolicy`（最多 72 字节，超长拒绝不截断），账号用 `normalizeUsername` 规范化后再存和查。
+18. 端到端测试不关心登录时用 `test/support/test-auth.ts` 的 `createTestModule` 代替 `Test.createTestingModule`（从请求头取身份）；测试用 Redis 前缀 `jna-test:`，用 `clearTestRedis` 只清自己的键。
+19. 后台接口必须声明权限（T06，`src/core/permission/`）：方法上加 `@Perms('模块:资源:动作')`（高风险加 `{ risk: 'high' }`），登录就能用的加 `@LoginOnly()`，都没有启动时报错；通用 CRUD 按「前缀:动作」自动生成（页面描述用列表的码，删除和彻底删除是高风险）。`@Perms` 只能加在方法上。
+20. 要按部门过滤数据的资源在 `@CrudController` 里写 `dataScope: true`：读、改、删、回收站和 `BaseService.select` 都按本次有效角色的数据范围过滤，新增时所属组织（`orgId`，基类字段）取当前组织。`@LoginOnly` 接口没有数据范围，查这种资源什么都看不到，要查数据就用 `@Perms`。
+21. 角色、组织、菜单由 system 模块实现 `PermissionSource` 提供，`PermissionModule.forRoot({ source, imports })` 接入；**改角色、角色分配、组织树、组织成员、菜单后，数据库提交了再调用 `PermissionService.bumpVersion(租户)`**，权限缓存立即失效。
+

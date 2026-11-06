@@ -1,12 +1,12 @@
 import { IsString } from 'class-validator';
 import { Column, Entity, Index } from 'typeorm';
 import { Controller, Get } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import {
   AdminController,
+  Anonymous,
   AppController,
   IgnoreTenant,
   Public,
@@ -23,12 +23,14 @@ import {
   DemoOrderItemEntity,
   DemoOrderNoteEntity,
 } from './fixtures/demo-order.js';
+import { createTestModule } from './support/test-auth.js';
+import { LoginOnly, Perms } from '../src/core/permission/perms.decorator.js';
 
 // 单独一个文件：@nestjs/typeorm 的 autoLoadEntities 在同一进程里会累积之前测试模块注册过的实体，
 // 和别的用例放在一起时「没注册」的实体会被之前的模块带进来
 describe('启动检查', () => {
   it('子表实体没在 TypeORM 注册：启动时就报错，而不是请求时 500', async () => {
-    const moduleRef = await Test.createTestingModule({
+    const moduleRef = await createTestModule({
       imports: [
         AppModule,
         TypeOrmModule.forFeature([
@@ -68,7 +70,7 @@ class BadUniqueController extends BaseController<BadUniqueEntity> {}
 
 describe('启动检查：唯一约束', () => {
   it('软删除资源的唯一约束缺 activeGuard：启动时报错并说明要怎么建', async () => {
-    const moduleRef = await Test.createTestingModule({
+    const moduleRef = await createTestModule({
       imports: [AppModule, TypeOrmModule.forFeature([BadUniqueEntity])],
       controllers: [BadUniqueController],
     }).compile();
@@ -151,6 +153,85 @@ class MixedCasePublicController {
   }
 }
 
+@AdminController('review-anon')
+class MethodAnonymousController {
+  @Get('open')
+  @Anonymous()
+  sneaky() {
+    return 1;
+  }
+}
+
+@Anonymous()
+@Public()
+@Controller('anon-public')
+class AnonymousPublicController {
+  @Get() ok() {
+    return 1;
+  }
+}
+
+@Anonymous()
+@AdminController('anon-cross')
+class AnonymousIgnoreController {
+  @Get()
+  @IgnoreTenant()
+  ok() {
+    return 1;
+  }
+}
+
+@AdminController('no-perm')
+class NoPermController {
+  @Get()
+  ok() {
+    return 1;
+  }
+}
+
+// 类型上已经不允许（MethodDecorator），这里强转，测启动检查这道防线
+@(Perms('test:class:perm') as ClassDecorator)
+@AdminController('class-perm')
+class ClassPermController {
+  @Get()
+  @LoginOnly()
+  ok() {
+    return 1;
+  }
+}
+
+@Anonymous()
+@AdminController('anon-perms')
+class AnonymousPermsController {
+  @Get()
+  @Perms('test:anon:secret')
+  secret() {
+    return 1;
+  }
+}
+
+@Anonymous()
+@LoginOnly()
+@AdminController('anon-login-only')
+class AnonymousLoginOnlyController {
+  @Get()
+  ok() {
+    return 1;
+  }
+}
+
+class AnonBase {
+  @Get('inherited')
+  @Perms('test:anon:inherited')
+  inherited() {
+    return 1;
+  }
+}
+
+@Anonymous()
+@AdminController('anon-inherit')
+class AnonymousInheritedPermsController extends AnonBase {}
+
 describe('启动检查：多端接口', () => {
   it.each([
     [
@@ -189,8 +270,48 @@ describe('启动检查：多端接口', () => {
       MixedCasePublicController,
       /路径 \/admin\/review-case 不能在 \/admin 下/,
     ],
+    [
+      '后台控制器的方法上加 @Anonymous',
+      MethodAnonymousController,
+      /MethodAnonymousController.sneaky 上加了 @Anonymous/,
+    ],
+    [
+      '@Anonymous 不属于任何端',
+      AnonymousPublicController,
+      /是 @Anonymous，但没有指定所属的端/,
+    ],
+    [
+      '@Anonymous 接口用 @IgnoreTenant',
+      AnonymousIgnoreController,
+      /是 @Anonymous 接口，不能用 @IgnoreTenant/,
+    ],
+    [
+      '后台接口没有声明权限',
+      NoPermController,
+      /NoPermController.ok 没有声明权限/,
+    ],
+    [
+      '@Perms 加在控制器上',
+      ClassPermController,
+      /ClassPermController 上加了 @Perms/,
+    ],
+    [
+      '@Anonymous 控制器的方法上加 @Perms',
+      AnonymousPermsController,
+      /AnonymousPermsController.secret 在 @Anonymous 控制器里却声明了权限/,
+    ],
+    [
+      '@Anonymous 和 @LoginOnly 加在同一个控制器上',
+      AnonymousLoginOnlyController,
+      /AnonymousLoginOnlyController 是 @Anonymous，不能同时加/,
+    ],
+    [
+      '@Anonymous 控制器继承来的方法带 @Perms',
+      AnonymousInheritedPermsController,
+      /AnonymousInheritedPermsController.inherited 在 @Anonymous 控制器里却声明了权限/,
+    ],
   ])('%s：启动失败', async (_name, controller, error) => {
-    const moduleRef = await Test.createTestingModule({
+    const moduleRef = await createTestModule({
       imports: [AppModule],
       controllers: [controller],
     }).compile();

@@ -2,6 +2,23 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EnvironmentVariables, NodeEnv } from './env.validation.js';
 
+export interface AuthConfig {
+  jwtSecret: string;
+  accessTtlSeconds: number;
+  refreshTtlSeconds: number;
+  /** 0 表示不启用 */
+  idleSeconds: number;
+  singleSession: boolean;
+  lockMaxFails: number;
+  lockIpMaxFails: number;
+  lockSeconds: number;
+  adminOrigins: string[];
+  captchaMode: 'always' | 'after-failure';
+  altchaHmacSecret: string;
+  altchaHmacKeySecret: string;
+  altchaCost: number;
+}
+
 /** 带类型的配置读取。业务代码不要直接读 process.env */
 @Injectable()
 export class AppConfigService {
@@ -41,6 +58,45 @@ export class AppConfigService {
       user: this.config.get('DB_USER', { infer: true }),
       password: this.config.get('DB_PASSWORD', { infer: true }),
       synchronize: this.config.get('DB_SYNCHRONIZE', { infer: true }) ?? false,
+    };
+  }
+
+  get redis(): {
+    host: string;
+    port: number;
+    password: string | undefined;
+    db: number;
+    keyPrefix: string;
+  } {
+    return {
+      host: this.config.get('REDIS_HOST', { infer: true }),
+      port: this.config.get('REDIS_PORT', { infer: true }),
+      password: this.config.get('REDIS_PASSWORD', { infer: true }) || undefined,
+      db: this.config.get('REDIS_DB', { infer: true }),
+      keyPrefix: this.config.get('REDIS_KEY_PREFIX', { infer: true }),
+    };
+  }
+
+  get auth(): AuthConfig {
+    const g = <K extends keyof EnvironmentVariables>(k: K) =>
+      this.config.get(k, { infer: true }) as EnvironmentVariables[K];
+    return {
+      jwtSecret: g('AUTH_JWT_SECRET'),
+      accessTtlSeconds: g('AUTH_ACCESS_TTL_MINUTES') * 60,
+      refreshTtlSeconds: g('AUTH_REFRESH_TTL_DAYS') * 86400,
+      idleSeconds: g('AUTH_IDLE_MINUTES') * 60,
+      singleSession: g('AUTH_SINGLE_SESSION') ?? false,
+      lockMaxFails: g('AUTH_LOCK_MAX_FAILS'),
+      lockIpMaxFails: g('AUTH_LOCK_IP_MAX_FAILS'),
+      lockSeconds: g('AUTH_LOCK_MINUTES') * 60,
+      adminOrigins: (g('AUTH_ADMIN_ORIGINS') ?? '')
+        .split(',')
+        .map((o) => o.trim().replace(/\/+$/, ''))
+        .filter(Boolean),
+      captchaMode: g('AUTH_CAPTCHA_MODE'),
+      altchaHmacSecret: g('ALTCHA_HMAC_SECRET'),
+      altchaHmacKeySecret: g('ALTCHA_HMAC_KEY_SECRET'),
+      altchaCost: g('ALTCHA_COST'),
     };
   }
 

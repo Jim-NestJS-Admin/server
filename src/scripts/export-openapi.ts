@@ -14,6 +14,13 @@ export async function exportOpenApi(
   process.env.DB_NAME ??= 'openapi_export';
   process.env.DB_USER ??= 'openapi_export';
   process.env.DB_PASSWORD ??= 'openapi_export';
+  // 导出文档不签发令牌、不出题，密钥只为通过启动校验
+  for (const k of [
+    'AUTH_JWT_SECRET',
+    'ALTCHA_HMAC_SECRET',
+    'ALTCHA_HMAC_KEY_SECRET',
+  ])
+    process.env[k] ??= 'openapi-export-placeholder-secret-0000';
   const { NestFactory } = await import('@nestjs/core');
   const { AppModule } = await import('../app.module.js');
   const { configureApp } = await import('../app.setup.js');

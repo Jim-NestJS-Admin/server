@@ -46,7 +46,11 @@
     "pino-http": "^11.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "1.1.2"
+    "typeorm": "1.1.2",
+    "altcha-lib": "2.8.0",
+    "bcryptjs": "3.0.3",
+    "ioredis": "6.0.0",
+    "jose": "6.2.15"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",

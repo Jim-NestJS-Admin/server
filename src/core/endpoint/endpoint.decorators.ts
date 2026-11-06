@@ -4,6 +4,7 @@ import type { EndpointKind } from '../tenant/request-context.js';
 export const ENDPOINT_KEY = 'jna:endpoint';
 export const PUBLIC_KEY = 'jna:public';
 export const IGNORE_TENANT_KEY = 'jna:ignore-tenant';
+export const ANONYMOUS_KEY = 'jna:anonymous';
 
 /** 各端的路由前缀，控制器放在 controller/{admin,app,web,open}/ 目录下 */
 export const ENDPOINT_PREFIX: Record<EndpointKind, string> = {
@@ -33,6 +34,13 @@ export const OpenController = endpointController('open');
  * 业务接口不能用它绕开认证：每个控制器必须属于一个端或者明确标成 Public，启动时检查。
  */
 export const Public = () => SetMetadata(PUBLIC_KEY, true);
+
+/**
+ * 某个端里不需要登录的接口（登录、出题、刷新令牌这类）：只确定租户，没有当前用户。
+ * 和 @Public 不同，它仍属于这个端、走这个端的租户解析。只能加在控制器上，方法上加启动时报错；
+ * 需要登录的接口放在另一个控制器里，不要和免登录的混在一起。
+ */
+export const Anonymous = () => SetMetadata(ANONYMOUS_KEY, true);
 
 /**
  * 平台管理员接口跨租户查询（架构「多租户设计 · 显式越权」）。

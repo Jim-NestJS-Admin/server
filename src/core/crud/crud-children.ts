@@ -486,6 +486,7 @@ export async function saveChildren(
           ...a.values,
           [child.foreignKey]: masterId,
           tenantId: tx.ctx.tenantId,
+          orgId: tx.ctx.orgId,
           createdBy: tx.ctx.userId,
           updatedBy: tx.ctx.userId,
         } as never)

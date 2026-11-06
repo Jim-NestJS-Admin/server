@@ -78,6 +78,11 @@ export interface CrudControllerOptions<T extends BaseEntity> {
   delete?: 'soft' | 'hard';
   /** 子表：主表和全部子表在同一个事务里一起保存 */
   children?: CrudChildOptions[];
+  /**
+   * 数据权限（架构「数据权限」）：按本次有效角色的数据范围过滤（所属组织、仅本人）。
+   * 读、改、删、回收站和 BaseService.select 都生效，范围外的数据和不存在一样。
+   */
+  dataScope?: boolean;
 }
 
 /** 子表整理好的定义 */
@@ -108,6 +113,8 @@ export interface CrudResourceMeta<T extends BaseEntity = BaseEntity> {
   name: string;
   /** 权限码前缀，如 system:user */
   permPrefix: string;
+  /** 按数据范围过滤 */
+  dataScope: boolean;
   entity: Type<T>;
   api: CrudApi[];
   deleteMode: 'soft' | 'hard';
@@ -130,6 +137,8 @@ export interface CrudContext {
   orgId: string | null;
   /** 平台管理员跨租户查询（@IgnoreTenant）：不加租户条件，只能读 */
   ignoreTenant: boolean;
+  /** 请求来自哪个端；后台任务、脚本是 system */
+  endpoint: 'admin' | 'app' | 'web' | 'open' | 'system';
 }
 
 /** 钩子拿到的事务环境：只能用这里的 manager 读写，保证在同一个事务里 */

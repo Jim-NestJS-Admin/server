@@ -18,14 +18,14 @@ import { ResponseInterceptor } from './interceptors/response.interceptor.js';
 import { buildLoggerOptions } from './logger/logger.options.js';
 import { CrudModule } from './crud/crud.module.js';
 import { DatabaseModule } from './database/database.module.js';
-import { AdminAuth, PhaseOneAdminAuth } from './endpoint/endpoint-auth.js';
+import { RedisModule } from './redis/redis.module.js';
 import { EndpointCheck } from './endpoint/endpoint-check.js';
 import { EndpointGuard } from './endpoint/endpoint.guard.js';
 import { RequestContext } from './tenant/request-context.js';
 import { TenantGuardSubscriber } from './tenant/tenant-guard.subscriber.js';
 import { TenantRepositoryFactory } from './tenant/tenant-repository.js';
 
-/** core 框架层：配置、日志、请求上下文与租户、多端认证守卫、统一响应、异常处理、健康检查、数据库、通用 CRUD。业务模块不写在这里 */
+/** core 框架层：配置、日志、请求上下文与租户、多端认证守卫（后台认证的实现在 AuthModule）、Redis、统一响应、异常处理、健康检查、数据库、通用 CRUD。业务模块不写在这里 */
 @Global()
 @Module({
   imports: [
@@ -52,6 +52,7 @@ import { TenantRepositoryFactory } from './tenant/tenant-repository.js';
     }),
     DiscoveryModule,
     DatabaseModule,
+    RedisModule,
     CrudModule,
   ],
   controllers: [HealthController],
@@ -61,8 +62,6 @@ import { TenantRepositoryFactory } from './tenant/tenant-repository.js';
     RequestContext,
     TenantRepositoryFactory,
     TenantGuardSubscriber,
-    // 后台端认证：T05 用正式实现替换（provide: AdminAuth）
-    { provide: AdminAuth, useClass: PhaseOneAdminAuth },
     EndpointCheck,
     { provide: APP_GUARD, useClass: EndpointGuard },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
@@ -73,7 +72,6 @@ import { TenantRepositoryFactory } from './tenant/tenant-repository.js';
     HealthService,
     RequestContext,
     TenantRepositoryFactory,
-    AdminAuth,
   ],
 })
 export class CoreModule {}

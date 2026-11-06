@@ -500,6 +500,7 @@ export class BaseService<T extends BaseEntity> {
       .values({
         ...this.stripSystem(values),
         tenantId: tx.ctx.tenantId,
+        orgId: tx.ctx.orgId,
         createdBy: tx.ctx.userId,
         updatedBy: tx.ctx.userId,
       } as never)

@@ -1,7 +1,16 @@
 import { NodeEnv, validateEnv as validateRaw } from './env.validation.js';
 
 /** 数据库连接信息是必填项；其他用例只关心各自的配置，统一补上 */
-const DB = { DB_NAME: 'app', DB_USER: 'app', DB_PASSWORD: 'secret' };
+const SECRET = 'x'.repeat(32);
+const DB = {
+  DB_NAME: 'app',
+  DB_USER: 'app',
+  DB_PASSWORD: 'secret',
+  AUTH_JWT_SECRET: SECRET,
+  ALTCHA_HMAC_SECRET: SECRET,
+  ALTCHA_HMAC_KEY_SECRET: SECRET,
+  AUTH_ADMIN_ORIGINS: 'https://admin.example.com',
+};
 const validateEnv = (raw: Record<string, unknown>) =>
   validateRaw({ ...DB, ...raw });
 
@@ -76,5 +85,23 @@ describe('validateEnv', () => {
       validateEnv({ NODE_ENV: 'production', DB_SYNCHRONIZE: 'false' })
         .DB_SYNCHRONIZE,
     ).toBe(false);
+  });
+
+  it('认证密钥必填且至少 32 个字符', () => {
+    expect(() => validateEnv({ AUTH_JWT_SECRET: 'short' })).toThrow(
+      /AUTH_JWT_SECRET/,
+    );
+    expect(() =>
+      validateRaw({ DB_NAME: 'a', DB_USER: 'a', DB_PASSWORD: 'a' }),
+    ).toThrow(/ALTCHA_HMAC_SECRET/);
+  });
+
+  it('生产环境必须配置后台前端地址', () => {
+    expect(() =>
+      validateEnv({ NODE_ENV: 'production', AUTH_ADMIN_ORIGINS: ' ' }),
+    ).toThrow(/AUTH_ADMIN_ORIGINS/);
+    expect(() =>
+      validateEnv({ NODE_ENV: 'development', AUTH_ADMIN_ORIGINS: '' }),
+    ).not.toThrow();
   });
 });

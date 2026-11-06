@@ -12,7 +12,6 @@ import {
   Post,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import { IsInt, IsString, MaxLength, Min } from 'class-validator';
 import { ClsService } from 'nestjs-cls';
 import request from 'supertest';
@@ -24,6 +23,7 @@ import { BusinessException } from '../src/core/exceptions/business.exception.js'
 import { ErrorCode } from '../src/core/exceptions/error-code.js';
 import { HealthService } from '../src/core/health/health.service.js';
 import { exportOpenApi } from '../src/scripts/export-openapi.js';
+import { createTestModule } from './support/test-auth.js';
 
 class CreateDemoDto {
   @IsString()
@@ -78,7 +78,7 @@ describe('server 骨架（T02）', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {
-    const mod = await Test.createTestingModule({
+    const mod = await createTestModule({
       imports: [AppModule],
       controllers: [DemoController],
     }).compile();
@@ -221,9 +221,12 @@ describe('server 骨架（T02）', () => {
   });
 
   describe('健康检查', () => {
-    it('原样返回，不包统一格式；数据库检查已注册', async () => {
+    it('原样返回，不包统一格式；数据库和 Redis 检查已注册', async () => {
       const r = await request(app.getHttpServer()).get('/health').expect(200);
-      expect(r.body).toEqual({ status: 'ok', checks: { database: 'ok' } });
+      expect(r.body).toEqual({
+        status: 'ok',
+        checks: { database: 'ok', redis: 'ok' },
+      });
     });
     it('注册的检查失败时返回 503', async () => {
       const health = app.get(HealthService);
@@ -233,7 +236,7 @@ describe('server 骨架（T02）', () => {
       const r = await request(app.getHttpServer()).get('/health').expect(503);
       expect(r.body).toEqual({
         status: 'error',
-        checks: { database: 'ok', 'fake-db': 'error' },
+        checks: { database: 'ok', redis: 'ok', 'fake-db': 'error' },
       });
       health.register('fake-db', async () => {});
       await request(app.getHttpServer()).get('/health').expect(200);

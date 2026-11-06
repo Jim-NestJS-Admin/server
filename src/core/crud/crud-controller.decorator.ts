@@ -13,6 +13,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AdminController } from '../endpoint/endpoint.decorators.js';
+import { Perms } from '../permission/perms.decorator.js';
 import { ApiErrors, ApiResult } from '../swagger/api-result.js';
 import type { BaseEntity } from './base.entity.js';
 import { CRUD_RESOURCE } from './base.controller.js';
@@ -172,7 +173,12 @@ export function CrudController<T extends BaseEntity>(
         });
       }
       const descriptor = Object.getOwnPropertyDescriptor(proto, spec.method)!;
+      // 权限码「前缀:动作」；页面描述跟列表同一个码。删除、彻底删除是高风险操作
+      const action = spec.api ?? 'page';
       const decorators: MethodDecorator[] = [
+        Perms(`${meta.permPrefix}:${action}`, {
+          risk: action === 'delete' || action === 'purge' ? 'high' : 'normal',
+        }),
         spec.http === 'get'
           ? Get(spec.path ?? spec.method)
           : Post(spec.path ?? spec.method),

@@ -27,6 +27,9 @@ import {
   type Principal,
 } from '../src/core/tenant/request-context.js';
 import { TenantRepositoryFactory } from '../src/core/tenant/tenant-repository.js';
+import { PermissionSource } from '../src/core/permission/permission-source.js';
+import { LoginOnly } from '../src/core/permission/perms.decorator.js';
+import { AllowAllPermissionSource } from './support/test-auth.js';
 import {
   DemoOrderController,
   DemoOrderEntity,
@@ -45,6 +48,10 @@ import {
 /** 测试用后台认证：从请求头取租户和用户，代替 T05 的正式登录；没带就是没登录 */
 @Injectable()
 class HeaderAdminAuth extends AdminAuth {
+  async resolveTenant(): Promise<string> {
+    return '1';
+  }
+
   async authenticate(req: Request): Promise<Principal> {
     const tenantId = req.header('x-test-tenant');
     if (!tenantId)
@@ -53,7 +60,7 @@ class HeaderAdminAuth extends AdminAuth {
         '请先登录',
         HttpStatus.UNAUTHORIZED,
       );
-    return { tenantId, userId: req.header('x-test-user') ?? null, orgId: null };
+    return { tenantId, userId: req.header('x-test-user') ?? '1', orgId: null };
   }
 }
 
@@ -97,7 +104,8 @@ async function convertAll(
   return out;
 }
 
-/** 平台接口和租户感知 Repository 的演示 */
+/** 平台接口和租户感知 Repository 的演示（权限不是这里的重点，登录即可） */
+@LoginOnly()
 @AdminController('test/platform')
 class PlatformController {
   constructor(
@@ -269,6 +277,8 @@ describe('多租户隔离（T04）', () => {
     })
       .overrideProvider(AdminAuth)
       .useClass(HeaderAdminAuth)
+      .overrideProvider(PermissionSource)
+      .useClass(AllowAllPermissionSource)
       .compile();
     app = moduleRef.createNestApplication();
     configureApp(app);

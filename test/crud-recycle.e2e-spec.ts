@@ -1,5 +1,4 @@
 import type { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
@@ -26,6 +25,7 @@ import {
   DemoUserEntity,
   DemoUserService,
 } from './fixtures/demo-resources.js';
+import { createTestModule } from './support/test-auth.js';
 
 /**
  * T03 验收点③：删除方式、软删除唯一约束（activeGuard）、回收站、删除批次，连真实 MySQL 测试库。
@@ -90,7 +90,7 @@ describe('删除方式与回收站（验收点③）', () => {
     };
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
+    const moduleRef = await createTestModule({
       imports: [
         AppModule,
         TypeOrmModule.forFeature([

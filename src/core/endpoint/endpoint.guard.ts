@@ -14,8 +14,10 @@ import {
   type EndpointKind,
 } from '../tenant/request-context.js';
 import { PLATFORM_TENANT_ID } from '../tenant/tenant.constants.js';
-import { AdminAuth } from './endpoint-auth.js';
+import { AdminAuth, AdminAuthorizer } from './endpoint-auth.js';
+import { LOGIN_ONLY_KEY, PERMS_KEY } from '../permission/perms.decorator.js';
 import {
+  ANONYMOUS_KEY,
   ENDPOINT_KEY,
   IGNORE_TENANT_KEY,
   PUBLIC_KEY,
@@ -34,6 +36,7 @@ export class EndpointGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly context: RequestContext,
     private readonly adminAuth: AdminAuth,
+    private readonly authorizer: AdminAuthorizer,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -52,8 +55,36 @@ export class EndpointGuard implements CanActivate {
         HttpStatus.NOT_FOUND,
       );
 
-    const principal = await this.adminAuth.authenticate(req);
+    // 同样只认控制器上的 @Anonymous
+    const anonymous = this.reflector.get<boolean>(
+      ANONYMOUS_KEY,
+      ctx.getClass(),
+    );
+    // 免登录接口上出现权限声明是矛盾的（启动检查会拦，这里第二道）：拒绝，不按免登录放行
+    if (
+      anonymous &&
+      (this.reflector.get(PERMS_KEY, ctx.getHandler()) ||
+        this.reflector.getAllAndOverride(LOGIN_ONLY_KEY, [
+          ctx.getHandler(),
+          ctx.getClass(),
+        ]) ||
+        this.reflector.get(PERMS_KEY, ctx.getClass()))
+    )
+      throw new BusinessException(
+        ErrorCode.Forbidden,
+        '没有权限',
+        HttpStatus.FORBIDDEN,
+      );
+    const principal = anonymous
+      ? {
+          tenantId: await this.adminAuth.resolveTenant(req),
+          userId: null,
+          orgId: null,
+        }
+      : await this.adminAuth.authenticate(req);
     this.context.establish(endpoint, principal);
+    // 权限码和本次有效角色（T06）。免登录的接口没有用户，不核对
+    if (!anonymous) await this.authorizer.authorize(ctx);
 
     if (this.reflector.get<boolean>(IGNORE_TENANT_KEY, ctx.getHandler())) {
       if (principal.tenantId !== PLATFORM_TENANT_ID)

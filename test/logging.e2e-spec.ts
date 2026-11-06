@@ -1,11 +1,11 @@
 import { Writable } from 'node:stream';
 import { Body, Controller, Get, INestApplication, Post } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import { Logger, LoggerModule, PinoLogger } from 'nestjs-pino';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { Public } from '../src/core/endpoint/endpoint.decorators.js';
 import { buildLoggerOptions } from '../src/core/logger/logger.options.js';
+import { createTestModule } from './support/test-auth.js';
 
 @Public()
 @Controller('log-demo')
@@ -35,7 +35,7 @@ describe('真实 HTTP 访问日志（T02 审查修正）', () => {
         cb();
       },
     });
-    const mod = await Test.createTestingModule({
+    const mod = await createTestModule({
       imports: [
         LoggerModule.forRoot(
           buildLoggerOptions({ level: 'info', pretty: false, stream }),

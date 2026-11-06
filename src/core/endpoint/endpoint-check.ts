@@ -34,12 +34,14 @@ function routes(
   return out;
 }
 import {
+  ANONYMOUS_KEY,
   ENDPOINT_KEY,
   ENDPOINT_PREFIX,
   IGNORE_TENANT_KEY,
   PUBLIC_KEY,
 } from './endpoint.decorators.js';
 import type { EndpointKind } from '../tenant/request-context.js';
+import { LOGIN_ONLY_KEY, PERMS_KEY } from '../permission/perms.decorator.js';
 
 /** 阶段 1 已经接入认证的端 */
 const ENABLED: EndpointKind[] = ['admin'];
@@ -67,6 +69,22 @@ export class EndpointCheck implements OnModuleInit {
           throw new Error(
             `${name}.${r.method} 上加了 @Public：@Public 只能加在控制器上，不能在某个端的控制器里开免登录的方法`,
           );
+      for (const r of list)
+        if (Reflect.getMetadata(ANONYMOUS_KEY, r.fn) === true)
+          throw new Error(
+            `${name}.${r.method} 上加了 @Anonymous：@Anonymous 只能加在控制器上，免登录的接口单独放一个控制器`,
+          );
+      const isAnonymous = Reflect.getMetadata(ANONYMOUS_KEY, cls) === true;
+      if (isAnonymous && !endpoint)
+        throw new Error(
+          `${name} 是 @Anonymous，但没有指定所属的端：用 @AdminController 等，不需要端的基础接口用 @Public`,
+        );
+      if (isAnonymous)
+        for (const r of list)
+          if (Reflect.getMetadata(IGNORE_TENANT_KEY, r.fn))
+            throw new Error(
+              `${name}.${r.method} 是 @Anonymous 接口，不能用 @IgnoreTenant`,
+            );
       if (isPublic && endpoint)
         throw new Error(`${name} 不能同时属于端 ${endpoint} 又标成 @Public`);
       if (!isPublic && !endpoint)
@@ -99,6 +117,41 @@ export class EndpointCheck implements OnModuleInit {
         throw new Error(
           `${name} 属于 ${endpoint} 端，这个端还没有接入认证，不能注册`,
         );
+      // 免登录控制器里不能有任何权限声明：声明了说明这个接口其实要登录，应该放到另一个控制器
+      if (isAnonymous) {
+        if (
+          Reflect.getMetadata(PERMS_KEY, cls) ||
+          Reflect.getMetadata(LOGIN_ONLY_KEY, cls)
+        )
+          throw new Error(
+            `${name} 是 @Anonymous，不能同时加 @Perms / @LoginOnly：需要登录的接口放到另一个控制器`,
+          );
+        for (const r of list)
+          if (
+            Reflect.getMetadata(PERMS_KEY, r.fn) ||
+            Reflect.getMetadata(LOGIN_ONLY_KEY, r.fn)
+          )
+            throw new Error(
+              `${name}.${r.method} 在 @Anonymous 控制器里却声明了权限：需要登录的接口放到另一个控制器`,
+            );
+        continue;
+      }
+      // 需要登录的接口必须声明权限：方法上的 @Perms，或者 @LoginOnly（方法或控制器上）
+      const classLoginOnly = Reflect.getMetadata(LOGIN_ONLY_KEY, cls) as
+        object | undefined;
+      if (Reflect.getMetadata(PERMS_KEY, cls))
+        throw new Error(
+          `${name} 上加了 @Perms：权限码只能加在方法上，一个接口一个权限码`,
+        );
+      for (const r of list)
+        if (
+          !Reflect.getMetadata(PERMS_KEY, r.fn) &&
+          !Reflect.getMetadata(LOGIN_ONLY_KEY, r.fn) &&
+          !classLoginOnly
+        )
+          throw new Error(
+            `${name}.${r.method} 没有声明权限：加 @Perms('模块:资源:动作')，登录就能用的接口加 @LoginOnly()`,
+          );
     }
   }
 }

@@ -58,11 +58,11 @@ export class DemoUserEntity extends BaseEntity {
   @Column({ type: 'varchar', length: 16, default: 'enabled' })
   status: string;
 
-  @CrudField({ label: '所属组织', list: false, form: false, nullable: true })
+  @CrudField({ label: '所属部门', list: false, form: false, nullable: true })
   @IsOptional()
   @Matches(/^[1-9]\d{0,19}$/)
   @Column({ type: 'bigint', unsigned: true, nullable: true })
-  orgId: string | null;
+  deptId: string | null;
 
   @CrudField({
     label: '备注',
@@ -166,7 +166,7 @@ export class DemoUserService extends BaseService<DemoUserEntity> {
   service: DemoUserService,
   pageQuery: {
     keyWords: ['username', 'nickname'],
-    fieldEq: ['status', 'orgId'],
+    fieldEq: ['status', 'deptId'],
     maxSize: 100,
   },
 })
