@@ -38,3 +38,9 @@ export class ChangeSystemPassword {
 export class SystemMutationResult {
   @ApiProperty({ type: String }) id: string;
 }
+export class SystemSelfAccount {
+  @ApiProperty({ type: String }) id: string;
+  @ApiProperty() username: string;
+  @ApiProperty() nickname: string;
+  @ApiProperty() version: number;
+}
