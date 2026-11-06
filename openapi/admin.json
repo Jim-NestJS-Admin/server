@@ -191,6 +191,35 @@
         ],
         "type": "object"
       },
+      "FieldPermStateDto": {
+        "properties": {
+          "mask": {
+            "enum": [
+              "phone",
+              "email",
+              "idcard",
+              "last4",
+              "all"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "editable",
+              "readonly",
+              "masked",
+              "hidden"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "mask"
+        ],
+        "type": "object"
+      },
       "LoginDto": {
         "properties": {
           "captchaCode": {
@@ -403,6 +432,70 @@
           "username",
           "nickname",
           "avatar"
+        ],
+        "type": "object"
+      },
+      "QueryConditionDto": {
+        "properties": {
+          "field": {
+            "description": "可筛选字段（页面描述 query[].field）",
+            "type": "string"
+          },
+          "op": {
+            "enum": [
+              "eq",
+              "ne",
+              "gt",
+              "gte",
+              "lt",
+              "lte",
+              "in",
+              "notIn",
+              "contains",
+              "startsWith",
+              "between",
+              "isNull",
+              "notNull"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "description": "值：eq…lte 是简单值；in / notIn 是数组；between 是 [下限, 上限]；isNull / notNull 不要",
+            "type": "object"
+          }
+        },
+        "required": [
+          "field",
+          "op"
+        ],
+        "type": "object"
+      },
+      "QueryGroupDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueryConditionDto"
+                },
+                {
+                  "$ref": "#/components/schemas/QueryGroupDto"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "op": {
+            "enum": [
+              "and",
+              "or"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "op",
+          "items"
         ],
         "type": "object"
       },

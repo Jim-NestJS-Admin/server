@@ -1,3 +1,8 @@
+import {
+  FieldPermStateDto,
+  QueryConditionDto,
+  QueryGroupDto,
+} from '../crud/crud-query.dto.js';
 import type { INestApplication } from '@nestjs/common';
 import {
   DocumentBuilder,
@@ -21,7 +26,10 @@ export function buildOpenApiDocument(
     .setVersion(version)
     .addBearerAuth()
     .build();
-  return SwaggerModule.createDocument(app, config);
+  // 只通过 $ref 引用的模型（高级查询递归分组、字段权限状态）要显式登记
+  return SwaggerModule.createDocument(app, config, {
+    extraModels: [QueryConditionDto, QueryGroupDto, FieldPermStateDto],
+  });
 }
 
 export function setupSwagger(app: INestApplication, version: string): void {
