@@ -7,7 +7,16 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsObject, IsOptional, Matches, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  Matches,
+  Min,
+} from 'class-validator';
 import { AdminController } from '../../core/endpoint/endpoint.decorators.js';
 import { Perms } from '../../core/permission/perms.decorator.js';
 import { ApiErrors, ApiResult } from '../../core/swagger/api-result.js';
@@ -23,6 +32,21 @@ class TableBody {
   @Matches(/^[a-z][a-z0-9_]{0,62}$/)
   table!: string;
 }
+class WriteBody extends IdBody {
+  @ApiProperty({ description: '预览返回的 token' })
+  @Matches(/^[A-Za-z0-9_-]{20,100}$/)
+  token!: string;
+  @ApiPropertyOptional({
+    type: [String],
+    description: '手改过但仍要覆盖的文件路径',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  overwrite?: string[];
+}
+
 class SaveBody {
   @ApiPropertyOptional({ description: '不带是新建' })
   @IsOptional()
@@ -121,6 +145,32 @@ export class CodegenController {
   @ApiErrors(400, 404)
   importTable(@Body() b: TableBody) {
     return this.codegen.importTable(b.table);
+  }
+
+  @Post('preview')
+  @HttpCode(200)
+  @Perms('dev:codegen:save')
+  @ApiOperation({
+    operationId: 'devCodegenPreview',
+    summary: '预览要生成的文件和每个文件的处理方式',
+  })
+  @ApiResult()
+  @ApiErrors(400, 404)
+  preview(@Body() b: IdBody) {
+    return this.codegen.preview(b.id);
+  }
+
+  @Post('write')
+  @HttpCode(200)
+  @Perms('dev:codegen:write', { risk: 'high' })
+  @ApiOperation({
+    operationId: 'devCodegenWrite',
+    summary: '确认写入本机项目（只写文件，不执行命令）',
+  })
+  @ApiResult()
+  @ApiErrors(400, 404, 409)
+  write(@Body() b: WriteBody) {
+    return this.codegen.write(b.id, b.token, b.overwrite ?? []);
   }
 
   @Post('sync')

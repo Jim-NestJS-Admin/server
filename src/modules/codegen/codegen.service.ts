@@ -1,5 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
+import { BusinessException } from '../../core/exceptions/business.exception.js';
+import { ErrorCode } from '../../core/exceptions/error-code.js';
+import { renderServer, type GeneratedFile } from './render-server.js';
+import {
+  currentFingerprint,
+  fingerprint,
+  resolveSafe,
+  writeSafe,
+} from './safe-writer.js';
 import { crudErrors } from '../../core/crud/crud.errors.js';
 import { TenantRepositoryFactory } from '../../core/tenant/tenant-repository.js';
 import { CodegenEntity } from './codegen.entity.js';
@@ -32,7 +43,114 @@ export class CodegenService {
   constructor(
     private readonly repos: TenantRepositoryFactory,
     private readonly dataSource: DataSource,
+    private readonly config: ConfigService,
   ) {}
+
+  private roots() {
+    return {
+      server: this.config.get<string>('CODEGEN_SERVER_ROOT') ?? '',
+      admin: this.config.get<string>('CODEGEN_ADMIN_ROOT') ?? '',
+    };
+  }
+
+  /**
+   * 生成计划：每个文件要新建、覆盖（上次生成后没人改过）还是跳过（已经存在且被手改过 / 不是本生成器写的）。
+   * token 绑定配置版本和每个文件当前、将写入的指纹；写入时重算，不一致说明预览后文件又变了。
+   */
+  private async plan(id: string) {
+    const row = await this.repo()
+      .query('g')
+      .andWhere('g.id = :id', { id })
+      .getOne();
+    if (!row) throw crudErrors.notFound();
+    const config = row.config as CodegenConfig;
+    const stamp = row.createdAt.getTime();
+    const files: GeneratedFile[] = renderServer(config, stamp);
+    const roots = this.roots();
+    const last = row.fingerprints ?? {};
+    const items = [];
+    for (const f of files) {
+      let abs: string;
+      try {
+        abs = resolveSafe(roots[f.project], f.project, f.path);
+      } catch (e) {
+        throw crudErrors.badRequest((e as Error).message);
+      }
+      const now = await currentFingerprint(abs);
+      const next = fingerprint(f.content);
+      const key = `${f.project}:${f.path}`;
+      const action =
+        now === null
+          ? 'create'
+          : now === next
+            ? 'unchanged'
+            : last[key] === now
+              ? 'overwrite'
+              : 'skip-modified';
+      items.push({ ...f, abs, key, now, next, action });
+    }
+    const token = createHash('sha256')
+      .update(
+        JSON.stringify([
+          row.id,
+          row.version,
+          items.map((i) => [i.key, i.now, i.next]),
+        ]),
+      )
+      .digest('base64url');
+    return { row, items, token };
+  }
+
+  async preview(id: string) {
+    const { items, token } = await this.plan(id);
+    return {
+      token,
+      files: items.map((i) => ({
+        project: i.project,
+        path: i.path,
+        action: i.action,
+        content: i.content,
+      })),
+      note: '前端文件等前端模板（Codex）提供后再生成',
+    };
+  }
+
+  /**
+   * 写入：先重算计划并核对 token（预览后文件被改过就 409），再按「后端、前端」顺序逐个写；
+   * 手改过的文件只有在 overwrite 里点名才覆盖。返回每个文件的结果，并记下写入后的指纹。只写文件，不执行任何命令。
+   */
+  async write(id: string, token: string, overwrite: string[]) {
+    const { row, items, token: current } = await this.plan(id);
+    if (current !== token)
+      throw new BusinessException(
+        ErrorCode.Conflict,
+        '预览之后文件或配置有变化，请重新预览',
+        409,
+      );
+    const written: string[] = [];
+    const skipped: string[] = [];
+    const failed: { path: string; message: string }[] = [];
+    const prints: Record<string, string> = { ...row.fingerprints };
+    for (const i of items) {
+      if (i.action === 'unchanged') {
+        prints[i.key] = i.next;
+        continue;
+      }
+      if (i.action === 'skip-modified' && !overwrite.includes(i.path)) {
+        skipped.push(i.path);
+        continue;
+      }
+      try {
+        await writeSafe(i.abs, i.content);
+        prints[i.key] = i.next;
+        written.push(i.path);
+      } catch (e) {
+        failed.push({ path: i.path, message: (e as Error).message });
+      }
+    }
+    await this.repo().update([row.id], { fingerprints: prints });
+    return { written, skipped, failed };
+  }
 
   private repo() {
     return this.repos.for(CodegenEntity);
