@@ -95,6 +95,7 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
       meta: meta as CrudResourceMeta<T>,
       childOwner: (entity) => this.crudRuntime.childOwner(entity),
       audit: this.crudRuntime.audit,
+      authz: this.crudRuntime.authz,
     });
     this.crudRuntime.register(meta);
     this.service = service;
