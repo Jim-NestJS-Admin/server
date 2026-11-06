@@ -72,3 +72,11 @@ pnpm start:dev                                         # 开发模式，改代�
 准备独立本地数据库、应用连接权限和 Redis 后，在 `.env` 配置 `BOOTSTRAP_USERNAME` / `BOOTSTRAP_PASSWORD`，执行 `pnpm bootstrap:local`。脚本只允许development、本机地址和明确库名；先运行版本化迁移，再在单个事务内创建默认组织、超管角色、账号及组织角色分配。重复执行遇到已有用户会拒绝，不重置密码，不覆盖旧权限。没有默认明文密码，不伪造菜单填充未实现的系统页面。不要对其他项目或生产数据库运行。
 
 同时修复T06审查发现的Anonymous与Perms/LoginOnly混用：启动检查拒绝（包括继承的方法），守卫也直接拒绝矛盾声明。此修复待Claude复核，不代表T06整体验收。
+
+## T17 字段配置（代码阶段）
+
+本分支合入Claude的T16引擎0a88f41，在system模块实现sys_field/sys_role_field、租户感知FieldPermSource、配置CRUD、配置页专用overview读模型及save批量接口。模块默认和角色覆盖分别读写，保存后授权版本失效；跟随默认删除覆盖，配置快照和写入在同一事务提交。批量修改锁行检查版本，任一项冲突整批回滚。所有配置写接口声明高风险。迁移1793941200000已登记，尚未应用到本地开发库。
+
+代码清单由CrudRuntime与FieldPerm读取，系统字段、未知字段、configurable:false字段一律拒绝；旧配置失效后不再作为权限来源。委派只能收紧代码声明。安全配置页本身不进入字段配置清单。overview提供完整DTO和版本，前端从正式OpenAPI生成，不依赖T16目前为通用object的registry响应。
+
+本轮仅类型检查、lint、构建/接口导出；测试文件已补，按Jimmy要求不执行。T16逐行字段状态契约仍待补充；T08硬删除审计注入点待Claude提供，当前配置变更已用独立同事务审计方法落库。
