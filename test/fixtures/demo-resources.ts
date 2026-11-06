@@ -121,6 +121,14 @@ export class DemoUserService extends BaseService<DemoUserEntity> {
     this.calls.push(`beforeUpdate:${existing.nickname}->${changes.nickname}`);
   }
 
+  /** 第 4 级定制的写法：用 select() 查数据，故意用 where 想替换掉范围条件 */
+  async otherTenantProbe(id: string): Promise<string[]> {
+    const rows = await this.select(this.crud.dataSource.manager, 'page')
+      .where('e.id = :pid', { pid: id })
+      .getMany();
+    return rows.map((r) => r.id);
+  }
+
   protected override async beforeDelete(rows: DemoUserEntity[]): Promise<void> {
     this.calls.push(`beforeDelete:${rows.length}`);
     if (rows.some((r) => r.username === 'protected'))

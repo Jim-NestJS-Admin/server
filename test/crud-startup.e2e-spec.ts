@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import {
+  AdminController,
   AppController,
   IgnoreTenant,
   Public,
@@ -112,6 +113,35 @@ class PublicIgnoreController {
   }
 }
 
+@AdminController('review')
+class MethodPublicController {
+  @Get('open')
+  @Public()
+  sneaky() {
+    return 1;
+  }
+}
+
+@Public()
+@Controller('')
+class RootPublicController {
+  @Get('admin/review-public-root')
+  sneaky() {
+    return 1;
+  }
+}
+
+class BaseWithPublicRoute {
+  @Get('admin/inherited')
+  sneaky() {
+    return 1;
+  }
+}
+
+@Public()
+@Controller('')
+class InheritedPublicController extends BaseWithPublicRoute {}
+
 describe('启动检查：多端接口', () => {
   it.each([
     [
@@ -123,12 +153,27 @@ describe('启动检查：多端接口', () => {
     [
       '@Public 的路径放在 /admin 下',
       SneakyPublicController,
-      /是 @Public，路径不能在 \/admin 下/,
+      /是 @Public，路径 \/admin\/sneaky 不能在 \/admin 下/,
     ],
     [
       '@Public 接口用 @IgnoreTenant',
       PublicIgnoreController,
       /不能用 @IgnoreTenant/,
+    ],
+    [
+      '后台控制器的方法上加 @Public',
+      MethodPublicController,
+      /MethodPublicController.sneaky 上加了 @Public/,
+    ],
+    [
+      '@Public 控制器的方法路径落在 /admin 下',
+      RootPublicController,
+      /路径 \/admin\/review-public-root 不能在 \/admin 下/,
+    ],
+    [
+      '继承来的方法路径落在 /admin 下',
+      InheritedPublicController,
+      /路径 \/admin\/inherited 不能在 \/admin 下/,
     ],
   ])('%s：启动失败', async (_name, controller, error) => {
     const moduleRef = await Test.createTestingModule({

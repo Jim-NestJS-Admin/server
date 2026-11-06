@@ -13,10 +13,10 @@ export interface Principal {
   orgId: string | null;
 }
 
-export interface ContextSnapshot extends Principal {
-  endpoint: EndpointKind | 'system';
+export interface ContextSnapshot extends Readonly<Principal> {
+  readonly endpoint: EndpointKind | 'system';
   /** 平台管理员的 @IgnoreTenant 接口：本次请求跨租户查询 */
-  ignoreTenant: boolean;
+  readonly ignoreTenant: boolean;
 }
 
 const KEY = 'jna:context';
@@ -51,7 +51,7 @@ export class RequestContext {
     const ctx = this.current();
     if (ctx.tenantId !== PLATFORM_TENANT_ID)
       throw new Error('只有平台管理员可以跨租户查询');
-    this.cls.set(KEY, { ...ctx, ignoreTenant: true });
+    this.cls.set(KEY, Object.freeze({ ...ctx, ignoreTenant: true }));
   }
 
   /** 后台任务、脚本：在指定租户下执行一段代码 */

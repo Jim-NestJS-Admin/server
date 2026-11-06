@@ -110,6 +110,48 @@ class PlatformController {
     };
   }
 
+  /** 用租户感知查询故意写 where / orWhere / 改保留参数，看能不能读到别的租户 */
+  @HttpCode(200)
+  @Post('repo-where')
+  async repoWhere(@Body() body: { otherId: string }) {
+    const repo = this.repos.for(DemoUserEntity);
+    const ids = (rows: DemoUserEntity[]) => rows.map((r) => r.id);
+    const where = ids(
+      await repo.query().where('e.id = :id', { id: body.otherId }).getMany(),
+    );
+    const orWhere = ids(
+      await repo
+        .query()
+        .where('1 = 1')
+        .orWhere('e.id = :id', { id: body.otherId })
+        .getMany(),
+    );
+    const [rows, total] = await repo
+      .query()
+      .where('e.id > 0')
+      .orWhere('e.id = :id', { id: body.otherId })
+      .getManyAndCount();
+    let paramError = '';
+    try {
+      await repo.query().setParameter('__tenantId', '2').getMany();
+    } catch (e) {
+      paramError = (e as Error).message;
+    }
+    let tamper: string[] = [];
+    const qb = repo.query();
+    qb.expressionMap.parameters.__tenantId = '2';
+    tamper = ids(await qb.getMany());
+    const viaService = await this.users.otherTenantProbe(body.otherId);
+    return {
+      where,
+      orWhere,
+      page: { ids: ids(rows), total },
+      paramError,
+      tamper,
+      viaService,
+    };
+  }
+
   @HttpCode(200)
   @Post('repo-remove')
   async repoRemove(@Body() body: { ids: string[] }) {
@@ -379,6 +421,30 @@ describe('多租户隔离（T04）', () => {
         ids: [id],
       }).expect(200);
       expect(mine.body.data.removed).toBe(1);
+    });
+  });
+
+  describe('查询构造器改不掉租户条件', () => {
+    it('where 替换、orWhere、改保留参数、经 BaseService.select：都读不到别的租户', async () => {
+      await user('1', 'add', {
+        data: { username: 'mine', nickname: 'x' },
+      }).expect(200);
+      const other = (
+        await user('2', 'add', {
+          data: { username: 'theirs', nickname: 'x' },
+        }).expect(200)
+      ).body.data;
+      const res = await as('1', '/admin/test/platform/repo-where', {
+        otherId: other.id,
+      }).expect(200);
+      const d = res.body.data;
+      expect(d.where).toEqual([]);
+      expect(d.orWhere).not.toContain(other.id);
+      expect(d.page.ids).not.toContain(other.id);
+      expect(d.page.total).toBe(1);
+      expect(d.paramError).toMatch(/__tenantId 是框架保留的/);
+      expect(d.tamper).not.toContain(other.id);
+      expect(d.viaService).toEqual([]);
     });
   });
 

@@ -1,11 +1,8 @@
 import { Injectable, type Type } from '@nestjs/common';
-import {
-  DataSource,
-  type EntityManager,
-  type SelectQueryBuilder,
-} from 'typeorm';
+import { DataSource, type EntityManager } from 'typeorm';
 import { SYSTEM_FIELDS, type BaseEntity } from '../crud/base.entity.js';
 import { RequestContext } from './request-context.js';
+import { ScopedSelectQueryBuilder } from './scoped-query-builder.js';
 
 const SYSTEM = new Set<string>(SYSTEM_FIELDS);
 
@@ -21,18 +18,25 @@ export class TenantRepository<T extends BaseEntity> {
     readonly entity: Type<T>,
   ) {}
 
-  /** 带租户条件的查询，别名默认 e；跨租户查询模式（@IgnoreTenant）下不加租户条件 */
-  query(alias = 'e', manager?: EntityManager): SelectQueryBuilder<T> {
+  /**
+   * 带租户条件的查询，别名默认 e；跨租户查询模式（@IgnoreTenant）下不加租户条件。
+   * 返回的查询构造器上随便用 where / orWhere，租户条件都会整体 AND 在最后，去不掉。
+   */
+  query(alias = 'e', manager?: EntityManager): ScopedSelectQueryBuilder<T> {
     const qb = (manager ?? this.dataSource.manager).createQueryBuilder(
       this.entity,
       alias,
     );
     const ctx = this.context.current();
-    if (!ctx.ignoreTenant)
-      qb.andWhere(`${alias}.\`tenant_id\` = :__tenantId`, {
-        __tenantId: ctx.tenantId,
-      });
-    return qb;
+    return new ScopedSelectQueryBuilder(
+      qb,
+      ctx.ignoreTenant
+        ? undefined
+        : {
+            conditions: [`${alias}.\`tenant_id\` = :__tenantId`],
+            params: { __tenantId: ctx.tenantId },
+          },
+    );
   }
 
   /** 插入一行，返回编号；租户、创建人、修改人由框架填，传进来的系统字段一律忽略 */

@@ -63,7 +63,18 @@ describe('请求上下文 RequestContext', () => {
       const c = ctx();
       c.establish('admin', { ...principal, tenantId: '0' });
       c.allowCrossTenant();
-      expect(c.current().ignoreTenant).toBe(true);
+      const snap = c.current();
+      expect(snap.ignoreTenant).toBe(true);
+      // 打开跨租户之后快照仍然不能改：租户、审计主体、只读标记都改不了
+      expect(Object.isFrozen(snap)).toBe(true);
+      expect(Object.isFrozen(c.peek())).toBe(true);
+      expect(() => {
+        (snap as { tenantId: string }).tenantId = '9';
+      }).toThrow(TypeError);
+      expect(() => {
+        (snap as { ignoreTenant: boolean }).ignoreTenant = false;
+      }).toThrow(TypeError);
+      expect(c.current()).toMatchObject({ tenantId: '0', ignoreTenant: true });
     });
   });
 });

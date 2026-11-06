@@ -1,15 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import {
-  Brackets,
-  type DataSource,
-  type EntityManager,
-  type SelectQueryBuilder,
-} from 'typeorm';
+import { Brackets, type DataSource, type EntityManager } from 'typeorm';
 import {
   INTERNAL_FIELDS,
   SYSTEM_FIELDS,
   type BaseEntity,
 } from './base.entity.js';
+import { ScopedSelectQueryBuilder } from '../tenant/scoped-query-builder.js';
 import { crudErrors, translateDbError } from './crud.errors.js';
 import type { CrudAudit } from './crud-audit.js';
 import {
@@ -528,21 +524,29 @@ export class BaseService<T extends BaseEntity> {
     }
   }
 
-  /** 带范围条件的查询，别名固定为 e；第 4 级自定义接口查数据也要用它，不能直接用 Repository */
+  /**
+   * 带范围条件的查询，别名固定为 e；第 4 级自定义接口查数据也要用它，不能直接用 Repository。
+   * 范围条件（租户、以后的数据范围）由框架放在 WHERE 最后整体 AND，调用方用 where / orWhere 也去不掉。
+   */
   protected select(
     manager: EntityManager,
     action: CrudAction,
-  ): SelectQueryBuilder<T> {
+  ): ScopedSelectQueryBuilder<T> {
     const qb = manager.createQueryBuilder(this.meta.entity, ALIAS);
     const ctx = this.crud.context.current();
-    for (const c of this.crud.scope.conditions(
+    const conds = this.crud.scope.conditions(
       ctx,
       this.meta as CrudResourceMeta,
       action,
       ALIAS,
-    ))
-      qb.andWhere(c.sql, c.params);
-    return qb;
+    );
+    return new ScopedSelectQueryBuilder(qb, {
+      conditions: conds.map((c) => c.sql),
+      params: Object.assign({}, ...conds.map((c) => c.params)) as Record<
+        string,
+        unknown
+      >,
+    });
   }
 
   private scope(tx: CrudTx, action: CrudAction) {

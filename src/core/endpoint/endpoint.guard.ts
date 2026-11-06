@@ -38,9 +38,8 @@ export class EndpointGuard implements CanActivate {
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     if (ctx.getType() !== 'http') return false;
-    const targets = [ctx.getHandler(), ctx.getClass()];
-    if (this.reflector.getAllAndOverride<boolean>(PUBLIC_KEY, targets))
-      return true;
+    // 只认控制器上的 @Public：方法上的标记不生效（启动检查也会直接拒绝），避免后台控制器里藏一个免登录的方法
+    if (this.reflector.get<boolean>(PUBLIC_KEY, ctx.getClass())) return true;
     const endpoint = this.reflector.get<EndpointKind | undefined>(
       ENDPOINT_KEY,
       ctx.getClass(),
