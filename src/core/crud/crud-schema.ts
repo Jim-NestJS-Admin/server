@@ -4,7 +4,12 @@ import {
   getSchemaPath,
 } from '@nestjs/swagger';
 import type { DictItem, FormComponent } from './crud-field.decorator.js';
-import type { CrudApi, CrudResourceMeta, SortItem } from './crud.types.js';
+import {
+  CRUD_APIS,
+  type CrudApi,
+  type CrudResourceMeta,
+  type SortItem,
+} from './crud.types.js';
 
 /** 基础字段在页面上的显示名称 */
 const BASE_LABELS: Record<string, string> = {
@@ -126,7 +131,7 @@ export class CrudSchema {
   @ApiProperty({ example: 'system:user', description: '权限码前缀' })
   permPrefix: string;
   @ApiProperty({
-    enum: ['page', 'info', 'add', 'update', 'delete'],
+    enum: [...CRUD_APIS],
     isArray: true,
   })
   api: CrudApi[];

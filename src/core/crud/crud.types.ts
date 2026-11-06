@@ -3,17 +3,30 @@ import type { EntityManager } from 'typeorm';
 import type { BaseEntity } from './base.entity.js';
 import type { CrudFieldMeta } from './crud-field.decorator.js';
 
-/** 按配置开放的接口。导出在 T18，回收站在 T03 验收点③ */
-export type CrudApi = 'page' | 'info' | 'add' | 'update' | 'delete';
+/**
+ * 按配置开放的接口。recycle / restore / purge 是回收站（列表、恢复、彻底删除），只有软删除的资源能开，
+ * 恢复和彻底删除各有独立的权限码（T06）。导出在 T18。
+ */
+export type CrudApi =
+  | 'page'
+  | 'info'
+  | 'add'
+  | 'update'
+  | 'delete'
+  | 'recycle'
+  | 'restore'
+  | 'purge';
 export const CRUD_APIS: readonly CrudApi[] = [
   'page',
   'info',
   'add',
   'update',
   'delete',
+  'recycle',
+  'restore',
+  'purge',
 ];
 
-/** 数据范围、字段权限等按「动作」区分 */
 export type CrudAction = CrudApi;
 
 export interface SortItem {
@@ -110,10 +123,13 @@ export interface CrudResourceMeta<T extends BaseEntity = BaseEntity> {
   children: CrudChildMeta[];
 }
 
-/** 请求上下文：租户和当前用户。T04 / T05 接入后由认证守卫写入 */
+/** 请求上下文：租户、当前用户、当前组织，由端的认证守卫写入（见 core/tenant/request-context） */
 export interface CrudContext {
   tenantId: string;
   userId: string | null;
+  orgId: string | null;
+  /** 平台管理员跨租户查询（@IgnoreTenant）：不加租户条件，只能读 */
+  ignoreTenant: boolean;
 }
 
 /** 钩子拿到的事务环境：只能用这里的 manager 读写，保证在同一个事务里 */

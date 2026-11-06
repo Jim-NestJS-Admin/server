@@ -1,5 +1,6 @@
 import { Inject, type OnModuleInit, type Type } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
+import type { EntityMetadata } from 'typeorm';
 import type { BaseEntity } from './base.entity.js';
 import { BaseService, type PageQuery } from './base.service.js';
 import { buildCrudSchema } from './crud-schema.js';
@@ -7,6 +8,34 @@ import { CrudRuntime } from './crud.runtime.js';
 import type { CrudControllerOptions, CrudResourceMeta } from './crud.types.js';
 
 export const CRUD_RESOURCE = Symbol('crud:resource');
+
+/**
+ * 唯一约束必须带租户；软删除的表还必须带 activeGuard（架构「删除方式 · 唯一字段的处理」），
+ * 否则删掉的记录占着业务键，删除后不能重用，恢复时撞名也查不出来。启动时检查，写错直接报错。
+ */
+function checkUniqueIndexes(
+  em: EntityMetadata,
+  prefix: string,
+  deleteMode: 'soft' | 'hard',
+): void {
+  const groups = [
+    ...em.indices
+      .filter((i) => i.isUnique)
+      .map((i) => ({ name: i.name, columns: i.columns })),
+    ...em.uniques.map((u) => ({ name: u.name, columns: u.columns })),
+  ];
+  for (const g of groups) {
+    const props = g.columns.map((c) => c.propertyName);
+    const need =
+      deleteMode === 'soft' ? ['tenantId', 'activeGuard'] : ['tenantId'];
+    const missing = need.filter((p) => !props.includes(p));
+    if (missing.length)
+      throw new Error(
+        `${prefix} 的实体 ${em.name} 唯一约束 ${g.name}（${props.join(', ')}）缺少 ${missing.join('、')}：` +
+          `唯一约束要建在「租户 + 业务字段${deleteMode === 'soft' ? ' + activeGuard' : ''}」上`,
+      );
+  }
+}
 
 interface CrudClassMeta {
   options: CrudControllerOptions<BaseEntity>;
@@ -44,6 +73,9 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
           throw new Error(
             `${meta.prefix} 用到的实体 ${e.name} 没有注册：请在模块里加上 TypeOrmModule.forFeature([${e.name}])`,
           );
+    if (ds.isInitialized)
+      for (const e of [meta.entity, ...meta.children.map((c) => c.entity)])
+        checkUniqueIndexes(ds.getMetadata(e), meta.prefix, meta.deleteMode);
     let service: BaseService<T>;
     if (options.service) {
       service = this.crudModuleRef.get(options.service, {
@@ -62,6 +94,7 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
       context: this.crudRuntime.context,
       meta: meta as CrudResourceMeta<T>,
       childOwner: (entity) => this.crudRuntime.childOwner(entity),
+      audit: this.crudRuntime.audit,
     });
     this.crudRuntime.register(meta);
     this.service = service;
@@ -92,6 +125,18 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
 
   delete(body: { ids: string[] }) {
     return this.service.delete(body.ids);
+  }
+
+  recyclePage(body: { page?: number; size?: number; keyword?: string }) {
+    return this.service.recyclePage(body);
+  }
+
+  restore(body: { items: { id: string; version: number }[] }) {
+    return this.service.restore(body.items);
+  }
+
+  purge(body: { items: { id: string; version: number }[] }) {
+    return this.service.purge(body.items);
   }
 
   schema() {

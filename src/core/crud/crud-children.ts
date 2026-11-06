@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import type { Type } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate, type ValidationError } from 'class-validator';
 import type { DataSource, EntityManager } from 'typeorm';
 import { SYSTEM_FIELDS } from './base.entity.js';
+import type { CrudAudit } from './crud-audit.js';
 import { ID_PATTERN, MAX_BATCH } from './crud.dto.js';
 import { crudErrors, type CrudFieldError } from './crud.errors.js';
 import type { CrudChildMeta, CrudResourceMeta, CrudTx } from './crud.types.js';
@@ -320,6 +322,7 @@ export async function saveChildren(
   meta: CrudResourceMeta,
   masterId: string,
   plans: ChildPlan[],
+  audit: CrudAudit,
   isNew = false,
 ): Promise<void> {
   const errors: CrudFieldError[] = [];
@@ -411,7 +414,7 @@ export async function saveChildren(
   if (errors.length)
     throw crudErrors.badRequest('明细有误，请修正标红的行', errors);
 
-  for (const { plan } of work) {
+  for (const { plan, current } of work) {
     const { child } = plan;
     const em = tx.manager.connection.getMetadata(child.entity);
     const fk = em.findColumnWithPropertyName(child.foreignKey)!.databaseName;
@@ -422,6 +425,21 @@ export async function saveChildren(
     };
 
     if (plan.deleted.length) {
+      // 硬删除模式下单独删的子行也是真删：删之前在同一事务里留底，留底失败整个保存回滚
+      if (meta.deleteMode === 'hard')
+        await audit.hardDeleted(
+          {
+            resource: meta.prefix,
+            reason: 'delete',
+            ctx: tx.ctx,
+            rows: [],
+            masterId,
+            children: {
+              [child.resource]: plan.deleted.map((id) => current.get(id)!),
+            },
+          },
+          tx.manager,
+        );
       const del =
         meta.deleteMode === 'soft'
           ? tx.manager
@@ -429,6 +447,8 @@ export async function saveChildren(
               .update(child.entity)
               .set({
                 deletedAt: () => 'CURRENT_TIMESTAMP(3)',
+                // 单独删掉的明细自成一批，恢复主表时不会被一起复活
+                deleteBatch: randomUUID(),
                 updatedBy: tx.ctx.userId,
                 updatedAt: () => 'CURRENT_TIMESTAMP(3)',
               } as never)
@@ -516,16 +536,15 @@ async function recheckUnique(
     throw crudErrors.badRequest('明细有误，请修正标红的行', errors);
 }
 
-/** 删除主表时子表一起处理，跟随主表的删除方式（删除批次和回收站在验收点③） */
+/** 删除主表时子表一起处理，跟随主表的删除方式；软删除时和主表同一个删除批次 */
 export async function deleteChildrenOf(
   tx: CrudTx,
   meta: CrudResourceMeta,
   masterIds: string[],
+  batch: string,
 ): Promise<void> {
   for (const child of meta.children) {
-    const fk = tx.manager.connection
-      .getMetadata(child.entity)
-      .findColumnWithPropertyName(child.foreignKey)!.databaseName;
+    const fk = childFk(tx.manager, child);
     const qb =
       meta.deleteMode === 'soft'
         ? tx.manager
@@ -533,6 +552,7 @@ export async function deleteChildrenOf(
             .update(child.entity)
             .set({
               deletedAt: () => 'CURRENT_TIMESTAMP(3)',
+              deleteBatch: batch,
               updatedBy: tx.ctx.userId,
               updatedAt: () => 'CURRENT_TIMESTAMP(3)',
             } as never)
@@ -543,4 +563,73 @@ export async function deleteChildrenOf(
       .andWhere('`deleted_at` IS NULL')
       .execute();
   }
+}
+
+const childFk = (manager: EntityManager, child: CrudChildMeta) =>
+  manager.connection
+    .getMetadata(child.entity)
+    .findColumnWithPropertyName(child.foreignKey)!.databaseName;
+
+/** 硬删除前留底用：这些主表下的子行整行内容（includeDeleted 时连已删除的也取） */
+export async function childRowsOf(
+  tx: CrudTx,
+  meta: CrudResourceMeta,
+  masterIds: string[],
+  includeDeleted: boolean,
+): Promise<Record<string, object[]>> {
+  const out: Record<string, object[]> = {};
+  for (const child of meta.children) {
+    const qb = childQuery(tx.manager, child, tx.ctx.tenantId, masterIds)
+      .addSelect(`${ALIAS}.deleteBatch`)
+      .orderBy(`${ALIAS}.id`, 'ASC');
+    if (includeDeleted) qb.withDeleted();
+    out[child.resource] = await qb.getMany();
+  }
+  return out;
+}
+
+/** 恢复主表：只恢复和主表同一删除批次的子行，之前单独删掉的明细仍在回收站 */
+export async function restoreChildrenOf(
+  tx: CrudTx,
+  meta: CrudResourceMeta,
+  masters: { id: string; batch: string | null }[],
+): Promise<void> {
+  for (const child of meta.children) {
+    const fk = childFk(tx.manager, child);
+    for (const m of masters) {
+      if (!m.batch) continue;
+      await tx.manager
+        .createQueryBuilder()
+        .update(child.entity)
+        .set({
+          deletedAt: null,
+          deleteBatch: null,
+          updatedBy: tx.ctx.userId,
+          updatedAt: () => 'CURRENT_TIMESTAMP(3)',
+        } as never)
+        .where(`\`${fk}\` = :__id`, { __id: m.id })
+        .andWhere('`tenant_id` = :__tenantId', { __tenantId: tx.ctx.tenantId })
+        .andWhere('`delete_batch` = :__batch', { __batch: m.batch })
+        .andWhere('`deleted_at` IS NOT NULL')
+        .execute();
+    }
+  }
+}
+
+/** 彻底删除主表：它名下的子行（不管有没有删除）一起真删 */
+export async function purgeChildrenOf(
+  tx: CrudTx,
+  meta: CrudResourceMeta,
+  masterIds: string[],
+): Promise<void> {
+  for (const child of meta.children)
+    await tx.manager
+      .createQueryBuilder()
+      .delete()
+      .from(child.entity)
+      .where(`\`${childFk(tx.manager, child)}\` IN (:...__ids)`, {
+        __ids: masterIds,
+      })
+      .andWhere('`tenant_id` = :__tenantId', { __tenantId: tx.ctx.tenantId })
+      .execute();
 }

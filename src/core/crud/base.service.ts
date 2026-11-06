@@ -1,19 +1,20 @@
-import {
-  Brackets,
-  type DataSource,
-  type EntityManager,
-  type SelectQueryBuilder,
-} from 'typeorm';
+import { randomUUID } from 'node:crypto';
+import { Brackets, type DataSource, type EntityManager } from 'typeorm';
 import {
   INTERNAL_FIELDS,
   SYSTEM_FIELDS,
   type BaseEntity,
 } from './base.entity.js';
+import { ScopedSelectQueryBuilder } from '../tenant/scoped-query-builder.js';
 import { crudErrors, translateDbError } from './crud.errors.js';
+import type { CrudAudit } from './crud-audit.js';
 import {
+  childRowsOf,
   deleteChildrenOf,
   loadChildren,
   planChildren,
+  purgeChildrenOf,
+  restoreChildrenOf,
   saveChildren,
 } from './crud-children.js';
 import type { CrudContextProvider, CrudScope } from './crud-scope.js';
@@ -43,6 +44,8 @@ export interface CrudBinding<T extends BaseEntity> {
   meta: CrudResourceMeta<T>;
   /** 查实体是不是某个主表的子表（由注册表提供） */
   childOwner: (entity: Function) => string | undefined;
+  /** 硬删除前留底 */
+  audit: CrudAudit;
 }
 
 const ALIAS = 'e';
@@ -101,6 +104,11 @@ export class BaseService<T extends BaseEntity> {
   /** 删除前：rows 是本批要删的全部数据，例如检查有没有被引用 */
   protected async beforeDelete(_rows: T[], _tx: CrudTx): Promise<void> {}
   protected async afterDelete(_rows: T[], _tx: CrudTx): Promise<void> {}
+  /** 从回收站恢复前：rows 是要恢复的数据（仍是已删除状态） */
+  protected async beforeRestore(_rows: T[], _tx: CrudTx): Promise<void> {}
+  protected async afterRestore(_rows: T[], _tx: CrudTx): Promise<void> {}
+  /** 彻底删除前：例如检查有没有被引用；抛异常整批不删 */
+  protected async beforePurge(_rows: T[], _tx: CrudTx): Promise<void> {}
 
   // ---------- 读 ----------
 
@@ -179,19 +187,7 @@ export class BaseService<T extends BaseEntity> {
       const values = this.pick(data, this.meta.addable);
       this.assertNullable(values);
       await this.beforeAdd(values, tx);
-      const clean = this.stripSystem(values);
-      const result = await tx.manager
-        .createQueryBuilder()
-        .insert()
-        .into(this.meta.entity)
-        .values({
-          ...clean,
-          tenantId: tx.ctx.tenantId,
-          createdBy: tx.ctx.userId,
-          updatedBy: tx.ctx.userId,
-        } as never)
-        .execute();
-      const id = String(result.identifiers[0]?.id);
+      const id = await this.insertRow(tx, values);
       // 没提交的子表也要按「空」检查行数下限
       const all = this.meta.children.map(
         (child) =>
@@ -202,7 +198,8 @@ export class BaseService<T extends BaseEntity> {
             deleted: [],
           },
       );
-      if (all.length) await saveChildren(tx, tx.meta, id, all, true);
+      if (all.length)
+        await saveChildren(tx, tx.meta, id, all, this.crud.audit, true);
       const row = await this.findOne(tx.manager, id, 'add');
       if (!row) throw new Error(`新增后读不到数据：${this.meta.prefix} ${id}`);
       await this.afterAdd(row, tx);
@@ -252,7 +249,8 @@ export class BaseService<T extends BaseEntity> {
       const result = await qb.execute();
       // 读到时版本一致、更新时 0 行：说明这期间被别人改了或删了
       if (!result.affected) throw crudErrors.versionConflict();
-      if (plans.length) await saveChildren(tx, tx.meta, id, plans);
+      if (plans.length)
+        await saveChildren(tx, tx.meta, id, plans, this.crud.audit);
 
       const row = await this.findOne(tx.manager, id, 'update');
       if (!row) throw crudErrors.notFound();
@@ -271,8 +269,24 @@ export class BaseService<T extends BaseEntity> {
         .getMany();
       if (rows.length !== unique.length) throw crudErrors.notFound();
       await this.beforeDelete(rows, tx);
+
+      if (this.meta.deleteMode === 'hard') {
+        // 真删之前把整行内容（含子行）留底
+        await this.crud.audit.hardDeleted(
+          {
+            resource: this.meta.prefix,
+            reason: 'delete',
+            ctx: tx.ctx,
+            rows,
+            children: await childRowsOf(tx, tx.meta, unique, false),
+          },
+          tx.manager,
+        );
+      }
+      // 这一次删除的主表和子行同一个批次，恢复主表时只恢复这一批子行
+      const batch = randomUUID();
       if (this.meta.children.length)
-        await deleteChildrenOf(tx, tx.meta, unique);
+        await deleteChildrenOf(tx, tx.meta, unique, batch);
 
       const base =
         this.meta.deleteMode === 'soft'
@@ -281,6 +295,7 @@ export class BaseService<T extends BaseEntity> {
               .update(this.meta.entity)
               .set({
                 deletedAt: () => 'CURRENT_TIMESTAMP(3)',
+                deleteBatch: batch,
                 updatedBy: tx.ctx.userId,
                 updatedAt: () => 'CURRENT_TIMESTAMP(3)',
               } as never)
@@ -297,6 +312,155 @@ export class BaseService<T extends BaseEntity> {
     });
   }
 
+  // ---------- 回收站（只有软删除的资源有） ----------
+
+  /** 回收站列表：只列已删除的数据，按删除时间倒序；搜索框和正常列表用同样的字段 */
+  async recyclePage(query: {
+    page?: number;
+    size?: number;
+    keyword?: string;
+  }): Promise<PageResult<CrudRow<T> & { deletedAt: Date }>> {
+    this.assertSoft();
+    const meta = this.meta;
+    const page = query.page ?? 1;
+    const size = query.size ?? 20;
+    const qb = this.deletedSelect(this.crud.dataSource.manager, 'recycle');
+    const keyword = query.keyword?.trim();
+    if (keyword && meta.keyWords.length)
+      qb.andWhere(
+        new Brackets((b) => {
+          for (const f of meta.keyWords)
+            b.orWhere(`${ALIAS}.\`${this.column(f)}\` LIKE :__kw`);
+        }),
+        { __kw: `%${escapeLike(keyword)}%` },
+      );
+    const [rows, total] = await qb
+      .orderBy(`${ALIAS}.deletedAt`, 'DESC')
+      .addOrderBy(`${ALIAS}.id`, 'DESC')
+      .offset((page - 1) * size)
+      .limit(size)
+      .getManyAndCount();
+    return {
+      list: rows.map((r) => ({
+        ...this.toRow(r),
+        deletedAt: r.deletedAt as Date,
+      })),
+      total,
+      page,
+      size,
+    };
+  }
+
+  /**
+   * 从回收站恢复，整批成败。每行带上用户在回收站里看到的版本号：
+   * - 有一条不在回收站（没删、不存在、无权访问）整批 404；
+   * - 版本号对不上（这期间被恢复、改过又删了，或者被别人处理过）整批 409，避免按过期的确认操作新的删除批次；
+   * - 业务键已被新数据占用时数据库唯一约束（含 activeGuard）报冲突，整批回滚并提示，不会静默覆盖或改名。
+   * 子表只恢复和主表同一删除批次的行。
+   */
+  async restore(
+    items: { id: string; version: number }[],
+  ): Promise<{ count: number }> {
+    this.assertNotChild();
+    this.assertSoft();
+    return this.transaction(async (tx) => {
+      const rows = await this.lockRecycled(tx, items, 'restore');
+      await this.beforeRestore(rows, tx);
+      const qb = tx.manager
+        .createQueryBuilder()
+        .update(this.meta.entity)
+        .set({
+          deletedAt: null,
+          deleteBatch: null,
+          updatedBy: tx.ctx.userId,
+          updatedAt: () => 'CURRENT_TIMESTAMP(3)',
+        } as never)
+        .andWhere('`deleted_at` IS NOT NULL');
+      this.whereIdVersion(qb, items);
+      for (const c of this.scope(tx, 'restore')) qb.andWhere(c.sql, c.params);
+      const result = await qb.execute();
+      if (result.affected !== items.length) throw crudErrors.versionConflict();
+      if (this.meta.children.length)
+        await restoreChildrenOf(
+          tx,
+          tx.meta,
+          rows.map((r) => ({ id: String(r.id), batch: r.deleteBatch })),
+        );
+      await this.afterRestore(rows, tx);
+      return { count: items.length };
+    });
+  }
+
+  /** 彻底删除回收站里的数据，整批成败，版本号规则同恢复；真删前把整行内容（含全部子行）留底 */
+  async purge(
+    items: { id: string; version: number }[],
+  ): Promise<{ count: number }> {
+    this.assertNotChild();
+    this.assertSoft();
+    return this.transaction(async (tx) => {
+      const rows = await this.lockRecycled(tx, items, 'purge');
+      const ids = rows.map((r) => String(r.id));
+      await this.beforePurge(rows, tx);
+      await this.crud.audit.hardDeleted(
+        {
+          resource: this.meta.prefix,
+          reason: 'purge',
+          ctx: tx.ctx,
+          rows,
+          children: await childRowsOf(tx, tx.meta, ids, true),
+        },
+        tx.manager,
+      );
+      if (this.meta.children.length) await purgeChildrenOf(tx, tx.meta, ids);
+      const qb = tx.manager
+        .createQueryBuilder()
+        .delete()
+        .from(this.meta.entity)
+        .andWhere('`deleted_at` IS NOT NULL');
+      this.whereIdVersion(qb, items);
+      for (const c of this.scope(tx, 'purge')) qb.andWhere(c.sql, c.params);
+      const result = await qb.execute();
+      if (result.affected !== items.length) throw crudErrors.versionConflict();
+      return { count: items.length };
+    });
+  }
+
+  /** 锁住回收站里的这些行：缺任何一行整批 404，有版本号对不上整批 409 */
+  private async lockRecycled(
+    tx: CrudTx,
+    items: { id: string; version: number }[],
+    action: CrudAction,
+  ): Promise<T[]> {
+    const ids = items.map((i) => i.id);
+    if (new Set(ids).size !== ids.length)
+      throw crudErrors.badRequest('同一行出现了多次', [
+        { field: 'items', messages: ['同一行出现了多次'] },
+      ]);
+    const rows = await this.deletedSelect(tx.manager, action)
+      .andWhere(`${ALIAS}.id IN (:...__ids)`, { __ids: ids })
+      .setLock('pessimistic_write')
+      .getMany();
+    if (rows.length !== ids.length) throw crudErrors.notFound();
+    const current = new Map(rows.map((r) => [String(r.id), r.version]));
+    if (items.some((i) => current.get(i.id) !== i.version))
+      throw crudErrors.versionConflict();
+    return rows;
+  }
+
+  /** 「编号 + 版本号」逐行条件：(id, version) IN ((?, ?), ...) */
+  private whereIdVersion(
+    qb: { andWhere: (sql: string, params?: object) => unknown },
+    items: { id: string; version: number }[],
+  ): void {
+    const params: Record<string, unknown> = {};
+    const tuples = items.map((it, n) => {
+      params[`__i${n}`] = it.id;
+      params[`__v${n}`] = it.version;
+      return `(:__i${n}, :__v${n})`;
+    });
+    qb.andWhere(`(\`id\`, \`version\`) IN (${tuples.join(', ')})`, params);
+  }
+
   // ---------- 给子类和后续任务用的工具 ----------
 
   /**
@@ -311,10 +475,46 @@ export class BaseService<T extends BaseEntity> {
       );
   }
 
-  /** 开一个事务；里面的读写都要用 tx.manager */
+  private assertSoft(): void {
+    if (this.meta.deleteMode !== 'soft')
+      throw new Error(`${this.meta.prefix} 是硬删除资源，没有回收站`);
+  }
+
+  /** 只查已删除的数据（回收站用），同样带范围条件；删除批次一起取出来 */
+  private deletedSelect(manager: EntityManager, action: CrudAction) {
+    return this.select(manager, action)
+      .withDeleted()
+      .addSelect(`${ALIAS}.deleteBatch`)
+      .andWhere(`${ALIAS}.\`deleted_at\` IS NOT NULL`);
+  }
+
+  /**
+   * 第 4 级定制用：在事务里插入一行，由框架填租户、创建人、修改人，剔除系统字段，返回新编号。
+   * 业务代码不给 tenantId 赋值，也不能借 values 改它。
+   */
+  protected async insertRow(tx: CrudTx, values: Partial<T>): Promise<string> {
+    const result = await tx.manager
+      .createQueryBuilder()
+      .insert()
+      .into(this.meta.entity)
+      .values({
+        ...this.stripSystem(values),
+        tenantId: tx.ctx.tenantId,
+        createdBy: tx.ctx.userId,
+        updatedBy: tx.ctx.userId,
+      } as never)
+      .execute();
+    return String(result.identifiers[0]?.id);
+  }
+
+  /** 开一个事务；里面的读写都要用 tx.manager。跨租户查询模式（@IgnoreTenant）只能读，不能开写事务 */
   protected async transaction<R>(fn: (tx: CrudTx) => Promise<R>): Promise<R> {
     const { dataSource, context, meta } = this.crud;
     const ctx = context.current();
+    if (ctx.ignoreTenant)
+      throw new Error(
+        '跨租户查询模式（@IgnoreTenant）只能读，不能新增、修改、删除',
+      );
     try {
       return await dataSource.transaction((manager) =>
         fn({ manager, ctx, meta: meta as CrudResourceMeta }),
@@ -324,21 +524,29 @@ export class BaseService<T extends BaseEntity> {
     }
   }
 
-  /** 带范围条件的查询，别名固定为 e；第 4 级自定义接口查数据也要用它，不能直接用 Repository */
+  /**
+   * 带范围条件的查询，别名固定为 e；第 4 级自定义接口查数据也要用它，不能直接用 Repository。
+   * 范围条件（租户、以后的数据范围）由框架放在 WHERE 最后整体 AND，调用方用 where / orWhere 也去不掉。
+   */
   protected select(
     manager: EntityManager,
     action: CrudAction,
-  ): SelectQueryBuilder<T> {
+  ): ScopedSelectQueryBuilder<T> {
     const qb = manager.createQueryBuilder(this.meta.entity, ALIAS);
     const ctx = this.crud.context.current();
-    for (const c of this.crud.scope.conditions(
+    const conds = this.crud.scope.conditions(
       ctx,
       this.meta as CrudResourceMeta,
       action,
       ALIAS,
-    ))
-      qb.andWhere(c.sql, c.params);
-    return qb;
+    );
+    return new ScopedSelectQueryBuilder(qb, {
+      conditions: conds.map((c) => c.sql),
+      params: Object.assign({}, ...conds.map((c) => c.params)) as Record<
+        string,
+        unknown
+      >,
+    });
   }
 
   private scope(tx: CrudTx, action: CrudAction) {

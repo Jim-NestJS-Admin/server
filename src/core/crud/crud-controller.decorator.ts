@@ -1,6 +1,5 @@
 import {
   Body,
-  Controller,
   Get,
   HttpCode,
   HttpStatus,
@@ -13,18 +12,32 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { AdminController } from '../endpoint/endpoint.decorators.js';
 import { ApiErrors, ApiResult } from '../swagger/api-result.js';
 import type { BaseEntity } from './base.entity.js';
 import { CRUD_RESOURCE } from './base.controller.js';
 import { buildCrudDtos } from './crud.dto.js';
 import { resolveCrudMeta } from './crud-meta.js';
 import { CrudSchema, CrudSchemaDictItem } from './crud-schema.js';
-import type { CrudControllerOptions } from './crud.types.js';
+import type { CrudApi, CrudControllerOptions } from './crud.types.js';
 
-type Method = 'page' | 'info' | 'add' | 'update' | 'delete' | 'schema';
+type Method =
+  | 'page'
+  | 'info'
+  | 'add'
+  | 'update'
+  | 'delete'
+  | 'recyclePage'
+  | 'restore'
+  | 'purge'
+  | 'schema';
 
 interface RouteSpec {
+  /** 对应的 api 配置项；页面描述总是开放 */
+  api?: CrudApi;
   method: Method;
+  /** 路由路径，不写和方法名相同 */
+  path?: string;
   http: 'get' | 'post';
   summary: string;
   body?: Type;
@@ -56,6 +69,7 @@ export function CrudController<T extends BaseEntity>(
     const label = meta.label;
     const specs: RouteSpec[] = [
       {
+        api: 'page',
         method: 'page',
         http: 'post',
         summary: `${label}分页列表`,
@@ -64,6 +78,7 @@ export function CrudController<T extends BaseEntity>(
         errors: [400],
       },
       {
+        api: 'info',
         method: 'info',
         http: 'post',
         summary: `${label}详情`,
@@ -72,6 +87,7 @@ export function CrudController<T extends BaseEntity>(
         errors: [400, 404],
       },
       {
+        api: 'add',
         method: 'add',
         http: 'post',
         summary: `新增${label}`,
@@ -80,6 +96,7 @@ export function CrudController<T extends BaseEntity>(
         errors: [400],
       },
       {
+        api: 'update',
         method: 'update',
         http: 'post',
         summary: `修改${label}`,
@@ -88,6 +105,7 @@ export function CrudController<T extends BaseEntity>(
         errors: [400, 404, 409],
       },
       {
+        api: 'delete',
         method: 'delete',
         http: 'post',
         summary: `删除${label}（整批成败）`,
@@ -95,8 +113,36 @@ export function CrudController<T extends BaseEntity>(
         result: dtos.DeleteResult,
         errors: [400, 404],
       },
+      {
+        api: 'recycle',
+        method: 'recyclePage',
+        path: 'recycle/page',
+        http: 'post',
+        summary: `${label}回收站列表`,
+        body: dtos.RecyclePageBody,
+        result: dtos.RecyclePageResult,
+        errors: [400],
+      },
+      {
+        api: 'restore',
+        method: 'restore',
+        http: 'post',
+        summary: `从回收站恢复${label}（整批成败）`,
+        body: dtos.RecycleActionBody,
+        result: dtos.DeleteResult,
+        errors: [400, 404, 409],
+      },
+      {
+        api: 'purge',
+        method: 'purge',
+        http: 'post',
+        summary: `彻底删除${label}（整批成败，不能撤销）`,
+        body: dtos.RecycleActionBody,
+        result: dtos.DeleteResult,
+        errors: [400, 404, 409],
+      },
     ];
-    const enabled = specs.filter((s) => meta.api.includes(s.method as never));
+    const enabled = specs.filter((s) => s.api && meta.api.includes(s.api));
     enabled.push({
       method: 'schema',
       http: 'get',
@@ -127,7 +173,9 @@ export function CrudController<T extends BaseEntity>(
       }
       const descriptor = Object.getOwnPropertyDescriptor(proto, spec.method)!;
       const decorators: MethodDecorator[] = [
-        spec.http === 'get' ? Get(spec.method) : Post(spec.method),
+        spec.http === 'get'
+          ? Get(spec.path ?? spec.method)
+          : Post(spec.path ?? spec.method),
         HttpCode(HttpStatus.OK),
         ApiOperation({
           operationId: `${lowerFirst(meta.name)}${spec.method.charAt(0).toUpperCase()}${spec.method.slice(1)}`,
@@ -156,6 +204,6 @@ export function CrudController<T extends BaseEntity>(
 
     Reflect.defineMetadata(CRUD_RESOURCE, { options, meta }, target);
     ApiTags(`${meta.prefix} ${label}`)(target);
-    Controller(`admin/${meta.prefix}`)(target);
+    AdminController(meta.prefix)(target);
   };
 }

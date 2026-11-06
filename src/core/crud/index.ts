@@ -10,6 +10,7 @@ export {
 } from './crud-field.decorator.js';
 export { CrudScope, type ScopeCondition } from './crud-scope.js';
 export { CrudRuntime } from './crud.runtime.js';
+export { CrudAudit, type HardDeleteEvent } from './crud-audit.js';
 export { crudErrors } from './crud.errors.js';
 export type {
   CrudApi,

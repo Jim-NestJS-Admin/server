@@ -71,6 +71,11 @@ describe('资源定义 resolveCrudMeta：配置写错在启动时就报错', () 
       { prefix: 'demo/item', api: ['export' as never] },
       /export/,
     ],
+    [
+      '硬删除资源开回收站',
+      { prefix: 'demo/item', delete: 'hard', api: ['page', 'restore'] },
+      /硬删除的资源没有回收站/,
+    ],
   ])('%s', (_name, patch, error) => {
     expect(() => resolveCrudMeta({ ...base, ...patch } as never)).toThrow(
       error,

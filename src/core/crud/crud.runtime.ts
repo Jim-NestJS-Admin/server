@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { CrudAudit } from './crud-audit.js';
 import { CrudContextProvider, CrudScope } from './crud-scope.js';
 import type { CrudResourceMeta } from './crud.types.js';
 
@@ -15,6 +16,7 @@ export class CrudRuntime {
     readonly dataSource: DataSource,
     readonly scope: CrudScope,
     readonly context: CrudContextProvider,
+    readonly audit: CrudAudit,
   ) {}
 
   register(meta: CrudResourceMeta): void {

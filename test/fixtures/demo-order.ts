@@ -19,7 +19,9 @@ import {
 
 /** 主子表演示：订单 + 明细 + 备注，只在测试里注册 */
 @Entity('demo_order')
-@Index('uk_demo_order_no', ['tenantId', 'orderNo'], { unique: true })
+@Index('uk_demo_order_no', ['tenantId', 'orderNo', 'activeGuard'], {
+  unique: true,
+})
 export class DemoOrderEntity extends BaseEntity {
   @CrudField({
     label: '单号',
@@ -116,7 +118,16 @@ export class DemoOrderTagEntity extends BaseEntity {
   prefix: 'test/demo-order',
   label: '演示订单',
   entity: DemoOrderEntity,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: [
+    'page',
+    'info',
+    'add',
+    'update',
+    'delete',
+    'recycle',
+    'restore',
+    'purge',
+  ],
   children: [
     {
       resource: 'items',
@@ -166,3 +177,43 @@ export class DemoOrderItemReadService extends BaseService<DemoOrderItemEntity> {
   service: DemoOrderItemReadService,
 })
 export class DemoOrderItemReadController extends BaseController<DemoOrderItemEntity> {}
+
+/** 硬删除的主子表：修改时单独删掉的子行也是真删，删之前要留底 */
+@Entity('demo_hard_order')
+export class DemoHardOrderEntity extends BaseEntity {
+  @CrudField({ label: '标题', form: { required: true } })
+  @IsString()
+  @Length(1, 64)
+  @Column({ type: 'varchar', length: 64 })
+  title: string;
+}
+
+@Entity('demo_hard_line')
+export class DemoHardLineEntity extends BaseEntity {
+  @Index()
+  @Column({ type: 'bigint', unsigned: true })
+  orderId: string;
+
+  @CrudField({ label: '内容', form: { required: true } })
+  @IsString()
+  @Length(1, 64)
+  @Column({ type: 'varchar', length: 64 })
+  content: string;
+}
+
+@CrudController({
+  prefix: 'test/demo-hard-order',
+  label: '硬删除订单',
+  entity: DemoHardOrderEntity,
+  api: ['info', 'add', 'update', 'delete'],
+  delete: 'hard',
+  children: [
+    {
+      resource: 'lines',
+      label: '行',
+      entity: DemoHardLineEntity,
+      foreignKey: 'orderId',
+    },
+  ],
+})
+export class DemoHardOrderController extends BaseController<DemoHardOrderEntity> {}

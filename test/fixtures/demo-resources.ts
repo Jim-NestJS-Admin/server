@@ -7,7 +7,7 @@ import {
   Matches,
   MaxLength,
 } from 'class-validator';
-import { Column, Entity, Index } from 'typeorm';
+import { Column, Entity, Index, type SelectQueryBuilder } from 'typeorm';
 import {
   BaseController,
   BaseEntity,
@@ -20,7 +20,9 @@ import {
 
 /** 端到端测试用的资源，只在测试里注册，不进正式应用 */
 @Entity('demo_user')
-@Index('uk_demo_user_username', ['tenantId', 'username'], { unique: true })
+@Index('uk_demo_user_username', ['tenantId', 'username', 'activeGuard'], {
+  unique: true,
+})
 export class DemoUserEntity extends BaseEntity {
   @CrudField({
     label: '账号',
@@ -119,6 +121,27 @@ export class DemoUserService extends BaseService<DemoUserEntity> {
     this.calls.push(`beforeUpdate:${existing.nickname}->${changes.nickname}`);
   }
 
+  /** 第 4 级定制的写法：用 select() 查数据，故意用 where 想替换掉范围条件 */
+  async otherTenantProbe(id: string): Promise<string[]> {
+    const rows = await this.select(this.crud.dataSource.manager, 'page')
+      .where('e.id = :pid', { pid: id })
+      .getMany();
+    return rows.map((r) => r.id);
+  }
+
+  /** 测试用：把 select() 拿到的查询转成 update，应该直接报错 */
+  async convertProbe(id: string): Promise<void> {
+    const qb = this.select(
+      this.crud.dataSource.manager,
+      'update',
+    ) as unknown as SelectQueryBuilder<DemoUserEntity>;
+    await qb
+      .update()
+      .set({ nickname: 'hacked' })
+      .where('id = :id', { id })
+      .execute();
+  }
+
   protected override async beforeDelete(rows: DemoUserEntity[]): Promise<void> {
     this.calls.push(`beforeDelete:${rows.length}`);
     if (rows.some((r) => r.username === 'protected'))
@@ -130,7 +153,16 @@ export class DemoUserService extends BaseService<DemoUserEntity> {
   prefix: 'test/demo-user',
   label: '演示用户',
   entity: DemoUserEntity,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: [
+    'page',
+    'info',
+    'add',
+    'update',
+    'delete',
+    'recycle',
+    'restore',
+    'purge',
+  ],
   service: DemoUserService,
   pageQuery: {
     keyWords: ['username', 'nickname'],
