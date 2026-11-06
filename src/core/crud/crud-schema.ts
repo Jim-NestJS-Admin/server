@@ -170,6 +170,12 @@ export class CrudSchema {
       '每个业务字段在本页面（列表权限的本次有效角色）下的最宽字段权限状态；逐行以 _fieldState 为准',
   })
   fieldPerms?: Record<string, FieldPermStateDto>;
+  @ApiPropertyOptional({
+    type: Object,
+    description:
+      '生效的显示配置（代码默认 → 模块配置 → 用户列设置，按字段权限裁剪后），结构见契约 page-config.md 第 2、4 节',
+  })
+  view?: unknown;
 }
 
 export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {

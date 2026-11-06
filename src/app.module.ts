@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from './core/auth/auth.module.js';
 import { CoreModule } from './core/core.module.js';
 import { PreferenceModule } from './core/preference/preference.controller.js';
+import { PageConfigModule } from './core/page-config/page-config.module.js';
 import { PermissionModule } from './core/permission/permission.module.js';
 
 @Module({
@@ -13,6 +14,7 @@ import { PermissionModule } from './core/permission/permission.module.js';
     AuthModule.forRoot(),
     PermissionModule.forRoot(),
     PreferenceModule,
+    PageConfigModule,
   ],
 })
 export class AppModule {}
