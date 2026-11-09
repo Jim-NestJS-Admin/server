@@ -7298,6 +7298,83 @@
         }
       }
     },
+    "/admin/system/dict-item/export": {
+      "post": {
+        "operationId": "systemDictItemExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemDictItemPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出字典项（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/dict-item 字典项"
+        ],
+        "x-permission": {
+          "code": "system:dict-item:export",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/dict-item/info": {
       "post": {
         "operationId": "systemDictItemInfo",
@@ -7762,6 +7839,83 @@
         "x-permission": {
           "code": "system:dict-type:delete",
           "risk": "high"
+        }
+      }
+    },
+    "/admin/system/dict-type/export": {
+      "post": {
+        "operationId": "systemDictTypeExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemDictTypePageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出字典类型（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/dict-type 字典类型"
+        ],
+        "x-permission": {
+          "code": "system:dict-type:export",
+          "risk": "normal"
         }
       }
     },
@@ -8688,6 +8842,83 @@
         }
       }
     },
+    "/admin/system/login-log/export": {
+      "post": {
+        "operationId": "systemLoginLogExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemLoginLogPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出登录日志（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/login-log 登录日志"
+        ],
+        "x-permission": {
+          "code": "system:login-log:export",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/login-log/info": {
       "post": {
         "operationId": "systemLoginLogInfo",
@@ -9018,6 +9249,83 @@
         }
       }
     },
+    "/admin/system/menu/export": {
+      "post": {
+        "operationId": "systemMenuExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemMenuPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出菜单（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/menu 菜单"
+        ],
+        "x-permission": {
+          "code": "system:menu:export",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/menu/info": {
       "post": {
         "operationId": "systemMenuInfo",
@@ -9288,6 +9596,83 @@
         ],
         "x-permission": {
           "code": "system:menu:update",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/system/operation-log/export": {
+      "post": {
+        "operationId": "systemOperationLogExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemOperationLogPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出操作日志（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/operation-log 操作日志"
+        ],
+        "x-permission": {
+          "code": "system:operation-log:export",
           "risk": "normal"
         }
       }
@@ -9619,6 +10004,83 @@
         "x-permission": {
           "code": "system:org:delete",
           "risk": "high"
+        }
+      }
+    },
+    "/admin/system/org/export": {
+      "post": {
+        "operationId": "systemOrgExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemOrgPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出组织（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/org 组织"
+        ],
+        "x-permission": {
+          "code": "system:org:export",
+          "risk": "normal"
         }
       }
     },
@@ -10618,6 +11080,83 @@
         "x-permission": {
           "code": "system:parameter:delete",
           "risk": "high"
+        }
+      }
+    },
+    "/admin/system/parameter/export": {
+      "post": {
+        "operationId": "systemParameterExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemParameterPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出系统参数（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/parameter 系统参数"
+        ],
+        "x-permission": {
+          "code": "system:parameter:export",
+          "risk": "normal"
         }
       }
     },
@@ -11670,6 +12209,83 @@
         }
       }
     },
+    "/admin/system/role/export": {
+      "post": {
+        "operationId": "systemRoleExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemRolePageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出角色（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/role 角色"
+        ],
+        "x-permission": {
+          "code": "system:role:export",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/role/info": {
       "post": {
         "operationId": "systemRoleInfo",
@@ -12086,6 +12702,83 @@
         }
       }
     },
+    "/admin/system/user-role/export": {
+      "post": {
+        "operationId": "systemUserRoleExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemUserRolePageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出用户组织角色分配（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/user-role 用户组织角色分配"
+        ],
+        "x-permission": {
+          "code": "system:user-role:export",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/user-role/info": {
       "post": {
         "operationId": "systemUserRoleInfo",
@@ -12499,6 +13192,83 @@
         "x-permission": {
           "code": "system:user-supervisor:delete",
           "risk": "high"
+        }
+      }
+    },
+    "/admin/system/user-supervisor/export": {
+      "post": {
+        "operationId": "systemUserSupervisorExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemUserSupervisorPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出用户多上级（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/user-supervisor 用户多上级"
+        ],
+        "x-permission": {
+          "code": "system:user-supervisor:export",
+          "risk": "normal"
         }
       }
     },
@@ -13007,6 +13777,83 @@
         "x-permission": {
           "code": "system:user:delete",
           "risk": "high"
+        }
+      }
+    },
+    "/admin/system/user/export": {
+      "post": {
+        "operationId": "systemUserExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemUserPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出用户（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/user 用户"
+        ],
+        "x-permission": {
+          "code": "system:user:export",
+          "risk": "normal"
         }
       }
     },

@@ -34,7 +34,7 @@ class DictionaryOptions {
   label: '字典类型',
   entity: SystemDictType,
   service: SystemDictTypeService,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: ['export', 'page', 'info', 'add', 'update', 'delete'],
   pageQuery: { keyWords: ['code', 'name'], fieldEq: ['enabled'] },
 })
 export class SystemDictTypeController extends BaseController<SystemDictType> {
@@ -57,7 +57,7 @@ export class SystemDictTypeController extends BaseController<SystemDictType> {
   label: '字典项',
   entity: SystemDictItem,
   service: SystemDictItemService,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: ['export', 'page', 'info', 'add', 'update', 'delete'],
   pageQuery: {
     keyWords: ['label', 'value'],
     fieldEq: ['typeId', 'enabled'],
@@ -70,7 +70,7 @@ export class SystemDictItemController extends BaseController<SystemDictItem> {}
   label: '系统参数',
   entity: SystemParameter,
   service: SystemParameterService,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: ['export', 'page', 'info', 'add', 'update', 'delete'],
   pageQuery: { keyWords: ['key'] },
 })
 export class SystemParameterController extends BaseController<SystemParameter> {}
@@ -78,7 +78,7 @@ export class SystemParameterController extends BaseController<SystemParameter> {
   prefix: 'system/login-log',
   label: '登录日志',
   entity: SystemLoginLog,
-  api: ['page', 'info'],
+  api: ['export', 'page', 'info'],
   pageQuery: { keyWords: ['username'], fieldEq: ['event', 'success'] },
 })
 export class SystemLoginLogController extends BaseController<SystemLoginLog> {}
@@ -86,7 +86,7 @@ export class SystemLoginLogController extends BaseController<SystemLoginLog> {}
   prefix: 'system/operation-log',
   label: '操作日志',
   entity: SystemOperationLog,
-  api: ['page', 'info'],
+  api: ['export', 'page', 'info'],
   pageQuery: { keyWords: ['action', 'resource'], fieldEq: ['success'] },
 })
 export class SystemOperationLogController extends BaseController<SystemOperationLog> {}

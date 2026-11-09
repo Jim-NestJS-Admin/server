@@ -58,7 +58,7 @@ function sensitiveWrites(prefix: string): ClassDecorator {
   label: '用户',
   entity: SystemUser,
   service: SystemUserService,
-  api: ['page', 'info', 'update', 'delete'],
+  api: ['export', 'page', 'info', 'update', 'delete'],
   pageQuery: {
     keyWords: ['username', 'nickname'],
     fieldEq: ['enabled', 'defaultOrgId'],
@@ -135,7 +135,7 @@ export class SystemUserController extends BaseController<SystemUser> {
   label: '角色',
   entity: SystemRole,
   service: SystemRoleService,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: ['export', 'page', 'info', 'add', 'update', 'delete'],
   pageQuery: { keyWords: ['code', 'name'], fieldEq: ['enabled'] },
 })
 export class SystemRoleController extends BaseController<SystemRole> {}
@@ -146,7 +146,7 @@ export class SystemRoleController extends BaseController<SystemRole> {}
   label: '组织',
   entity: SystemOrg,
   service: SystemOrgService,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: ['export', 'page', 'info', 'add', 'update', 'delete'],
   pageQuery: {
     keyWords: ['name'],
     fieldEq: ['parentId', 'enabled'],
@@ -161,7 +161,7 @@ export class SystemOrgController extends BaseController<SystemOrg> {}
   label: '菜单',
   entity: SystemMenu,
   service: SystemMenuService,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: ['export', 'page', 'info', 'add', 'update', 'delete'],
   pageQuery: {
     keyWords: ['title', 'path'],
     fieldEq: ['parentId', 'type'],
@@ -176,7 +176,7 @@ export class SystemMenuController extends BaseController<SystemMenu> {}
   label: '用户组织角色分配',
   entity: SystemUserRole,
   service: SystemUserRoleService,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: ['export', 'page', 'info', 'add', 'update', 'delete'],
   pageQuery: { fieldEq: ['userId', 'roleId', 'scopeOrgId'] },
 })
 export class SystemUserRoleController extends BaseController<SystemUserRole> {}
@@ -187,7 +187,7 @@ export class SystemUserRoleController extends BaseController<SystemUserRole> {}
   label: '用户多上级',
   entity: SystemUserSupervisor,
   service: SystemSupervisorService,
-  api: ['page', 'info', 'add', 'update', 'delete'],
+  api: ['export', 'page', 'info', 'add', 'update', 'delete'],
   pageQuery: { fieldEq: ['userId', 'supervisorId'] },
 })
 export class SystemSupervisorController extends BaseController<SystemUserSupervisor> {}
