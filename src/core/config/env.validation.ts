@@ -92,6 +92,14 @@ export class EnvironmentVariables {
   @IsBoolean()
   DB_SYNCHRONIZE?: boolean;
 
+  /** 只读查询的超时（毫秒），超过由 MySQL 中止；0 表示不限。导出 1 万行也要在这个时间内完成 */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(0)
+  DB_QUERY_TIMEOUT_MS: number = 30000;
+
   @IsString()
   @IsNotEmpty()
   REDIS_HOST: string = '127.0.0.1';

@@ -48,6 +48,7 @@ export class AppConfigService {
     user: string;
     password: string;
     synchronize: boolean;
+    queryTimeoutMs: number;
   } {
     return {
       host: this.config.get('DB_HOST', { infer: true }),
@@ -56,6 +57,7 @@ export class AppConfigService {
       user: this.config.get('DB_USER', { infer: true }),
       password: this.config.get('DB_PASSWORD', { infer: true }),
       synchronize: this.config.get('DB_SYNCHRONIZE', { infer: true }) ?? false,
+      queryTimeoutMs: this.config.get('DB_QUERY_TIMEOUT_MS', { infer: true }),
     };
   }
 
