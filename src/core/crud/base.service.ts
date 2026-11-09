@@ -18,6 +18,7 @@ import { mask } from '../field-perm/masks.js';
 import { escapeSpreadsheetCell } from '../security/sanitize.js';
 import { crudErrors, translateDbError } from './crud.errors.js';
 import type { CrudAudit } from './crud-audit.js';
+import type { IdempotencyLedger } from '../security/idempotency.ledger.js';
 import type { AuthzContext } from '../permission/authz-context.js';
 import {
   childRowsOf,
@@ -61,6 +62,8 @@ export interface CrudBinding<T extends BaseEntity> {
   audit: CrudAudit;
   /** 本次请求的授权（字段权限按行裁剪用） */
   authz: AuthzContext;
+  /** 幂等记录账本（T25）：写事务提交前把幂等记录写进同一个事务 */
+  idempotency: IdempotencyLedger;
 }
 
 const ALIAS = 'e';
@@ -589,7 +592,7 @@ export class BaseService<T extends BaseEntity> {
         '跨租户查询模式（@IgnoreTenant）只能读，不能新增、修改、删除',
       );
     try {
-      return await dataSource.transaction((manager) =>
+      return await this.crud.idempotency.transaction((manager) =>
         fn({ manager, ctx, meta: meta as CrudResourceMeta }),
       );
     } catch (err) {

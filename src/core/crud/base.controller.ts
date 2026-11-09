@@ -110,6 +110,7 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
       childOwner: (entity) => this.crudRuntime.childOwner(entity),
       audit: this.crudRuntime.audit,
       authz: this.crudRuntime.authz,
+      idempotency: this.crudRuntime.idempotency,
     });
     this.crudRuntime.register(meta);
     this.service = service;
