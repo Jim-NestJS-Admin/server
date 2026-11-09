@@ -1,4 +1,8 @@
 import type { CrudResourceMeta } from '../crud/crud.types.js';
+import {
+  defaultColumnOrder,
+  defaultHiddenColumn,
+} from '../crud/crud-schema.js';
 
 export interface ViewColumn {
   field: string;
@@ -205,13 +209,24 @@ export function mergeView(
   );
   const userCols = new Map((user?.columns ?? []).map((c) => [c.field, c]));
   const fields = order(
-    order(meta.readable, admin?.list?.columns),
+    order(defaultColumnOrder(meta), admin?.list?.columns),
     user?.columns ?? admin?.list?.columns,
   );
+  // 只带设置过的属性，没设置的（undefined）不能盖掉代码默认
   const pick = (c?: ViewColumn) =>
-    c ? { width: c.width, hidden: c.hidden, fixed: c.fixed } : {};
+    c
+      ? Object.fromEntries(
+          Object.entries({
+            width: c.width,
+            hidden: c.hidden,
+            fixed: c.fixed,
+          }).filter(([, v]) => v !== undefined),
+        )
+      : {};
   const columns: ViewColumn[] = fields.filter(visible).map((field) => {
     const merged = {
+      // 代码默认：系统字段（编号、版本号等）默认隐藏，管理员和用户的设置覆盖它
+      ...(defaultHiddenColumn(meta, field) ? { hidden: true } : {}),
       ...pick(adminCols.get(field)),
       ...pick(userCols.get(field)),
     };

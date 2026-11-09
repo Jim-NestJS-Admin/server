@@ -65,6 +65,22 @@ const SYSTEM_COLUMN_ORDER = [
   'version',
 ];
 
+/** 列表默认的列顺序：业务字段在前（按实体里的顺序），系统字段在后 */
+export function defaultColumnOrder(meta: CrudResourceMeta): string[] {
+  return [
+    ...meta.readable.filter((p) => !SYSTEM_COLUMN_ORDER.includes(p)),
+    ...SYSTEM_COLUMN_ORDER.filter((p) => meta.readable.includes(p)),
+  ];
+}
+
+/** 默认不显示的列：资源没有在 systemColumns 里列出的系统字段 */
+export function defaultHiddenColumn(
+  meta: CrudResourceMeta,
+  p: string,
+): boolean {
+  return SYSTEM_COLUMN_ORDER.includes(p) && !meta.systemColumns?.[p];
+}
+
 function columnType(entity: Function, p: string): CrudColumnType {
   if (p === 'createdBy' || p === 'updatedBy' || p === 'orgId')
     return 'reference';

@@ -10,6 +10,7 @@ const meta = {
   sortable: ['name', 'phone', 'id'],
   defaultSort: [{ field: 'id', order: 'desc' }],
   maxSize: 100,
+  systemColumns: { createdAt: true },
 } as unknown as CrudResourceMeta;
 
 describe('在线页面配置规则（T23）', () => {
@@ -55,12 +56,16 @@ describe('在线页面配置规则（T23）', () => {
       state,
       false,
     );
+    // 管理员 / 用户指定的在前，其余按代码默认：业务字段在前，系统字段（编号）在后且默认隐藏
     expect(v.list.columns.map((c) => c.field)).toEqual([
       'name',
       'status',
-      'id',
       'phone',
+      'id',
     ]);
+    expect(v.list.columns.find((c) => c.field === 'id')).toMatchObject({
+      hidden: true,
+    });
     expect(v.list.columns.find((c) => c.field === 'name')).toMatchObject({
       hidden: true,
     });
