@@ -195,16 +195,15 @@ it('迁移列与实体一致，并包含软删除生成列和租户索引；不�
     generatedType: 'STORED',
     asExpression: 'IF(`deleted_at` IS NULL, 1, NULL)',
   });
-  expect(
-    table!.indices
-      .map((i) => ({ name: i.name ?? '', columns: i.columnNames }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
-  ).toEqual(
+  // 索引按列比较：BaseEntity 上 tenant_id、org_id 的索引是 TypeORM 自动起名（IDX_哈希），
+  // 迁移链给 org_id 起的是 idx_file_asset_org（CreateFileAsset 和 FileAssetOrganization 都用这个名，
+  // 已执行过的库就是这个名）。名字不同不影响约束和查询；实体上显式起名的索引名字必须一致。
+  const cols = (c: string[]) => c.join(',');
+  expect(table!.indices.map((i) => cols(i.columnNames)).sort()).toEqual(
     entity.indices
-      .map((i) => ({
-        name: i.name,
-        columns: i.columns.map((c) => c.databaseName),
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
+      .map((i) => cols(i.columns.map((c) => c.databaseName)))
+      .sort(),
   );
+  for (const i of entity.indices.filter((x) => x.givenName))
+    expect(table!.indices.map((t) => t.name)).toContain(i.givenName);
 });

@@ -35,6 +35,48 @@ import { AllExceptionsFilter } from '../../core/filters/all-exceptions.filter.js
 import { ResponseInterceptor } from '../../core/interceptors/response.interceptor.js';
 import { createValidationPipe } from '../../core/validation.js';
 import { buildOpenApiDocument } from '../../core/swagger/swagger.js';
+import { Global, Module } from '@nestjs/common';
+import { IdempotencyRunner } from '../../core/security/idempotency.interceptor.js';
+import type { IdempotencyLedger } from '../../core/security/idempotency.ledger.js';
+import type { RedisService } from '../../core/redis/redis.service.js';
+import type { RequestContext } from '../../core/tenant/request-context.js';
+
+/**
+ * 独立文件模块测试不装 Core/Crud：用真实的 IdempotencyRunner，配内存版 Redis 和账本替身，
+ * 上传幂等的行为（文件内容进摘要、同键重放、换文件 409）照样能断言。
+ */
+const idemRedis = new Map<string, string>();
+const idemRunner = new IdempotencyRunner(
+  {
+    tenantKey: (...p: string[]) => p.join(':'),
+    call: async (fn: (r: unknown) => unknown) =>
+      fn({
+        set: (k: string, v: string, ...a: unknown[]) => {
+          if (a.includes('NX') && idemRedis.has(k)) return null;
+          idemRedis.set(k, v);
+          return 'OK';
+        },
+        get: (k: string) => idemRedis.get(k) ?? null,
+        del: (k: string) => idemRedis.delete(k),
+      }),
+  } as unknown as RedisService,
+  {
+    current: () => ({ tenantId: '1', orgId: '1', userId: '1' }),
+  } as unknown as RequestContext,
+  {
+    find: async () => null,
+    begin: () => undefined,
+    complete: async () => undefined,
+    skip: () => undefined,
+    pending: () => undefined,
+  } as unknown as IdempotencyLedger,
+);
+@Global()
+@Module({
+  providers: [{ provide: IdempotencyRunner, useValue: idemRunner }],
+  exports: [IdempotencyRunner],
+})
+class TestIdempotencyModule {}
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg==',
   'base64',
@@ -210,6 +252,7 @@ describe('真实 HTTP 的独立文件模块（无数据库、测试替身仅在�
     store = new LocalBlobStore(await temp());
     const module = await Test.createTestingModule({
       imports: [
+        TestIdempotencyModule,
         FileModule.register({
           store,
           policy,
@@ -253,6 +296,20 @@ describe('真实 HTTP 的独立文件模块（无数据库、测试替身仅在�
     expect(download.body).toEqual(png);
     expect(download.headers['content-disposition']).toContain('attachment');
     expect(download.headers['x-content-type-options']).toBe('nosniff');
+  });
+  it('上传幂等：同一个键同一个文件只存一次，换了文件内容 409', async () => {
+    const before = files.size;
+    const send = (content: Buffer) =>
+      request(app.getHttpServer())
+        .post('/admin/file/asset/upload')
+        .set('Idempotency-Key', 'upload-key-0001')
+        .attach('file', content, { filename: 'a.png' });
+    const first = await send(png).expect(200);
+    const again = await send(png).expect(200);
+    expect(again.body.data).toEqual(first.body.data);
+    expect(files.size).toBe(before + 1);
+    await send(Buffer.concat([png, Buffer.from([0])])).expect(409);
+    expect(files.size).toBe(before + 1);
   });
   it('跨租户和不存在 ID 同样404，不读取对象存储', async () => {
     principal = { tenantId: '2', userId: '2' };
@@ -321,13 +378,14 @@ describe('真实 HTTP 的独立文件模块（无数据库、测试替身仅在�
   });
   it('导出文档包含 multipart、二进制下载和明确权限扩展', () => {
     const doc = buildOpenApiDocument(app, 'test');
+    // core 的 @Perms 写的是 x-permission（权限码 + 风险级别），前端据此生成权限常量
     expect(
       (
         doc.paths['/admin/file/asset/upload'].post as unknown as {
-          'x-permissions': string[];
+          'x-permission': { code: string };
         }
-      )['x-permissions'],
-    ).toEqual(['file:asset:upload']);
+      )['x-permission'],
+    ).toMatchObject({ code: 'file:asset:upload' });
     expect(
       doc.paths['/admin/file/asset/download'].post?.responses['200'],
     ).toMatchObject({
@@ -341,7 +399,7 @@ describe('真实 HTTP 的独立文件模块（无数据库、测试替身仅在�
   });
   it('未装配真实认证时默认401，在解析上传内容之前拒绝', async () => {
     const module = await Test.createTestingModule({
-      imports: [FileModule.register({ store, policy })],
+      imports: [TestIdempotencyModule, FileModule.register({ store, policy })],
     }).compile();
     const denied = module.createNestApplication();
     denied.useLogger(false);
@@ -360,6 +418,7 @@ describe('真实 HTTP 的独立文件模块（无数据库、测试替身仅在�
     const put = vi.spyOn(store, 'put');
     const module = await Test.createTestingModule({
       imports: [
+        TestIdempotencyModule,
         FileModule.register({
           store,
           policy,

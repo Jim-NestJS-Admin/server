@@ -7,8 +7,13 @@ describe('代码生成安全写盘（T21）', () => {
   const root = mkdtempSync(join(tmpdir(), 'codegen-root-'));
   const outside = mkdtempSync(join(tmpdir(), 'codegen-outside-'));
   mkdirSync(join(root, 'src/modules'), { recursive: true });
-  // 目录联接 / 符号链接指向项目外
-  symlinkSync(outside, join(root, 'src/modules/evil'), 'dir');
+  // 目录联接 / 符号链接指向项目外。Windows 普通用户建不了目录符号链接（EPERM），
+  // 用目录联接（junction，不需要管理员权限）——这正是 Windows 上真实会遇到的逃逸方式
+  symlinkSync(
+    outside,
+    join(root, 'src/modules/evil'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
 
   it('白名单目录里的正常路径', () => {
     expect(

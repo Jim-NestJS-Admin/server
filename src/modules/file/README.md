@@ -45,7 +45,7 @@ S3 适配器通过 `PutObject` 的 `IfNoneMatch: '*'` 条件写入防止覆盖�
 | POST /admin/file/asset/upload   | multipart/form-data，仅 `file` 一项 | `{code:1000,data:{id,name,mime,bytes},message}`，不返回对象key/原名称/云SDK URL |
 | POST /admin/file/asset/download | `{id:string}`，其他字段拒绝         | 原始二进制附件；错误仍是统一中文响应                                            |
 
-OpenAPI 带 operationId、multipart binary、下载binary响应及 `x-permissions`。真实认证尚未装配，此处是后端可测试契约，不表示正式应用已开放或通过联调。导出正式 admin.json 没有这些端点是因为模块未注册；没有把测试接口混进正式客户端。
+OpenAPI 带 operationId、multipart binary、下载binary响应及 `x-permission`。真实认证尚未装配，此处是后端可测试契约，不表示正式应用已开放或通过联调。导出正式 admin.json 没有这些端点是因为模块未注册；没有把测试接口混进正式客户端。
 
 ## 依赖与验证
 

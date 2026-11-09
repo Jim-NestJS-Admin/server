@@ -52,7 +52,12 @@ export class IdempotencyEntity {
   @Column({ type: 'json', nullable: true })
   result: unknown;
 
-  @CreateDateColumn({ type: 'datetime', precision: 3 })
+  // 默认值的精度必须和列一致：TypeORM 默认 CURRENT_TIMESTAMP(6)，MySQL 8 对 datetime(3) 直接报错
+  @CreateDateColumn({
+    type: 'datetime',
+    precision: 3,
+    default: () => 'CURRENT_TIMESTAMP(3)',
+  })
   createdAt: Date;
 
   @Index()
