@@ -68,9 +68,18 @@ const SYSTEM_COLUMN_ORDER = [
 /** 列表默认的列顺序：业务字段在前（按实体里的顺序），系统字段在后 */
 export function defaultColumnOrder(meta: CrudResourceMeta): string[] {
   return [
-    ...meta.readable.filter((p) => !SYSTEM_COLUMN_ORDER.includes(p)),
+    ...businessOrder(meta, meta.readable),
     ...SYSTEM_COLUMN_ORDER.filter((p) => meta.readable.includes(p)),
   ];
+}
+
+/** 业务字段顺序；树形资源把名称字段放第一列（树的展开箭头在第一列） */
+function businessOrder(meta: CrudResourceMeta, fields: string[]): string[] {
+  const list = fields.filter((p) => !SYSTEM_COLUMN_ORDER.includes(p));
+  const name = meta.tree?.nameField;
+  return name && list.includes(name)
+    ? [name, ...list.filter((p) => p !== name)]
+    : list;
 }
 
 /** 默认不显示的列：资源没有在 systemColumns 里列出的系统字段 */
@@ -78,6 +87,8 @@ export function defaultHiddenColumn(
   meta: CrudResourceMeta,
   p: string,
 ): boolean {
+  // 树形资源的父级字段：表格本身就是树，默认不显示
+  if (meta.tree?.parentField === p) return true;
   return SYSTEM_COLUMN_ORDER.includes(p) && !meta.systemColumns?.[p];
 }
 
@@ -283,8 +294,9 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
   const shown = meta.systemColumns;
   const systemLabel = (p: string) =>
     typeof shown[p] === 'string' ? (shown[p] as string) : label(p);
-  const business = meta.readable.filter(
-    (p) => !SYSTEM_COLUMN_ORDER.includes(p) && field(p)?.list !== false,
+  const business = businessOrder(
+    meta,
+    meta.readable.filter((p) => field(p)?.list !== false),
   );
   const system = SYSTEM_COLUMN_ORDER.filter((p) => meta.readable.includes(p));
   const columns: CrudSchemaColumn[] = [
@@ -298,6 +310,7 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
         sortable: meta.sortable.includes(p),
         ...(f?.dict ? { dict: p } : {}),
         type: columnType(meta.entity, p),
+        ...(meta.tree?.parentField === p ? { hidden: true } : {}),
       };
     }),
     ...system.map((p) => ({

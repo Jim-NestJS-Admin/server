@@ -187,7 +187,15 @@ export class SystemMenu extends BaseEntity {
   @Column({ type: 'bigint', unsigned: true, nullable: true })
   parentId: string | null;
   @ApiProperty({ enum: ['directory', 'page', 'button'] })
-  @CrudField({ label: '类型', form: { required: true } })
+  @CrudField({
+    label: '类型',
+    form: { required: true },
+    dict: [
+      { value: 'directory', label: '目录' },
+      { value: 'page', label: '页面' },
+      { value: 'button', label: '按钮' },
+    ],
+  })
   @IsIn(['directory', 'page', 'button'])
   @Column({ type: 'varchar', length: 16 })
   type: MenuNode['type'];
