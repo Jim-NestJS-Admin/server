@@ -326,7 +326,8 @@ function menu(c: CodegenConfig): string {
         page: {
           title: c.label,
           path: `/${c.module}/${kebab(c.business)}`,
-          component: `${c.module}/${kebab(c.business)}/index`,
+          // 组件键：前端导航白名单（navigationViews）按它找页面，和页面的 pageKey 一致
+          component: c.permPrefix.replace(/:/g, '/'),
           permission: `${c.permPrefix}:page`,
         },
         buttons: actions

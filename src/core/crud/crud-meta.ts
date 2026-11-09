@@ -25,7 +25,8 @@ const BASE_READABLE = [
 const BASE_SORTABLE = ['id', 'createdAt', 'updatedAt'];
 export const MAX_PAGE_SIZE = 500;
 
-const pascal = (prefix: string) =>
+/** 资源前缀 → 接口文档名（system/user → SystemUser）；operationId 是它首字母小写再加动作 */
+export const crudResourceName = (prefix: string) =>
   prefix
     .split(/[/-]/)
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
@@ -209,7 +210,7 @@ export function resolveCrudMeta<T extends BaseEntity>(
   if (!Number.isInteger(maxSize) || maxSize < 1 || maxSize > MAX_PAGE_SIZE)
     fail(`maxSize 必须在 1 到 ${MAX_PAGE_SIZE} 之间`);
 
-  const name = pascal(options.prefix);
+  const name = crudResourceName(options.prefix);
   const children = (options.children ?? []).map((c) =>
     resolveChild(c, name, fail),
   );

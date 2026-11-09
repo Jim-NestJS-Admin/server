@@ -7,6 +7,11 @@ import { BusinessException } from '../../core/exceptions/business.exception.js';
 import { ErrorCode } from '../../core/exceptions/error-code.js';
 import { renderServer, type GeneratedFile } from './render-server.js';
 import {
+  loadAdminTemplates,
+  manualSteps,
+  renderAdmin,
+} from './render-admin.js';
+import {
   currentFingerprint,
   fingerprint,
   resolveSafe,
@@ -47,6 +52,27 @@ export class CodegenService {
     private readonly config: ConfigService,
   ) {}
 
+  /** 预览、写入、下载共用同一份文件集合：后端文件 + 前端文件（模板来自前端项目 codegen-templates/） */
+  private async render(
+    config: CodegenConfig,
+    stamp: number,
+  ): Promise<GeneratedFile[]> {
+    let templates;
+    try {
+      templates = await loadAdminTemplates(this.roots().admin);
+    } catch (e) {
+      throw crudErrors.badRequest((e as Error).message);
+    }
+    try {
+      return [
+        ...renderServer(config, stamp),
+        ...renderAdmin(config, templates),
+      ];
+    } catch (e) {
+      throw crudErrors.badRequest((e as Error).message);
+    }
+  }
+
   private roots() {
     return {
       server: this.config.get<string>('CODEGEN_SERVER_ROOT') ?? '',
@@ -66,7 +92,7 @@ export class CodegenService {
     if (!row) throw crudErrors.notFound();
     const config = row.config as CodegenConfig;
     const stamp = row.createdAt.getTime();
-    const files: GeneratedFile[] = renderServer(config, stamp);
+    const files = await this.render(config, stamp);
     const roots = this.roots();
     const last = row.fingerprints ?? {};
     const items = [];
@@ -112,7 +138,7 @@ export class CodegenService {
       .getOne();
     if (!row) throw crudErrors.notFound();
     const config = row.config as CodegenConfig;
-    const files = renderServer(config, row.createdAt.getTime());
+    const files = await this.render(config, row.createdAt.getTime());
     const entries: Record<string, Uint8Array> = {};
     for (const f of files) {
       const rel = f.path;
@@ -132,7 +158,8 @@ export class CodegenService {
   }
 
   async preview(id: string) {
-    const { items, token } = await this.plan(id);
+    const { row, items, token } = await this.plan(id);
+    const steps = manualSteps(row.config as CodegenConfig);
     return {
       token,
       files: items.map((i) => ({
@@ -141,7 +168,8 @@ export class CodegenService {
         action: i.action,
         content: i.content,
       })),
-      note: '前端文件等前端模板（Codex）提供后再生成',
+      note: `写入后还要人工完成：${steps.join('；')}`,
+      manualSteps: steps,
     };
   }
 
@@ -179,7 +207,12 @@ export class CodegenService {
       }
     }
     await this.repo().update([row.id], { fingerprints: prints });
-    return { written, skipped, failed };
+    return {
+      written,
+      skipped,
+      failed,
+      manualSteps: manualSteps(row.config as CodegenConfig),
+    };
   }
 
   private repo() {
