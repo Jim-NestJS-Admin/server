@@ -62,6 +62,7 @@ beforeAll(async () => {
     audit: { beforeHardDelete: async () => {} } as never,
     authz: new AuthzContext(ClsServiceManager.getClsService()),
     idempotency: new IdempotencyLedger(ClsServiceManager.getClsService(), ds),
+    display: () => undefined,
   });
 });
 afterEach(() => vi.restoreAllMocks());

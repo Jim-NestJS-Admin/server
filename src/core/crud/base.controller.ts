@@ -111,6 +111,7 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
       audit: this.crudRuntime.audit,
       authz: this.crudRuntime.authz,
       idempotency: this.crudRuntime.idempotency,
+      display: () => this.crudRuntime.display,
     });
     this.crudRuntime.register(meta);
     this.service = service;

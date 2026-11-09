@@ -80,6 +80,7 @@ export class SystemParameterController extends BaseController<SystemParameter> {
   entity: SystemLoginLog,
   api: ['export', 'page', 'info'],
   pageQuery: { keyWords: ['username'], fieldEq: ['event', 'success'] },
+  systemColumns: { createdAt: '时间' },
 })
 export class SystemLoginLogController extends BaseController<SystemLoginLog> {}
 @CrudController({
@@ -88,5 +89,6 @@ export class SystemLoginLogController extends BaseController<SystemLoginLog> {}
   entity: SystemOperationLog,
   api: ['export', 'page', 'info'],
   pageQuery: { keyWords: ['action', 'resource'], fieldEq: ['success'] },
+  systemColumns: { createdBy: '操作人', createdAt: '操作时间' },
 })
 export class SystemOperationLogController extends BaseController<SystemOperationLog> {}

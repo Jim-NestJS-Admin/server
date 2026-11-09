@@ -109,7 +109,21 @@ export interface CrudControllerOptions<T extends BaseEntity> {
   dataScope?: boolean;
   /** 树形资源；开放 tree 接口时必填 */
   tree?: CrudTreeOptions;
+  /**
+   * 列表默认显示哪些系统字段（其余在列设置里打开），值为 true 或改用的列名。
+   * 不写时只显示创建时间。例：操作日志 { createdBy: '操作人', createdAt: '操作时间' }
+   */
+  systemColumns?: Partial<Record<SystemColumn, true | string>>;
 }
+
+export type SystemColumn =
+  | 'id'
+  | 'orgId'
+  | 'createdBy'
+  | 'createdAt'
+  | 'updatedBy'
+  | 'updatedAt'
+  | 'version';
 
 /** 子表整理好的定义 */
 export interface CrudChildMeta {
@@ -156,6 +170,8 @@ export interface CrudResourceMeta<T extends BaseEntity = BaseEntity> {
   children: CrudChildMeta[];
   /** 树形资源配置；不是树时为 null */
   tree: CrudTreeMeta | null;
+  /** 列表默认显示的系统字段（值为 true 或列名） */
+  systemColumns: Record<string, true | string>;
 }
 
 /** 请求上下文：租户、当前用户、当前组织，由端的认证守卫写入（见 core/tenant/request-context） */

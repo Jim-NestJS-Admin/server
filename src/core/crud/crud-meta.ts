@@ -267,5 +267,6 @@ export function resolveCrudMeta<T extends BaseEntity>(
     maxSize,
     children,
     tree,
+    systemColumns: { ...(options.systemColumns ?? { createdAt: true }) },
   };
 }

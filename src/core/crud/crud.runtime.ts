@@ -5,6 +5,7 @@ import { CrudAudit } from './crud-audit.js';
 import { CrudContextProvider, CrudScope } from './crud-scope.js';
 import { IdempotencyLedger } from '../security/idempotency.ledger.js';
 import type { CrudResourceMeta } from './crud.types.js';
+import type { CrudDisplaySource } from './crud-display.js';
 
 /**
  * CRUD 运行环境和资源注册表：所有 @CrudController 资源在启动时登记到这里。
@@ -24,6 +25,17 @@ export class CrudRuntime {
     /** 幂等记录账本：写事务提交前带上幂等记录（T25） */
     readonly idempotency: IdempotencyLedger,
   ) {}
+
+  private displaySource?: CrudDisplaySource;
+
+  /** 系统模块启动时注册：列表里的创建人、修改人、所属组织显示名称 */
+  setDisplaySource(source: CrudDisplaySource): void {
+    this.displaySource = source;
+  }
+
+  get display(): CrudDisplaySource | undefined {
+    return this.displaySource;
+  }
 
   register(meta: CrudResourceMeta): void {
     const existing = this.resources.get(meta.prefix);

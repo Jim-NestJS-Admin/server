@@ -349,11 +349,28 @@
           "field": {
             "type": "string"
           },
+          "hidden": {
+            "description": "默认不显示（用户可以在列设置里打开）：编号、版本号等系统字段",
+            "type": "boolean"
+          },
           "label": {
             "type": "string"
           },
           "sortable": {
             "type": "boolean"
+          },
+          "type": {
+            "description": "显示方式：datetime / date 按本地时间格式化，boolean 显示是 / 否，reference 显示行里 _display 的名称",
+            "enum": [
+              "text",
+              "number",
+              "boolean",
+              "date",
+              "datetime",
+              "json",
+              "reference"
+            ],
+            "type": "string"
           },
           "width": {
             "type": "number"
@@ -362,7 +379,8 @@
         "required": [
           "field",
           "label",
-          "sortable"
+          "sortable",
+          "type"
         ],
         "type": "object"
       },
@@ -1060,6 +1078,13 @@
       },
       "FileAssetRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -1870,6 +1895,13 @@
       },
       "SystemDictItemRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -2170,6 +2202,13 @@
       },
       "SystemDictTypeRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -2500,6 +2539,13 @@
       },
       "SystemFieldRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -2802,6 +2848,13 @@
       },
       "SystemLoginLogRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -3102,6 +3155,13 @@
       },
       "SystemMenuRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -3419,6 +3479,13 @@
       },
       "SystemOperationLogRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -3697,6 +3764,13 @@
       },
       "SystemOrgRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -3994,6 +4068,13 @@
       },
       "SystemParameterRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -4403,6 +4484,13 @@
       },
       "SystemRoleFieldRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -4667,6 +4755,13 @@
       },
       "SystemRoleRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -5192,6 +5287,13 @@
       },
       "SystemUserRoleRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -5306,6 +5408,13 @@
       },
       "SystemUserRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [
@@ -5568,6 +5677,13 @@
       },
       "SystemUserSupervisorRow": {
         "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
           "_fieldState": {
             "additionalProperties": {
               "enum": [

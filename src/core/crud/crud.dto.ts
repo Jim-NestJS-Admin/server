@@ -300,6 +300,15 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
         },
       }),
     ]);
+    prop(t, '_display', Object, [
+      ApiProperty({
+        required: false,
+        description:
+          '编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回',
+        type: Object,
+        additionalProperties: { type: 'string' },
+      }),
+    ]);
     return t;
   };
   const Row = named(rowType(), `${n}Row`);

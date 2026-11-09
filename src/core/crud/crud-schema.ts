@@ -4,6 +4,7 @@ import {
   ApiPropertyOptional,
   getSchemaPath,
 } from '@nestjs/swagger';
+import { getMetadataArgsStorage } from 'typeorm';
 import type { DictItem, FormComponent } from './crud-field.decorator.js';
 import {
   CRUD_APIS,
@@ -30,6 +31,68 @@ export class CrudSchemaColumn {
   @ApiProperty() sortable: boolean;
   @ApiPropertyOptional({ description: '字典名，对应 dictionaries 里的键' })
   dict?: string;
+  @ApiProperty({
+    enum: [
+      'text',
+      'number',
+      'boolean',
+      'date',
+      'datetime',
+      'json',
+      'reference',
+    ],
+    description:
+      '显示方式：datetime / date 按本地时间格式化，boolean 显示是 / 否，reference 显示行里 _display 的名称',
+  })
+  type: CrudColumnType;
+  @ApiPropertyOptional({
+    description: '默认不显示（用户可以在列设置里打开）：编号、版本号等系统字段',
+  })
+  hidden?: boolean;
+}
+
+export type CrudColumnType =
+  'text' | 'number' | 'boolean' | 'date' | 'datetime' | 'json' | 'reference';
+
+/** 系统字段在列表里的顺序（排在业务字段后面）；默认只显示创建时间，其余在列设置里打开 */
+const SYSTEM_COLUMN_ORDER = [
+  'createdBy',
+  'createdAt',
+  'updatedBy',
+  'updatedAt',
+  'orgId',
+  'id',
+  'version',
+];
+
+function columnType(entity: Function, p: string): CrudColumnType {
+  if (p === 'createdBy' || p === 'updatedBy' || p === 'orgId')
+    return 'reference';
+  if (p === 'createdAt' || p === 'updatedAt' || p === 'deletedAt')
+    return 'datetime';
+  if (p === 'id' || p === 'version') return p === 'id' ? 'text' : 'number';
+  const col = columnArgs(entity, p);
+  const dbType = typeof col?.options.type === 'string' ? col.options.type : '';
+  if (dbType === 'date') return 'date';
+  if (dbType === 'json') return 'json';
+  const t = Reflect.getMetadata('design:type', entity.prototype, p);
+  if (t === Boolean) return 'boolean';
+  if (t === Date) return 'datetime';
+  if (t === Number) return 'number';
+  return 'text';
+}
+
+function columnArgs(entity: Function, p: string) {
+  const chain: Function[] = [];
+  for (
+    let c: Function | null = entity;
+    c && c !== Function.prototype;
+    c = Object.getPrototypeOf(c) as Function | null
+  )
+    chain.push(c);
+  return getMetadataArgsStorage().columns.find(
+    (c) => c.propertyName === p && chain.includes(c.target as Function),
+  );
 }
 
 export class CrudSchemaFormItem {
@@ -200,9 +263,16 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
   const dictionaries: Record<string, DictItem[]> = {};
   for (const f of meta.fields) if (f.dict) dictionaries[f.property] = f.dict;
 
-  const columns: CrudSchemaColumn[] = meta.readable
-    .filter((p) => field(p)?.list !== false)
-    .map((p) => {
+  // 业务字段在前（按实体里的顺序），系统字段在后；系统字段默认只显示资源配置里列出的（默认创建时间）
+  const shown = meta.systemColumns;
+  const systemLabel = (p: string) =>
+    typeof shown[p] === 'string' ? (shown[p] as string) : label(p);
+  const business = meta.readable.filter(
+    (p) => !SYSTEM_COLUMN_ORDER.includes(p) && field(p)?.list !== false,
+  );
+  const system = SYSTEM_COLUMN_ORDER.filter((p) => meta.readable.includes(p));
+  const columns: CrudSchemaColumn[] = [
+    ...business.map((p) => {
       const f = field(p);
       const list = f?.list || undefined;
       return {
@@ -211,8 +281,17 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
         ...(list?.width ? { width: list.width } : {}),
         sortable: meta.sortable.includes(p),
         ...(f?.dict ? { dict: p } : {}),
+        type: columnType(meta.entity, p),
       };
-    });
+    }),
+    ...system.map((p) => ({
+      field: p,
+      label: systemLabel(p),
+      sortable: meta.sortable.includes(p),
+      type: columnType(meta.entity, p),
+      ...(shown[p] ? {} : { hidden: true }),
+    })),
+  ];
 
   const form: CrudSchemaFormItem[] = meta.fields
     .filter((f) => f.form !== false && (f.edit ?? 'both') !== 'none')
@@ -294,6 +373,8 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
             ...(list?.width ? { width: list.width } : {}),
             sortable: false,
             ...(f?.dict ? { dict: `${c.resource}.${p}` } : {}),
+            type: columnType(c.entity, p),
+            ...(SYSTEM_COLUMN_ORDER.includes(p) ? { hidden: true } : {}),
           };
         }),
       form: c.fields

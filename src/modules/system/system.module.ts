@@ -13,6 +13,7 @@ import {
   SystemRoleFieldController,
 } from './controller/admin/system-field.controller.js';
 import { SystemDirectory } from './service/system-directory.service.js';
+import { SystemDisplaySource } from './service/system-display.source.js';
 import {
   SystemUserService,
   SystemRoleService,
@@ -45,6 +46,7 @@ import {
     SystemFieldService,
     SystemRoleFieldService,
     SystemDirectory,
+    SystemDisplaySource,
     SystemUserService,
     SystemRoleService,
     SystemOrgService,

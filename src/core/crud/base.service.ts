@@ -19,6 +19,7 @@ import { escapeSpreadsheetCell } from '../security/sanitize.js';
 import { crudErrors, translateDbError } from './crud.errors.js';
 import type { CrudAudit } from './crud-audit.js';
 import type { IdempotencyLedger } from '../security/idempotency.ledger.js';
+import { attachDisplay, type CrudDisplaySource } from './crud-display.js';
 import type { AuthzContext } from '../permission/authz-context.js';
 import {
   childRowsOf,
@@ -64,6 +65,8 @@ export interface CrudBinding<T extends BaseEntity> {
   authz: AuthzContext;
   /** 幂等记录账本（T25）：写事务提交前把幂等记录写进同一个事务 */
   idempotency: IdempotencyLedger;
+  /** 列表显示名来源（系统模块注册；没有时只返回编号） */
+  display: () => CrudDisplaySource | undefined;
 }
 
 const ALIAS = 'e';
@@ -225,14 +228,31 @@ export class BaseService<T extends BaseEntity> {
       .offset((page - 1) * size)
       .limit(size)
       .getManyAndCount();
-    return { list: rows.map((r) => this.toRow(r)), total, page, size };
+    const list = rows.map((r) => this.toRow(r));
+    await this.withDisplay(list);
+    return { list, total, page, size };
   }
 
   async info(id: string): Promise<CrudRow<T>> {
     const manager = this.crud.dataSource.manager;
     const row = await this.findOne(manager, id, 'info');
     if (!row) throw crudErrors.notFound();
-    return this.toDetail(manager, row, this.crud.context.current().tenantId);
+    const out = await this.toDetail(
+      manager,
+      row,
+      this.crud.context.current().tenantId,
+    );
+    await this.withDisplay([out]);
+    return out;
+  }
+
+  /** 给返回的行补创建人、修改人、所属组织的显示名（_display） */
+  protected async withDisplay(rows: object[]): Promise<void> {
+    await attachDisplay(
+      this.crud.display(),
+      this.crud.context.current().tenantId,
+      rows as Record<string, unknown>[],
+    );
   }
 
   /** 树形列表最多这么多个节点；超过说明不适合一次加载，要改成按层加载 */
@@ -253,7 +273,9 @@ export class BaseService<T extends BaseEntity> {
       throw crudErrors.badRequest(
         `节点超过 ${BaseService.TREE_MAX_NODES} 个，不能一次加载`,
       );
-    return { list: rows.map((r) => this.toRow(r)) };
+    const list = rows.map((r) => this.toRow(r));
+    await this.withDisplay(list);
+    return { list };
   }
 
   // ---------- 写 ----------
@@ -439,11 +461,13 @@ export class BaseService<T extends BaseEntity> {
       .offset((page - 1) * size)
       .limit(size)
       .getManyAndCount();
+    const list = rows.map((r) => ({
+      ...this.toRow(r),
+      deletedAt: r.deletedAt as Date,
+    }));
+    await this.withDisplay(list);
     return {
-      list: rows.map((r) => ({
-        ...this.toRow(r),
-        deletedAt: r.deletedAt as Date,
-      })),
+      list,
       total,
       page,
       size,
