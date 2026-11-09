@@ -1,0 +1,141 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+/** 一个页面菜单：组件键要在前端 navigationViews 白名单里，权限码要由后端声明 */
+export interface PageSeed {
+  title: string;
+  path: string;
+  component: string;
+  /** 打开页面需要的权限码 */
+  permission: string;
+  /** 这些前缀下的其他权限码作为页面上的按钮，如 system:user */
+  buttonPrefixes: string[];
+  icon?: string;
+}
+
+export interface DirectorySeed {
+  title: string;
+  path: string;
+  icon?: string;
+  pages: PageSeed[];
+}
+
+const crud = (title: string, key: string, extra: string[] = []): PageSeed => ({
+  title,
+  path: `/${key}`,
+  component: key,
+  permission: `${key.replace(/\//g, ':')}:page`,
+  buttonPrefixes: [key.replace(/\//g, ':'), ...extra],
+});
+
+/**
+ * 默认菜单（T10）：系统管理、开发工具。组件键和前端 src/platform/navigation.ts 的 navigationViews 一一对应。
+ * 权限码没有在后端声明的页面（例如没开启代码生成器）初始化时跳过，不写入无效菜单。
+ */
+export const DEFAULT_MENUS: DirectorySeed[] = [
+  {
+    title: '系统管理',
+    path: '/system',
+    icon: 'ri:settings-3-line',
+    pages: [
+      crud('用户', 'system/user'),
+      crud('角色', 'system/role'),
+      crud('组织', 'system/org'),
+      crud('菜单', 'system/menu'),
+      crud('用户角色', 'system/user-role'),
+      crud('上级关系', 'system/user-supervisor'),
+      crud('字典类型', 'system/dict-type'),
+      crud('字典项', 'system/dict-item'),
+      crud('系统参数', 'system/parameter'),
+      crud('字段权限', 'system/field', ['system:role-field']),
+      {
+        title: '模块配置',
+        path: '/system/page-config',
+        component: 'system/page-config',
+        permission: 'system:page-config:info',
+        buttonPrefixes: ['system:page-config'],
+      },
+      crud('操作日志', 'system/operation-log'),
+      crud('登录日志', 'system/login-log'),
+    ],
+  },
+  {
+    title: '开发工具',
+    path: '/dev',
+    icon: 'ri:code-box-line',
+    pages: [
+      {
+        title: '代码生成',
+        path: '/dev/codegen',
+        component: 'dev/codegen',
+        permission: 'dev:codegen:list',
+        buttonPrefixes: ['dev:codegen'],
+      },
+    ],
+  },
+];
+
+/** 按钮名称：按权限码最后一段 */
+const ACTION_TITLES: Record<string, string> = {
+  page: '查看',
+  list: '查看',
+  info: '详情',
+  add: '新增',
+  update: '修改',
+  delete: '删除',
+  recycle: '回收站',
+  restore: '恢复',
+  purge: '彻底删除',
+  export: '导出',
+  save: '保存',
+  write: '写入文件',
+  read: '下载',
+  upload: '上传',
+  'reset-password': '重置密码',
+};
+
+export const buttonTitle = (code: string): string => {
+  const action = code.split(':').at(-1) ?? code;
+  return ACTION_TITLES[action] ?? action;
+};
+
+/** 代码生成器写出的 src/modules/<模块>/<业务>.menu.json（见 render-server.ts 的 menu()） */
+export interface GeneratedMenu {
+  page: { title: string; path: string; component: string; permission: string };
+  buttons: { title: string; permission: string }[];
+}
+
+/** 读 src/modules 下一层目录里的 *.menu.json；格式不对的文件报错，不静默跳过 */
+export async function loadGeneratedMenus(
+  modulesDir: string,
+): Promise<{ file: string; menu: GeneratedMenu }[]> {
+  const out: { file: string; menu: GeneratedMenu }[] = [];
+  let mods: string[];
+  try {
+    mods = await readdir(modulesDir);
+  } catch {
+    return out;
+  }
+  for (const m of mods.sort()) {
+    let files: string[];
+    try {
+      files = await readdir(join(modulesDir, m));
+    } catch {
+      continue;
+    }
+    for (const f of files.filter((x) => x.endsWith('.menu.json')).sort()) {
+      const file = join(modulesDir, m, f);
+      const menu = JSON.parse(await readFile(file, 'utf8')) as GeneratedMenu;
+      if (
+        !menu?.page?.title ||
+        !menu.page.path ||
+        !menu.page.component ||
+        !menu.page.permission ||
+        !Array.isArray(menu.buttons)
+      )
+        throw new Error(`菜单文件格式不对：${file}`);
+      out.push({ file, menu });
+    }
+  }
+  return out;
+}

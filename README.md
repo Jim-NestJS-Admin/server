@@ -69,7 +69,7 @@ pnpm start:dev                                         # 开发模式，改代�
 
 本地独立环境使用 `jim_admin_local`，后端端口3011、Redis端口6387，前端地址 `http://localhost:8848`。连接信息、随机签名密钥和初始密码仅存本地被忽略的 `.env`，不提交。前端本地 `VITE_ADMIN_PROXY_TARGET=http://localhost:3011`，生产仍须同源反向代理。
 
-准备独立本地数据库、应用连接权限和 Redis 后，在 `.env` 配置 `BOOTSTRAP_USERNAME` / `BOOTSTRAP_PASSWORD`，执行 `pnpm bootstrap:local`。脚本只允许development、本机地址和明确库名；先运行版本化迁移，再在单个事务内创建默认组织、超管角色、账号及组织角色分配。重复执行遇到已有用户会拒绝，不重置密码，不覆盖旧权限。没有默认明文密码，不伪造菜单填充未实现的系统页面。不要对其他项目或生产数据库运行。
+准备独立本地数据库 `jim_admin_local`、应用连接权限和 Redis 后，执行 `pnpm bootstrap:local`（T10）。脚本只允许 development、本机地址和这个库名：先运行版本化迁移，再在单个事务内补齐默认菜单和按钮（系统管理、开发工具，以及代码生成器写出的 `src/modules/*/*.menu.json`；权限码没在后端声明的页面跳过，已有菜单不改）、基础字典，库里还没有用户时创建默认组织、超管角色和账号。账号默认 `admin` / `123456`（只限本机开发库，登录后请修改），可用 `.env` 里的 `BOOTSTRAP_USERNAME` / `BOOTSTRAP_PASSWORD` 覆盖；已有用户时不创建、不改密码。生成了新模块后用 `pnpm menus:local` 只补菜单。不要对其他项目或生产数据库运行。
 
 同时修复T06审查发现的Anonymous与Perms/LoginOnly混用：启动检查拒绝（包括继承的方法），守卫也直接拒绝矛盾声明。此修复待Claude复核，不代表T06整体验收。
 
