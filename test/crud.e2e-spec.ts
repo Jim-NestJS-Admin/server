@@ -579,18 +579,38 @@ describe('通用 CRUD（验收点①）', () => {
           ],
         },
       });
+      // 业务字段在前，系统字段在后；系统字段默认只显示创建时间，其余 hidden
       expect(s.columns.map((c: { field: string }) => c.field)).toEqual([
-        'id',
-        'version',
-        'orgId',
-        'createdBy',
-        'updatedBy',
-        'createdAt',
-        'updatedAt',
         'username',
         'nickname',
         'status',
+        'createdBy',
+        'createdAt',
+        'updatedBy',
+        'updatedAt',
+        'orgId',
+        'id',
+        'version',
       ]);
+      expect(
+        s.columns
+          .filter((c: { hidden?: boolean }) => !c.hidden)
+          .map((c: { field: string }) => c.field),
+      ).toEqual(['username', 'nickname', 'status', 'createdAt']);
+      expect(
+        Object.fromEntries(
+          s.columns.map((c: { field: string; type: string }) => [
+            c.field,
+            c.type,
+          ]),
+        ),
+      ).toMatchObject({
+        username: 'text',
+        createdAt: 'datetime',
+        createdBy: 'reference',
+        orgId: 'reference',
+        version: 'number',
+      });
       expect(
         s.columns.find((c: { field: string }) => c.field === 'username'),
       ).toMatchObject({ label: '账号', width: 140, sortable: true });

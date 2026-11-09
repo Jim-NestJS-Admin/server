@@ -312,6 +312,8 @@ describe('字段权限（T16）', () => {
   });
 
   it('导出（T18）：逐行脱敏 / 隐藏、防公式注入、只有有导出权限的角色参与', async () => {
+    // 导出权限只给客服（全局）；经理在本部门没有导出权限，不参与导出时的字段判断
+    grants.get('100')![0].permissions.push(...P('export'));
     await seed('mine', '11');
     await seed('=1+1', '20');
     const res = await as('100', '11', 'export', {}).expect(200);

@@ -544,6 +544,8 @@ describe('删除方式与回收站（验收点③）', () => {
         'recycle',
         'restore',
         'purge',
+        'export',
+        'tree',
       ]);
       const item = schemas.TestDemoUserRecycleItem as {
         properties: Record<string, unknown>;

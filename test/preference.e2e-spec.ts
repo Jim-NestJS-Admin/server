@@ -5,6 +5,7 @@ import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import { createTestModule } from './support/test-auth.js';
+import { clearTestRedis, rawRedis } from './support/test-redis.js';
 
 describe('个人偏好（T18 常用查询）', () => {
   let app: INestApplication<App>;
@@ -33,6 +34,10 @@ describe('个人偏好（T18 常用查询）', () => {
   };
 
   beforeAll(async () => {
+    // 权限缓存按「租户 + 用户 + 组织 + 版本」存一小时，先清掉上次运行留下的，免得用到旧结论
+    const raw = rawRedis();
+    await clearTestRedis(raw);
+    await raw.quit();
     const m = await createTestModule({ imports: [AppModule] }).compile();
     app = m.createNestApplication();
     configureApp(app);

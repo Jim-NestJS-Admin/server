@@ -27,7 +27,7 @@ interface ActiveRole {
 
 /** 缓存的内容：key 带租户、用户、当前组织和授权版本 */
 interface UserAuthz {
-  /** 当前组织里还有角色（没有当前组织时为 true） */
+  /** 当前组织里还有角色，或者是全局超级管理员（没有当前组织时为 true） */
   orgValid: boolean;
   roles: ActiveRole[];
 }
@@ -195,7 +195,14 @@ export class PermissionService {
         scope: await this.scopeOf(g, orgId, tree),
       });
     return {
-      orgValid: orgId === null || grants.some((g) => g.scopeOrgId === orgId),
+      // 当前组织有效：在这个组织有角色，或者是全局超级管理员（在任何组织都有效）
+      orgValid:
+        orgId === null ||
+        grants.some(
+          (g) =>
+            g.scopeOrgId === orgId ||
+            (g.scopeOrgId === null && g.allPermissions),
+        ),
       roles,
     };
   }

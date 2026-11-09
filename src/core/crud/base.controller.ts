@@ -70,6 +70,14 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
   private readonly pageViews?: PageViewSource;
   protected service: BaseService<T>;
 
+  private ownService(type: Function): unknown {
+    try {
+      return this.crudModuleRef.get(type, { strict: true });
+    } catch {
+      return this.crudModuleRef.get(type, { strict: false });
+    }
+  }
+
   async onModuleInit(): Promise<void> {
     const cls = Reflect.getMetadata(CRUD_RESOURCE, this.constructor) as
       CrudClassMeta | undefined;
@@ -92,9 +100,9 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
         checkUniqueIndexes(ds.getMetadata(e), meta.prefix, meta.deleteMode);
     let service: BaseService<T>;
     if (options.service) {
-      service = this.crudModuleRef.get(options.service, {
-        strict: false,
-      }) as BaseService<T>;
+      // 先取控制器所在模块里的实例：同一个动态模块装配了多次时（例如测试里），
+      // 每个控制器绑定自己模块的 Service，不会绑到别的实例上、留下没绑定的那个
+      service = this.ownService(options.service) as BaseService<T>;
       if (!(service instanceof BaseService))
         throw new Error(
           `${options.service.name} 必须继承 BaseService，才能作为 ${meta.prefix} 的 service`,
