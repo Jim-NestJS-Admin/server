@@ -68,8 +68,8 @@ describe('资源定义 resolveCrudMeta：配置写错在启动时就报错', () 
     ],
     [
       '不认识的接口',
-      { prefix: 'demo/item', api: ['export' as never] },
-      /export/,
+      { prefix: 'demo/item', api: ['import' as never] },
+      /import/,
     ],
     [
       '硬删除资源开回收站',
