@@ -61,7 +61,9 @@ export class SystemFieldOverview {
               codeDelegable: code.delegable,
               defaultState: effective?.state ?? code.default,
               defaultMask: effective?.mask ?? code.mask,
-                defaultDelegable: effective ? effective.delegable : code.delegable,
+              defaultDelegable: effective
+                ? effective.delegable
+                : code.delegable,
               state: target?.state ?? null,
               mask: target?.mask ?? null,
               delegable: roleId ? null : (stored?.delegable ?? null),

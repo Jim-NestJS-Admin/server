@@ -139,22 +139,20 @@ export class SystemOperationRecorder {
     const snapshot = auditSnapshot({ previous, next });
     if (Buffer.byteLength(JSON.stringify(snapshot), 'utf8') > 4 * 1024 * 1024)
       throw new Error('配置审计快照过大，拒绝写入');
-    await this.repos
-      .for(SystemOperationLog)
-      .insert(
-        {
-          action,
-          resource,
-          method: 'CONFIG',
-          success: true,
-          status: 200,
-          durationMs: 0,
-          recordCount: 1,
-          requestId: null,
-          snapshot,
-        },
-        manager,
-      );
+    await this.repos.for(SystemOperationLog).insert(
+      {
+        action,
+        resource,
+        method: 'CONFIG',
+        success: true,
+        status: 200,
+        durationMs: 0,
+        recordCount: 1,
+        requestId: null,
+        snapshot,
+      },
+      manager,
+    );
   }
   private readonly logger = new Logger('SystemOperationRecorder');
   constructor(
