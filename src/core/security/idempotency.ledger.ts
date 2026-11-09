@@ -68,11 +68,18 @@ export interface IdempotencyClaim {
   digest: string;
 }
 
+/**
+ * 记录在本次请求里的状态：
+ * - none：还没写；
+ * - inTx：已经写进一个还没结束的事务（业务自己开事务调 recordInTx 时，事务结束前一直是它）；
+ * - committed：ledger.transaction 确认事务已提交；
+ * - unknown：事务体执行完了但提交时出错，不知道到底提交了没有。
+ * 拦截器失败时只释放 Redis 占位，不按这里的状态宣称成功或失败：重试时以数据库记录为准。
+ */
+export type LedgerState = 'none' | 'inTx' | 'committed' | 'unknown';
+
 interface Pending extends IdempotencyClaim {
-  /** 已经在业务事务里写过记录 */
-  recorded: boolean;
-  /** 事务里记下的结果，事务后整个请求失败时用它补 Redis */
-  txResult?: unknown;
+  state: LedgerState;
 }
 
 const CLS_KEY = 'jna:idempotency';
@@ -106,27 +113,42 @@ export class IdempotencyLedger {
 
   /** 开一个写事务；本次请求带了幂等键时，提交前把幂等记录写进同一个事务 */
   async transaction<R>(fn: (manager: EntityManager) => Promise<R>): Promise<R> {
-    return this.dataSource.transaction(async (manager) => {
-      const result = await fn(manager);
-      await this.recordInTx(manager, result);
-      return result;
-    });
+    const p = this.pending();
+    const before = p?.state ?? 'none';
+    let bodyDone = false;
+    try {
+      const out = await this.dataSource.transaction(async (manager) => {
+        const result = await fn(manager);
+        await this.recordInTx(manager, result);
+        bodyDone = true;
+        return result;
+      });
+      if (p?.state === 'inTx') p.state = 'committed';
+      return out;
+    } catch (e) {
+      if (p?.state === 'inTx')
+        // 事务体出错 → 已回滚，记录没留下；事务体完成后才出错 → 提交结果不确定
+        p.state = bodyDone ? 'unknown' : before;
+      throw e;
+    }
   }
 
-  /** 已经自己开了事务时，在事务最后调用它 */
+  /**
+   * 已经自己开了事务时，在事务最后调用它。之后这条记录算「在事务里」，
+   * 请求成功返回时按已提交处理；事务回滚则记录随之消失。
+   */
   async recordInTx(manager: EntityManager, result: unknown): Promise<void> {
     const p = this.pending();
-    if (!p || p.recorded) return;
+    if (!p || p.state !== 'none') return;
     await this.insert(manager, p, result);
-    p.recorded = true;
-    p.txResult = result;
+    p.state = 'inTx';
   }
 
   // ---- 下面给拦截器用 ----
 
   begin(claim: IdempotencyClaim): void {
     if (this.cls.isActive())
-      this.cls.set<Pending>(CLS_KEY, { ...claim, recorded: false });
+      this.cls.set<Pending>(CLS_KEY, { ...claim, state: 'none' });
   }
 
   pending(): Pending | undefined {
@@ -146,22 +168,29 @@ export class IdempotencyLedger {
   }
 
   /**
-   * 请求成功后：事务里写过就把结果改成最终返回的数据；没走带账本的事务（例如只调了外部接口）就在这里补写。
+   * 请求成功后：事务里写过（含业务自己的事务）就把结果改成最终返回的数据；
+   * 没走带账本的事务（例如只调了外部接口）就在这里补写。二进制结果不保存，见拦截器说明。
    */
   async complete(result: unknown): Promise<void> {
     const p = this.pending();
     if (!p) return;
-    if (p.recorded) {
-      await this.dataSource
-        .getRepository(IdempotencyEntity)
-        .update(
-          { tenantId: p.tenantId, userId: p.userId, idemKey: p.key },
-          { result: result as object },
-        );
+    if (p.state === 'none') {
+      await this.dataSource.transaction((m) => this.insert(m, p, result));
+      p.state = 'committed';
       return;
     }
-    await this.dataSource.transaction((m) => this.insert(m, p, result));
-    p.recorded = true;
+    await this.dataSource
+      .getRepository(IdempotencyEntity)
+      .update(
+        { tenantId: p.tenantId, userId: p.userId, idemKey: p.key },
+        { result: result as object },
+      );
+    p.state = 'committed';
+  }
+
+  /** 本次请求不做幂等记录（二进制结果）：之后的事务不再写记录 */
+  skip(): void {
+    if (this.cls.isActive()) this.cls.set(CLS_KEY, undefined);
   }
 
   private async insert(

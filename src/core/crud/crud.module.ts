@@ -4,6 +4,7 @@ import {
   IdempotencyEntity,
   IdempotencyLedger,
 } from '../security/idempotency.ledger.js';
+import { IdempotencyRunner } from '../security/idempotency.interceptor.js';
 import { AuthzContext } from '../permission/authz-context.js';
 import { DataScopeCrudScope } from '../permission/data-scope.scope.js';
 import { CrudContextProvider, CrudScope } from './crud-scope.js';
@@ -20,6 +21,7 @@ import { CrudRuntime } from './crud.runtime.js';
   imports: [TypeOrmModule.forFeature([IdempotencyEntity])],
   providers: [
     IdempotencyLedger,
+    IdempotencyRunner,
     CrudContextProvider,
     AuthzContext,
     { provide: CrudScope, useClass: DataScopeCrudScope },
@@ -29,6 +31,7 @@ import { CrudRuntime } from './crud.runtime.js';
   exports: [
     CrudRuntime,
     IdempotencyLedger,
+    IdempotencyRunner,
     CrudScope,
     CrudContextProvider,
     CrudAudit,

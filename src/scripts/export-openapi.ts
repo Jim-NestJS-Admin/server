@@ -11,6 +11,9 @@ export async function exportOpenApi(
   // 数据库配置给占位值，只为通过启动校验，导出过程不会用它们连接。
   process.env.LOG_LEVEL ??= 'silent';
   process.env.OPENAPI_EXPORT = 'true';
+  // 接口文档固定包含开发环境才有的代码生成器接口（前端生成器页面要用），本机和 CI 导出结果一致
+  process.env.NODE_ENV = 'development';
+  process.env.CODEGEN_ENABLED = 'true';
   process.env.DB_NAME ??= 'openapi_export';
   process.env.DB_USER ??= 'openapi_export';
   process.env.DB_PASSWORD ??= 'openapi_export';

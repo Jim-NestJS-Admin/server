@@ -16,7 +16,11 @@ import { AdminController } from '../endpoint/endpoint.decorators.js';
 import { Perms } from '../permission/perms.decorator.js';
 import { RawResponse } from '../decorators/raw-response.decorator.js';
 import { UserRateLimit } from '../security/user-rate-limit.js';
-import { ApiErrors, ApiResult } from '../swagger/api-result.js';
+import {
+  ApiBinaryResult,
+  ApiErrors,
+  ApiResult,
+} from '../swagger/api-result.js';
 import type { BaseEntity } from './base.entity.js';
 import { CRUD_RESOURCE } from './base.controller.js';
 import { buildCrudDtos } from './crud.dto.js';
@@ -209,7 +213,9 @@ export function CrudController<T extends BaseEntity>(
           operationId: `${lowerFirst(meta.name)}${spec.method.charAt(0).toUpperCase()}${spec.method.slice(1)}`,
           summary: spec.summary,
         }),
-        ApiResult(spec.result),
+        spec.method === 'export'
+          ? ApiBinaryResult('text/csv', 'CSV 文件（UTF-8 带 BOM）')
+          : ApiResult(spec.result),
         ...(spec.errors.length ? [ApiErrors(...spec.errors)] : []),
       ];
       // 导出：原样返回文件，按用户限流（每人每小时 20 次）

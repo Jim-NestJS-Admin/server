@@ -8,7 +8,6 @@ import {
   StreamableFile,
   UploadedFile,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -35,6 +34,7 @@ import { FileIdBody, FileReceipt } from '../../dto/file.dto.js';
 import { FileGuard, FileOperation } from '../../file.guard.js';
 import { FileService } from '../../service/file.service.js';
 import { Perms } from '../../../../core/permission/perms.decorator.js';
+import { IdempotentUpload } from '../../../../core/security/idempotency.interceptor.js';
 const FileErrors = () =>
   applyDecorators(
     ApiErrors(400, 404),
@@ -65,7 +65,8 @@ export class FileController {
   })
   @ApiResult(FileReceipt)
   @FileErrors()
-  @UseInterceptors(FileInterceptor('file'))
+  // 先解析文件，再按「请求体 + 文件内容」做幂等（T25）
+  @IdempotentUpload(FileInterceptor('file'))
   upload(@UploadedFile() file: Express.Multer.File | undefined) {
     if (!file?.buffer)
       throw new BusinessException(ErrorCode.BadRequest, '请选择文件');

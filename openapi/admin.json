@@ -6219,6 +6219,17 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "代码压缩包"
+          },
           "400": {
             "content": {
               "application/json": {
@@ -7956,34 +7967,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "properties": {
-                    "code": {
-                      "enum": [
-                        1000
-                      ],
-                      "type": "integer"
-                    },
-                    "data": {
-                      "nullable": true,
-                      "type": "object"
-                    },
-                    "message": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "data",
-                    "message"
-                  ],
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": ""
+            "description": "CSV 文件（UTF-8 带 BOM）"
           },
           "400": {
             "content": {
@@ -8500,34 +8491,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "properties": {
-                    "code": {
-                      "enum": [
-                        1000
-                      ],
-                      "type": "integer"
-                    },
-                    "data": {
-                      "nullable": true,
-                      "type": "object"
-                    },
-                    "message": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "data",
-                    "message"
-                  ],
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": ""
+            "description": "CSV 文件（UTF-8 带 BOM）"
           },
           "400": {
             "content": {
@@ -9500,34 +9471,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "properties": {
-                    "code": {
-                      "enum": [
-                        1000
-                      ],
-                      "type": "integer"
-                    },
-                    "data": {
-                      "nullable": true,
-                      "type": "object"
-                    },
-                    "message": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "data",
-                    "message"
-                  ],
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": ""
+            "description": "CSV 文件（UTF-8 带 BOM）"
           },
           "400": {
             "content": {
@@ -9907,34 +9858,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "properties": {
-                    "code": {
-                      "enum": [
-                        1000
-                      ],
-                      "type": "integer"
-                    },
-                    "data": {
-                      "nullable": true,
-                      "type": "object"
-                    },
-                    "message": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "data",
-                    "message"
-                  ],
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": ""
+            "description": "CSV 文件（UTF-8 带 BOM）"
           },
           "400": {
             "content": {
@@ -10258,34 +10189,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "properties": {
-                    "code": {
-                      "enum": [
-                        1000
-                      ],
-                      "type": "integer"
-                    },
-                    "data": {
-                      "nullable": true,
-                      "type": "object"
-                    },
-                    "message": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "data",
-                    "message"
-                  ],
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": ""
+            "description": "CSV 文件（UTF-8 带 BOM）"
           },
           "400": {
             "content": {
@@ -10665,34 +10576,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "properties": {
-                    "code": {
-                      "enum": [
-                        1000
-                      ],
-                      "type": "integer"
-                    },
-                    "data": {
-                      "nullable": true,
-                      "type": "object"
-                    },
-                    "message": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "data",
-                    "message"
-                  ],
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": ""
+            "description": "CSV 文件（UTF-8 带 BOM）"
           },
           "400": {
             "content": {
@@ -11741,34 +11632,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "properties": {
-                    "code": {
-                      "enum": [
-                        1000
-                      ],
-                      "type": "integer"
-                    },
-                    "data": {
-                      "nullable": true,
-                      "type": "object"
-                    },
-                    "message": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "data",
-                    "message"
-                  ],
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": ""
+            "description": "CSV 文件（UTF-8 带 BOM）"
           },
           "400": {
             "content": {
@@ -12867,34 +12738,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "properties": {
-                    "code": {
-                      "enum": [
-                        1000
-                      ],
-                      "type": "integer"
-                    },
-                    "data": {
-                      "nullable": true,
-                      "type": "object"
-                    },
-                    "message": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "data",
-                    "message"
-                  ],
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": ""
+            "description": "CSV 文件（UTF-8 带 BOM）"
           },
           "400": {
             "content": {
@@ -13360,34 +13211,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "properties": {
-                    "code": {
-                      "enum": [
-                        1000
-                      ],
-                      "type": "integer"
-                    },
-                    "data": {
-                      "nullable": true,
-                      "type": "object"
-                    },
-                    "message": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "data",
-                    "message"
-                  ],
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": ""
+            "description": "CSV 文件（UTF-8 带 BOM）"
           },
           "400": {
             "content": {
@@ -13853,34 +13684,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "properties": {
-                    "code": {
-                      "enum": [
-                        1000
-                      ],
-                      "type": "integer"
-                    },
-                    "data": {
-                      "nullable": true,
-                      "type": "object"
-                    },
-                    "message": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "data",
-                    "message"
-                  ],
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": ""
+            "description": "CSV 文件（UTF-8 带 BOM）"
           },
           "400": {
             "content": {
@@ -14438,34 +14249,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "properties": {
-                    "code": {
-                      "enum": [
-                        1000
-                      ],
-                      "type": "integer"
-                    },
-                    "data": {
-                      "nullable": true,
-                      "type": "object"
-                    },
-                    "message": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "data",
-                    "message"
-                  ],
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": ""
+            "description": "CSV 文件（UTF-8 带 BOM）"
           },
           "400": {
             "content": {

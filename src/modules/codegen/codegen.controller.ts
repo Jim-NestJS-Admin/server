@@ -20,7 +20,11 @@ import {
 } from 'class-validator';
 import { AdminController } from '../../core/endpoint/endpoint.decorators.js';
 import { Perms } from '../../core/permission/perms.decorator.js';
-import { ApiErrors, ApiResult } from '../../core/swagger/api-result.js';
+import {
+  ApiBinaryResult,
+  ApiErrors,
+  ApiResult,
+} from '../../core/swagger/api-result.js';
 import { CodegenService } from './codegen.service.js';
 
 const ID = /^[1-9]\d{0,19}$/;
@@ -182,6 +186,7 @@ export class CodegenController {
     operationId: 'devCodegenDownload',
     summary: '下载生成的代码压缩包',
   })
+  @ApiBinaryResult('application/zip', '代码压缩包')
   @ApiErrors(400, 404)
   async download(@Body() b: IdBody) {
     const { name, zip } = await this.codegen.download(b.id);
