@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EnvironmentVariables, NodeEnv } from './env.validation.js';
+import { parseOrigins, type CorsOrigins } from '../security/http-security.js';
 
 export interface AuthConfig {
   jwtSecret: string;
@@ -74,10 +75,24 @@ export class AppConfigService {
     };
   }
 
-  get security(): { trustProxy: number; ipPerMinute: number } {
+  get security(): {
+    trustProxy: number;
+    ipPerMinute: number;
+    hsts: boolean;
+    cors: CorsOrigins;
+  } {
     return {
       trustProxy: this.config.get('TRUST_PROXY', { infer: true }),
       ipPerMinute: this.config.get('RATE_LIMIT_IP_PER_MINUTE', { infer: true }),
+      hsts:
+        this.config.get('SECURITY_HSTS', { infer: true }) ?? this.isProduction,
+      cors: {
+        admin: parseOrigins(
+          this.config.get('AUTH_ADMIN_ORIGINS', { infer: true }),
+        ),
+        web: parseOrigins(this.config.get('CORS_WEB_ORIGINS', { infer: true })),
+        app: parseOrigins(this.config.get('CORS_APP_ORIGINS', { infer: true })),
+      },
     };
   }
 

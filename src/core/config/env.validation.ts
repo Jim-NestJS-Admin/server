@@ -208,6 +208,22 @@ export class EnvironmentVariables {
   @Min(10)
   RATE_LIMIT_IP_PER_MINUTE: number = 600;
 
+  /** 网站端前端地址（跨域白名单，/web 接口用），多个用逗号分隔。后台端直接用 AUTH_ADMIN_ORIGINS */
+  @IsOptional()
+  @IsString()
+  CORS_WEB_ORIGINS?: string;
+
+  /** APP / 小程序端的 H5 地址（跨域白名单，/app 接口用），多个用逗号分隔 */
+  @IsOptional()
+  @IsString()
+  CORS_APP_ORIGINS?: string;
+
+  /** 是否发送 HSTS 头；不填时生产环境开、其他环境关 */
+  @Transform(toBool)
+  @IsOptional()
+  @IsBoolean()
+  SECURITY_HSTS?: boolean;
+
   /** 代码生成器（T21）：只在开发环境生效；还要配两个输出根目录 */
   @Transform(toBool)
   @IsOptional()

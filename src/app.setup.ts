@@ -4,6 +4,10 @@ import { Logger } from 'nestjs-pino';
 import { requestIdMiddleware } from './core/context/request-id.js';
 import { createValidationPipe } from './core/validation.js';
 import { AppConfigService } from './core/config/app-config.service.js';
+import {
+  corsDelegate,
+  securityHeaders,
+} from './core/security/http-security.js';
 
 /**
  * main.ts、端到端测试、接口文档导出共用的应用配置，保证三处行为一致。
@@ -11,10 +15,19 @@ import { AppConfigService } from './core/config/app-config.service.js';
  */
 export function configureApp(app: INestApplication): INestApplication {
   // 只信任配置的受控代理层数（T25）：直连时不信 X-Forwarded-For，伪造的来源 IP 绕不过限流
-  const trust = app.get(AppConfigService).security.trustProxy;
-  (
-    app.getHttpAdapter().getInstance() as { set(k: string, v: unknown): void }
-  ).set('trust proxy', trust > 0 ? trust : false);
+  const security = app.get(AppConfigService).security;
+  const instance = app.getHttpAdapter().getInstance() as {
+    set(k: string, v: unknown): void;
+    disable(k: string): void;
+  };
+  instance.set(
+    'trust proxy',
+    security.trustProxy > 0 ? security.trustProxy : false,
+  );
+  instance.disable('x-powered-by');
+  // 安全响应头 + 按端跨域白名单（T25，安全基线第 6、10 条）
+  app.use(securityHeaders({ hsts: security.hsts, docsPrefix: 'docs' }));
+  app.enableCors(corsDelegate(security.cors));
   app.use(requestIdMiddleware);
   // 请求体上限（T25）：JSON / 表单 1MB；文件上传由文件模块自己的限制控制
   const express = app as NestExpressApplication;
