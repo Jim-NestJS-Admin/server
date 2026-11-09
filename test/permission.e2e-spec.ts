@@ -493,4 +493,67 @@ describe('权限（T06）', () => {
       ]);
     });
   });
+
+  describe('幂等（T25）', () => {
+    beforeEach(() => {
+      grants.set('200', [
+        {
+          roleId: 'sg',
+          scopeOrgId: '20',
+          permissions: P('page', 'add'),
+          dataScope: 'org',
+        },
+      ]);
+    });
+    const add = (key: string, name: string) =>
+      request(app.getHttpServer())
+        .post('/admin/test/customer/add')
+        .set('x-test-user', '200')
+        .set('x-test-org', '20')
+        .set('Idempotency-Key', key)
+        .send({ data: { name } });
+
+    it('同一个键重复提交只执行一次，返回第一次的结果；换了内容用同一个键 409', async () => {
+      const a = await add('key-00000001', 'once').expect(200);
+      const b = await add('key-00000001', 'once').expect(200);
+      expect(b.body.data).toEqual(a.body.data);
+      const [{ n }] = await ds.query(
+        "SELECT COUNT(*) n FROM demo_customer WHERE name = 'once'",
+      );
+      expect(Number(n)).toBe(1);
+      await add('key-00000001', 'other').expect(409);
+      await add('bad key', 'x').expect(400);
+    });
+
+    it('幂等记录和业务同一事务落库：Redis 清空后重试仍返回第一次的结果，不再新建', async () => {
+      await ds.query('DELETE FROM sys_idempotency');
+      const a = await add('key-00000002', 'durable').expect(200);
+      const [rec] = await ds.query(
+        "SELECT owner, digest FROM sys_idempotency WHERE idem_key = 'key-00000002'",
+      );
+      expect(rec).toBeTruthy();
+      // 模拟 Redis 丢失（重启、清空、上次执行时进程崩溃）
+      await clearTestRedis(raw);
+      const b = await add('key-00000002', 'durable').expect(200);
+      expect(b.body.data).toEqual(a.body.data);
+      const [{ n }] = await ds.query(
+        "SELECT COUNT(*) n FROM demo_customer WHERE name = 'durable'",
+      );
+      expect(Number(n)).toBe(1);
+      // Redis 清空后换内容用同一个键，仍按数据库记录判冲突
+      await clearTestRedis(raw);
+      await add('key-00000002', 'changed').expect(409);
+    });
+
+    it('业务失败（校验不通过）时不留幂等记录，同一个键改正后可以重提', async () => {
+      await ds.query('DELETE FROM sys_idempotency');
+      // name 必填：空字符串校验失败
+      await add('key-00000003', '').expect(400);
+      const [{ n }] = await ds.query(
+        "SELECT COUNT(*) n FROM sys_idempotency WHERE idem_key = 'key-00000003'",
+      );
+      expect(Number(n)).toBe(0);
+      await add('key-00000003', 'fixed').expect(200);
+    });
+  });
 });

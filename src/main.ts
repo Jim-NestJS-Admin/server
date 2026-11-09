@@ -6,7 +6,11 @@ import { AppConfigService } from './core/config/app-config.service.js';
 import { setupSwagger } from './core/swagger/swagger.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // 关掉默认的请求体解析，用 configureApp 里带上限的那一套（T25）
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+    bodyParser: false,
+  });
   configureApp(app);
   const config = app.get(AppConfigService);
   if (config.swaggerEnabled) setupSwagger(app, APP_VERSION);

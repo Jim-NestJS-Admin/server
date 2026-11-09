@@ -1,4 +1,9 @@
 import { Global, Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import {
+  IdempotencyEntity,
+  IdempotencyLedger,
+} from '../security/idempotency.ledger.js';
 import { AuthzContext } from '../permission/authz-context.js';
 import { DataScopeCrudScope } from '../permission/data-scope.scope.js';
 import { CrudContextProvider, CrudScope } from './crud-scope.js';
@@ -11,7 +16,10 @@ import { CrudRuntime } from './crud.runtime.js';
  */
 @Global()
 @Module({
+  // 幂等记录和业务写在同一个事务里（T25），所以账本放在 CRUD 运行环境旁边
+  imports: [TypeOrmModule.forFeature([IdempotencyEntity])],
   providers: [
+    IdempotencyLedger,
     CrudContextProvider,
     AuthzContext,
     { provide: CrudScope, useClass: DataScopeCrudScope },
@@ -20,6 +28,7 @@ import { CrudRuntime } from './crud.runtime.js';
   ],
   exports: [
     CrudRuntime,
+    IdempotencyLedger,
     CrudScope,
     CrudContextProvider,
     CrudAudit,

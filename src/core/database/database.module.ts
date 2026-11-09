@@ -4,6 +4,7 @@ import { AppConfigService } from '../config/app-config.service.js';
 import { HealthService } from '../health/health.service.js';
 import { DataSource } from 'typeorm';
 import { SnakeNamingStrategy } from './naming.strategy.js';
+import { applyQueryTimeout } from './query-timeout.js';
 
 /**
  * 数据库连接（MySQL 8.4 + TypeORM）。实体由各模块用 TypeOrmModule.forFeature 注册，autoLoadEntities 自动收集。
@@ -37,7 +38,12 @@ import { SnakeNamingStrategy } from './naming.strategy.js';
   ],
 })
 export class DatabaseModule {
-  constructor(health: HealthService, dataSource: DataSource) {
+  constructor(
+    health: HealthService,
+    dataSource: DataSource,
+    config: AppConfigService,
+  ) {
+    applyQueryTimeout(dataSource, config.db.queryTimeoutMs);
     health.register('database', async () => {
       await dataSource.query('SELECT 1');
     });

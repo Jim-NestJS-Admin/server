@@ -15,8 +15,10 @@ import {
   type RowOwner,
 } from '../field-perm/field-policy.js';
 import { mask } from '../field-perm/masks.js';
+import { escapeSpreadsheetCell } from '../security/sanitize.js';
 import { crudErrors, translateDbError } from './crud.errors.js';
 import type { CrudAudit } from './crud-audit.js';
+import type { IdempotencyLedger } from '../security/idempotency.ledger.js';
 import type { AuthzContext } from '../permission/authz-context.js';
 import {
   childRowsOf,
@@ -60,6 +62,8 @@ export interface CrudBinding<T extends BaseEntity> {
   audit: CrudAudit;
   /** 本次请求的授权（字段权限按行裁剪用） */
   authz: AuthzContext;
+  /** 幂等记录账本（T25）：写事务提交前把幂等记录写进同一个事务 */
+  idempotency: IdempotencyLedger;
 }
 
 const ALIAS = 'e';
@@ -129,11 +133,42 @@ export class BaseService<T extends BaseEntity> {
 
   // ---------- 读 ----------
 
-  async page(query: PageQuery): Promise<PageResult<CrudRow<T>>> {
+  /** 导出（T18）：最多这么多行，超过时只导出前面的 */
+  static readonly EXPORT_MAX_ROWS = 10000;
+
+  /** 导出 CSV：列是可读的业务字段，值已按字段权限处理（隐藏留空、脱敏是打码值），单元格防公式注入 */
+  async exportCsv(query: PageQuery): Promise<string> {
+    const { list } = await this.page(query, BaseService.EXPORT_MAX_ROWS);
+    const cols = this.meta.readable.filter((f) => f !== 'version');
+    const label = (f: string) =>
+      this.meta.fields.find((x) => x.property === f)?.label ?? f;
+    const cell = (v: unknown) => {
+      const s = escapeSpreadsheetCell(
+        v === null || v === undefined
+          ? ''
+          : v instanceof Date
+            ? v.toISOString()
+            : typeof v === 'object'
+              ? JSON.stringify(v)
+              : String(v as string),
+      ) as string;
+      return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [cols.map((c) => cell(label(c))).join(',')];
+    for (const row of list as Record<string, unknown>[])
+      lines.push(cols.map((c) => cell(row[c])).join(','));
+    // 带 BOM，Excel 打开中文不乱码
+    return '\uFEFF' + lines.join('\r\n');
+  }
+
+  async page(
+    query: PageQuery,
+    exportLimit?: number,
+  ): Promise<PageResult<CrudRow<T>>> {
     const meta = this.meta;
-    const page = query.page ?? 1;
-    const size = query.size ?? 20;
-    if (size > meta.maxSize)
+    const page = exportLimit ? 1 : (query.page ?? 1);
+    const size = exportLimit ?? query.size ?? 20;
+    if (!exportLimit && size > meta.maxSize)
       throw crudErrors.badRequest(`每页最多 ${meta.maxSize} 条`, [
         { field: 'size', messages: [`每页最多 ${meta.maxSize} 条`] },
       ]);
@@ -200,6 +235,27 @@ export class BaseService<T extends BaseEntity> {
     return this.toDetail(manager, row, this.crud.context.current().tenantId);
   }
 
+  /** 树形列表最多这么多个节点；超过说明不适合一次加载，要改成按层加载 */
+  static readonly TREE_MAX_NODES = 5000;
+
+  /**
+   * 树形列表（树形资源）：全部可见节点平铺返回，同级按排序字段、再按编号从小到大。
+   * 数据范围同样生效：看不见父节点的节点在前端当作根节点显示。
+   */
+  async tree(): Promise<{ list: CrudRow<T>[] }> {
+    const tree = this.assertTree();
+    const qb = this.select(this.crud.dataSource.manager, 'page');
+    if (tree.sortField)
+      qb.addOrderBy(`${ALIAS}.\`${this.column(tree.sortField)}\``, 'ASC');
+    qb.addOrderBy(`${ALIAS}.id`, 'ASC');
+    const rows = await qb.limit(BaseService.TREE_MAX_NODES + 1).getMany();
+    if (rows.length > BaseService.TREE_MAX_NODES)
+      throw crudErrors.badRequest(
+        `节点超过 ${BaseService.TREE_MAX_NODES} 个，不能一次加载`,
+      );
+    return { list: rows.map((r) => this.toRow(r)) };
+  }
+
   // ---------- 写 ----------
 
   /** 新增；有子表时 children 里每个子表只有 added，主表和子表在同一个事务里写入 */
@@ -213,6 +269,10 @@ export class BaseService<T extends BaseEntity> {
     );
     return this.transaction(async (tx) => {
       const values = this.pick(data, this.meta.addable);
+      this.dropChildNotEditable(plans, {
+        orgId: tx.ctx.orgId,
+        createdBy: tx.ctx.userId,
+      });
       // 字段权限：新增的这一行属于当前组织、创建人是自己
       this.dropNotEditable(values, {
         orgId: tx.ctx.orgId,
@@ -220,6 +280,7 @@ export class BaseService<T extends BaseEntity> {
       });
       this.assertNullable(values);
       await this.beforeAdd(values, tx);
+      await this.checkTreeParent(tx, null, values);
       const id = await this.insertRow(tx, values);
       // 没提交的子表也要按「空」检查行数下限
       const all = this.meta.children.map(
@@ -260,12 +321,15 @@ export class BaseService<T extends BaseEntity> {
     return this.transaction(async (tx) => {
       // 锁住主表这一行：同一张单据的聚合保存排队执行，子表的行数、唯一检查基于一致的数据
       const existing = await this.findOne(tx.manager, id, 'update', true);
+      // 子表字段权限按主表这一行的归属判断
+      this.dropChildNotEditable(plans, existing as unknown as RowOwner);
       if (!existing) throw crudErrors.notFound();
       if (existing.version !== version) throw crudErrors.versionConflict();
       const changes = this.pick(data, this.meta.updatable);
       this.dropNotEditable(changes, existing as unknown as RowOwner);
       this.assertNullable(changes);
       await this.beforeUpdate(changes, existing, tx);
+      await this.checkTreeParent(tx, id, changes);
       const clean = this.stripSystem(changes);
 
       const qb = tx.manager
@@ -302,6 +366,7 @@ export class BaseService<T extends BaseEntity> {
         .setLock('pessimistic_write')
         .getMany();
       if (rows.length !== unique.length) throw crudErrors.notFound();
+      await this.checkTreeLeaves(tx, unique);
       await this.beforeDelete(rows, tx);
 
       if (this.meta.deleteMode === 'hard') {
@@ -399,6 +464,7 @@ export class BaseService<T extends BaseEntity> {
     this.assertSoft();
     return this.transaction(async (tx) => {
       const rows = await this.lockRecycled(tx, items, 'restore');
+      await this.checkTreeRestore(tx, rows);
       await this.beforeRestore(rows, tx);
       const qb = tx.manager
         .createQueryBuilder()
@@ -509,6 +575,95 @@ export class BaseService<T extends BaseEntity> {
       );
   }
 
+  // ---------- 树形资源 ----------
+
+  private assertTree() {
+    const tree = this.meta.tree;
+    if (!tree) throw new Error(`${this.meta.prefix} 不是树形资源`);
+    return tree;
+  }
+
+  /** 只按租户查（不按数据范围）：成环、有没有下级要看整棵树，包括当前用户看不见的节点 */
+  private tenantTree(tx: CrudTx) {
+    return tx.manager
+      .createQueryBuilder(this.meta.entity, 't')
+      .where('t.`tenant_id` = :__tid', { __tid: tx.ctx.tenantId })
+      .andWhere('t.`deleted_at` IS NULL');
+  }
+
+  /**
+   * 新增、修改时的父节点校验：父节点要存在且当前用户看得见，不能是自己，不能是自己的下级（成环）。
+   * values 里没有父级字段时（修改时没改父节点）不检查；null 表示根节点。
+   */
+  private async checkTreeParent(
+    tx: CrudTx,
+    id: string | null,
+    values: Partial<T>,
+  ): Promise<void> {
+    const tree = this.meta.tree;
+    if (!tree || !Object.hasOwn(values, tree.parentField)) return;
+    const raw = (values as Record<string, unknown>)[tree.parentField];
+    if (raw === null || raw === undefined || raw === '') {
+      (values as Record<string, unknown>)[tree.parentField] = null;
+      return;
+    }
+    const parentId = String(raw as string);
+    const bad = (message: string) =>
+      crudErrors.badRequest(message, [
+        { field: `data.${tree.parentField}`, messages: [message] },
+      ]);
+    if (id !== null && parentId === id) throw bad('上级不能是自己');
+    if (!(await this.findOne(tx.manager, parentId, id ? 'update' : 'add')))
+      throw bad('上级节点不存在或没有权限');
+    if (id === null) return;
+    const col = this.column(tree.parentField);
+    let current: string | null = parentId;
+    for (let depth = 0; current; depth++) {
+      if (depth >= 100) throw bad('层级太深（超过 100 层）');
+      const row: { p: string | null } | undefined = await this.tenantTree(tx)
+        .select(`t.\`${col}\``, 'p')
+        .andWhere('t.id = :__cur', { __cur: current })
+        .getRawOne();
+      current = row?.p != null ? String(row.p) : null;
+      if (current === id) throw bad('不能把节点移到它自己的下级');
+    }
+  }
+
+  /** 有下级的节点不能删除；同一批里连同下级一起删可以 */
+  private async checkTreeLeaves(tx: CrudTx, ids: string[]): Promise<void> {
+    const tree = this.meta.tree;
+    if (!tree) return;
+    const col = this.column(tree.parentField);
+    const child = await this.tenantTree(tx)
+      .andWhere(`t.\`${col}\` IN (:...__ids)`, { __ids: ids })
+      .andWhere('t.id NOT IN (:...__ids)', { __ids: ids })
+      .getCount();
+    if (child)
+      throw crudErrors.badRequest('有下级节点，不能删除，请先删除或移走下级');
+  }
+
+  /** 恢复时上级必须是有效的（没删除），或者在同一批里一起恢复 */
+  private async checkTreeRestore(tx: CrudTx, rows: T[]): Promise<void> {
+    const tree = this.meta.tree;
+    if (!tree) return;
+    const batch = new Set(rows.map((r) => String(r.id)));
+    const parents = [
+      ...new Set(
+        rows
+          .map((r) => (r as Record<string, unknown>)[tree.parentField])
+          .filter((p) => p !== null && p !== undefined)
+          .map((p) => String(p as string))
+          .filter((p) => !batch.has(p)),
+      ),
+    ];
+    if (!parents.length) return;
+    const alive = await this.tenantTree(tx)
+      .andWhere('t.id IN (:...__ps)', { __ps: parents })
+      .getCount();
+    if (alive !== parents.length)
+      throw crudErrors.badRequest('上级节点已删除，请先恢复上级');
+  }
+
   private assertSoft(): void {
     if (this.meta.deleteMode !== 'soft')
       throw new Error(`${this.meta.prefix} 是硬删除资源，没有回收站`);
@@ -551,7 +706,7 @@ export class BaseService<T extends BaseEntity> {
         '跨租户查询模式（@IgnoreTenant）只能读，不能新增、修改、删除',
       );
     try {
-      return await dataSource.transaction((manager) =>
+      return await this.crud.idempotency.transaction((manager) =>
         fn({ manager, ctx, meta: meta as CrudResourceMeta }),
       );
     } catch (err) {
@@ -608,13 +763,37 @@ export class BaseService<T extends BaseEntity> {
     tenantId: string,
   ): Promise<CrudRow<T>> {
     const out = this.toRow(row) as Record<string, unknown>;
-    if (this.meta.children.length)
-      out.children = await loadChildren(
+    if (this.meta.children.length) {
+      const children = await loadChildren(
         manager,
         this.meta as CrudResourceMeta,
         tenantId,
         String(row.id),
       );
+      // 子表字段权限（T16）：资源是「主表前缀.子表名」，按主表这一行的归属判断
+      const src = row as unknown as Record<string, unknown>;
+      const owner: RowOwner = {
+        orgId: (src.orgId as string | null | undefined) ?? null,
+        createdBy: (src.createdBy as string | null | undefined) ?? null,
+      };
+      for (const child of this.meta.children) {
+        const verdict = this.childAccess(child, owner);
+        if (!verdict) continue;
+        for (const r of children[child.resource] ?? []) {
+          const states: Record<string, string> = {};
+          for (const k of Object.keys(r)) {
+            if (FIELD_PERM_EXEMPT.has(k) || k === child.foreignKey) continue;
+            const v = verdict(k);
+            if (v.state === 'editable') continue;
+            states[k] = v.state;
+            if (v.state === 'hidden') delete r[k];
+            else if (v.state === 'masked') r[k] = mask(r[k], v.mask);
+          }
+          if (Object.keys(states).length) r._fieldState = states;
+        }
+      }
+      out.children = children;
+    }
     return out as CrudRow<T>;
   }
 
@@ -723,6 +902,56 @@ export class BaseService<T extends BaseEntity> {
       FIELD_PERM_EXEMPT.has(field) ||
       (!!authz &&
         rawVisibleToAll(authz, this.meta.permPrefix, this.meta.entity, field));
+  }
+
+  /** 子表字段的判断函数：资源 = 主表权限前缀 + . + 子表名，归属看主表这一行 */
+  private childAccess(
+    child: { resource: string; entity: Function },
+    owner: RowOwner,
+  ): ((field: string) => FieldVerdict) | null {
+    const ctx = this.crud.context.current();
+    if (ctx.endpoint === 'system') return null;
+    const authz = this.crud.authz.get();
+    return (field) =>
+      authz
+        ? fieldVerdict(
+            authz,
+            ctx.userId,
+            `${this.meta.permPrefix}.${child.resource}`,
+            child.entity,
+            field,
+            this.meta.dataScope,
+            owner,
+          )
+        : { state: 'hidden', mask: null };
+  }
+
+  /** 子表新增、修改的行：剔除不可编辑的字段并记日志 */
+  private dropChildNotEditable(
+    plans: {
+      child: { resource: string; entity: Function };
+      added: { values: Record<string, unknown> }[];
+      updated: { values: Record<string, unknown> }[];
+    }[],
+    owner: RowOwner,
+  ): void {
+    for (const p of plans) {
+      const verdict = this.childAccess(p.child, owner);
+      if (!verdict) return;
+      const dropped = new Set<string>();
+      for (const r of [...p.added, ...p.updated])
+        for (const k of Object.keys(r.values))
+          if (!FIELD_PERM_EXEMPT.has(k) && verdict(k).state !== 'editable') {
+            delete r.values[k];
+            dropped.add(k);
+          }
+      if (dropped.size)
+        fieldLogger.warn({
+          event: 'field-perm.write-dropped',
+          resource: `${this.meta.permPrefix}.${p.child.resource}`,
+          fields: [...dropped],
+        });
+    }
   }
 
   /** 写入前剔除这一行上不可编辑的字段，并记日志（架构「字段权限 · 后端强制执行」） */

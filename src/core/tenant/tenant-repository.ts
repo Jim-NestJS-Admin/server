@@ -39,7 +39,7 @@ export class TenantRepository<T extends BaseEntity> {
     );
   }
 
-  /** 插入一行，返回编号；租户、创建人、修改人由框架填，传进来的系统字段一律忽略 */
+  /** 插入一行，返回编号；租户、所属组织、创建人、修改人由框架填，传进来的系统字段一律忽略 */
   async insert(values: Partial<T>, manager?: EntityManager): Promise<string> {
     const ctx = this.writable();
     const r = await (manager ?? this.dataSource.manager)
@@ -49,6 +49,7 @@ export class TenantRepository<T extends BaseEntity> {
       .values({
         ...this.clean(values),
         tenantId: ctx.tenantId,
+        orgId: ctx.orgId,
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       } as never)

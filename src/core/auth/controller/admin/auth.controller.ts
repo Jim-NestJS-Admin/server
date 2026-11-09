@@ -23,6 +23,7 @@ import {
 } from '../../http.js';
 import { LoginLockedException } from '../../login-attempts.service.js';
 import { TokenService } from '../../token.service.js';
+import { RateLimit } from '../../../security/rate-limit.js';
 
 /** 后台登录：出题、登录、刷新、退出。都不需要访问令牌（刷新和退出靠 Cookie） */
 @ApiTags('auth 登录认证')
@@ -36,6 +37,7 @@ export class AuthController {
   ) {}
 
   @Get('captcha')
+  @RateLimit('captcha', 30, 60)
   @ApiOperation({
     operationId: 'authCaptcha',
     summary: '获取图形验证码',
@@ -49,6 +51,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @RateLimit('login', 20, 60)
   @HttpCode(200)
   @ApiOperation({ operationId: 'authLogin', summary: '账号密码登录' })
   @ApiResult(TokenResult)
@@ -70,6 +73,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @RateLimit('refresh', 60, 60)
   @HttpCode(200)
   @ApiOperation({
     operationId: 'authRefresh',

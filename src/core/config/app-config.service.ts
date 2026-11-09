@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EnvironmentVariables, NodeEnv } from './env.validation.js';
+import { parseOrigins, type CorsOrigins } from '../security/http-security.js';
 
 export interface AuthConfig {
   jwtSecret: string;
@@ -47,6 +48,7 @@ export class AppConfigService {
     user: string;
     password: string;
     synchronize: boolean;
+    queryTimeoutMs: number;
   } {
     return {
       host: this.config.get('DB_HOST', { infer: true }),
@@ -55,6 +57,7 @@ export class AppConfigService {
       user: this.config.get('DB_USER', { infer: true }),
       password: this.config.get('DB_PASSWORD', { infer: true }),
       synchronize: this.config.get('DB_SYNCHRONIZE', { infer: true }) ?? false,
+      queryTimeoutMs: this.config.get('DB_QUERY_TIMEOUT_MS', { infer: true }),
     };
   }
 
@@ -71,6 +74,27 @@ export class AppConfigService {
       password: this.config.get('REDIS_PASSWORD', { infer: true }) || undefined,
       db: this.config.get('REDIS_DB', { infer: true }),
       keyPrefix: this.config.get('REDIS_KEY_PREFIX', { infer: true }),
+    };
+  }
+
+  get security(): {
+    trustProxy: number;
+    ipPerMinute: number;
+    hsts: boolean;
+    cors: CorsOrigins;
+  } {
+    return {
+      trustProxy: this.config.get('TRUST_PROXY', { infer: true }),
+      ipPerMinute: this.config.get('RATE_LIMIT_IP_PER_MINUTE', { infer: true }),
+      hsts:
+        this.config.get('SECURITY_HSTS', { infer: true }) ?? this.isProduction,
+      cors: {
+        admin: parseOrigins(
+          this.config.get('AUTH_ADMIN_ORIGINS', { infer: true }),
+        ),
+        web: parseOrigins(this.config.get('CORS_WEB_ORIGINS', { infer: true })),
+        app: parseOrigins(this.config.get('CORS_APP_ORIGINS', { infer: true })),
+      },
     };
   }
 

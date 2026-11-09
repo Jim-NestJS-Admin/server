@@ -1,7 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+/** tree-select：树形资源的父级字段，选项来自本资源的 tree 接口 */
 export type FormComponent =
-  'input' | 'textarea' | 'number' | 'select' | 'switch' | 'date' | 'datetime';
+  | 'input'
+  | 'textarea'
+  | 'number'
+  | 'select'
+  | 'switch'
+  | 'date'
+  | 'datetime'
+  | 'tree-select';
 
 export interface DictItem {
   value: string | number | boolean;

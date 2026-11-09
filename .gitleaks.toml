@@ -1,0 +1,22 @@
+# 密钥泄露检查（T25）。沿用 gitleaks 默认规则，只放行明确的假值。
+# 真实密钥只放 .env（不提交）或部署环境变量；误报时在这里按路径或固定字符串放行，并在提交说明里写原因。
+[extend]
+useDefault = true
+
+[allowlist]
+description = "示例配置、测试固定值、公开测试向量"
+paths = [
+  '''\.env\.example$''',
+  '''(^|/)test/''',
+  '''\.spec\.ts$''',
+  '''\.e2e-spec\.ts$''',
+  '''(^|/)openapi/''',
+  '''pnpm-lock\.yaml$''',
+]
+stopwords = [
+  "change-me",
+  "openapi-export-placeholder-secret",
+  "e2e-jwt-secret",
+  "ci-password",
+  "ci-root",
+]

@@ -58,7 +58,7 @@ class DemoClientEntity extends BaseEntity {
   prefix: 'test/client',
   label: '演示客户',
   entity: DemoClientEntity,
-  api: ['page', 'info', 'update'],
+  api: ['page', 'info', 'update', 'export'],
   dataScope: true,
   pageQuery: {
     keyWords: ['name', 'phone'],
@@ -68,6 +68,7 @@ class DemoClientEntity extends BaseEntity {
 class DemoClientController extends BaseController<DemoClientEntity> {}
 
 const P = (...a: string[]) => a.map((x) => `test:client:${x}`);
+
 const grants = new Map<string, RoleGrant[]>();
 const roleFields: RoleFieldRule[] = [];
 
@@ -308,5 +309,18 @@ describe('字段权限（T16）', () => {
         },
       }).expect(200);
     });
+  });
+
+  it('导出（T18）：逐行脱敏 / 隐藏、防公式注入、只有有导出权限的角色参与', async () => {
+    await seed('mine', '11');
+    await seed('=1+1', '20');
+    const res = await as('100', '11', 'export', {}).expect(200);
+    expect(res.headers['content-type']).toMatch(/text\/csv/);
+    const text = res.text.replace(/^\uFEFF/, '');
+    // 导出权限只有客服有：所有行都按客服的状态（手机号打码、成本价留空）
+    expect(text).toContain('138****5678');
+    expect(text).not.toContain('13812345678');
+    expect(text).not.toContain('99.5');
+    expect(text).toContain("'=1+1");
   });
 });

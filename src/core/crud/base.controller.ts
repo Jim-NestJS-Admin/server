@@ -1,4 +1,10 @@
-import { Inject, type OnModuleInit, type Type } from '@nestjs/common';
+import {
+  Inject,
+  type OnModuleInit,
+  type Type,
+  Optional,
+  StreamableFile,
+} from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { EntityMetadata } from 'typeorm';
 import type { BaseEntity } from './base.entity.js';
@@ -6,6 +12,8 @@ import { BaseService, type PageQuery } from './base.service.js';
 import { buildCrudSchema } from './crud-schema.js';
 import { SYSTEM_FIELDS } from './base.entity.js';
 import { fieldVerdict } from '../field-perm/field-policy.js';
+import { mergeView } from '../page-config/page-config.rules.js';
+import { PageViewSource } from '../page-config/page-config.service.js';
 import { CrudRuntime } from './crud.runtime.js';
 import type { CrudControllerOptions, CrudResourceMeta } from './crud.types.js';
 
@@ -56,6 +64,10 @@ interface CrudClassMeta {
 export class BaseController<T extends BaseEntity> implements OnModuleInit {
   @Inject(CrudRuntime) private readonly crudRuntime: CrudRuntime;
   @Inject(ModuleRef) private readonly crudModuleRef: ModuleRef;
+  /** 在线页面配置（T23）；没装配时页面描述不带 view */
+  @Optional()
+  @Inject(PageViewSource)
+  private readonly pageViews?: PageViewSource;
   protected service: BaseService<T>;
 
   async onModuleInit(): Promise<void> {
@@ -98,6 +110,7 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
       childOwner: (entity) => this.crudRuntime.childOwner(entity),
       audit: this.crudRuntime.audit,
       authz: this.crudRuntime.authz,
+      idempotency: this.crudRuntime.idempotency,
     });
     this.crudRuntime.register(meta);
     this.service = service;
@@ -130,6 +143,10 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
     return this.service.delete(body.ids);
   }
 
+  tree() {
+    return this.service.tree();
+  }
+
   recyclePage(body: { page?: number; size?: number; keyword?: string }) {
     return this.service.recyclePage(body);
   }
@@ -146,7 +163,16 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
    * 页面描述 + fieldPerms：本页面（列表权限的本次有效角色）下每个字段可能的最宽状态，
    * 前端据此决定列和表单项是否出现、是否只读；逐行的真实状态以数据为准（契约 field-perm.md）。
    */
-  schema() {
+  /** 导出 CSV（T18）：和列表同样的查询条件和数据范围，逐行按字段权限隐藏 / 打码，单元格防公式注入 */
+  async export(body: PageQuery) {
+    const csv = await this.service.exportCsv(body);
+    return new StreamableFile(Buffer.from(csv, 'utf8'), {
+      type: 'text/csv; charset=utf-8',
+      disposition: `attachment; filename="${this.service.meta.permPrefix.replace(/:/g, '-')}.csv"`,
+    });
+  }
+
+  async schema() {
     const meta = this.service.meta as CrudResourceMeta;
     const authz = this.crudRuntime.authz.get();
     const ctx = this.crudRuntime.context.current();
@@ -169,7 +195,15 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
             : { state: 'hidden', mask: null },
         ]),
     );
-    return Object.assign(buildCrudSchema(meta), { fieldPerms });
+    const schema = Object.assign(buildCrudSchema(meta), { fieldPerms });
+    if (!this.pageViews) return schema;
+    // 生效的显示配置：代码默认 → 管理员 → 用户列设置，最后按字段权限裁剪（契约 page-config.md）
+    const { admin, user, canWrite } = await this.pageViews.load(meta);
+    const state = (f: string) =>
+      (fieldPerms[f] as { state: string } | undefined)?.state ?? 'editable';
+    return Object.assign(schema, {
+      view: mergeView(meta, admin, user, state, canWrite),
+    });
   }
 }
 
