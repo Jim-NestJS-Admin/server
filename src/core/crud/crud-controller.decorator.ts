@@ -34,6 +34,7 @@ type Method =
   | 'restore'
   | 'purge'
   | 'export'
+  | 'tree'
   | 'schema';
 
 interface RouteSpec {
@@ -61,6 +62,7 @@ const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
  * - add    { data: {...} }
  * - update { id, version, data: { 只传要改的字段 } }
  * - delete { ids: [...] }，整批成败
+ * - tree   无参数 → { list }（树形资源，权限码同 page）
  *
  * 子类自己写了同名方法时，路由挂在子类的方法上（第 3 级定制）。
  */
@@ -154,6 +156,14 @@ export function CrudController<T extends BaseEntity>(
         result: undefined,
         errors: [400, 429],
       },
+      {
+        api: 'tree',
+        method: 'tree',
+        http: 'post',
+        summary: `${label}树形列表（全部可见节点，平铺）`,
+        result: dtos.TreeResult,
+        errors: [400],
+      },
     ];
     const enabled = specs.filter((s) => s.api && meta.api.includes(s.api));
     enabled.push({
@@ -185,8 +195,8 @@ export function CrudController<T extends BaseEntity>(
         });
       }
       const descriptor = Object.getOwnPropertyDescriptor(proto, spec.method)!;
-      // 权限码「前缀:动作」；页面描述跟列表同一个码。删除、彻底删除是高风险操作
-      const action = spec.api ?? 'page';
+      // 权限码「前缀:动作」；页面描述、树形列表跟列表同一个码。删除、彻底删除是高风险操作
+      const action = !spec.api || spec.api === 'tree' ? 'page' : spec.api;
       const decorators: MethodDecorator[] = [
         Perms(`${meta.permPrefix}:${action}`, {
           risk: action === 'delete' || action === 'purge' ? 'high' : 'normal',

@@ -44,6 +44,7 @@ export class CrudSchemaFormItem {
       'switch',
       'date',
       'datetime',
+      'tree-select',
     ],
   })
   component: FormComponent;
@@ -111,6 +112,15 @@ export class CrudSchemaSort {
   @ApiProperty({ enum: ['asc', 'desc'] }) order: 'asc' | 'desc';
 }
 
+export class CrudSchemaTree {
+  @ApiProperty({ example: 'parentId', description: '指向父节点编号的字段' })
+  parentField: string;
+  @ApiProperty({ example: 'name', description: '节点显示名称字段' })
+  nameField: string;
+  @ApiPropertyOptional({ example: 'sort', description: '同级排序字段' })
+  sortField?: string;
+}
+
 export class CrudSchemaChild {
   @ApiProperty({ example: 'items' }) resource: string;
   @ApiProperty() label: string;
@@ -163,6 +173,12 @@ export class CrudSchema {
     description: '子表；没有子表时为空数组',
   })
   children: CrudSchemaChild[];
+  @ApiProperty({
+    type: CrudSchemaTree,
+    nullable: true,
+    description: '树形资源配置；不是树时为 null',
+  })
+  tree: CrudSchemaTree | null;
   @ApiPropertyOptional({
     type: 'object',
     additionalProperties: { $ref: getSchemaPath('FieldPermStateDto') },
@@ -205,7 +221,13 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
       return {
         field: f.property,
         label: f.label,
-        component: cfg.component ?? (f.dict ? 'select' : 'input'),
+        component:
+          cfg.component ??
+          (meta.tree?.parentField === f.property
+            ? 'tree-select'
+            : f.dict
+              ? 'select'
+              : 'input'),
         required: Boolean(cfg.required),
         ...(cfg.placeholder ? { placeholder: cfg.placeholder } : {}),
         edit: f.edit ?? 'both',
@@ -307,5 +329,6 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
     defaultSort: meta.defaultSort,
     maxSize: meta.maxSize,
     children,
+    tree: meta.tree ? { ...meta.tree } : null,
   };
 }

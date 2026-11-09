@@ -235,6 +235,27 @@ export class BaseService<T extends BaseEntity> {
     return this.toDetail(manager, row, this.crud.context.current().tenantId);
   }
 
+  /** 树形列表最多这么多个节点；超过说明不适合一次加载，要改成按层加载 */
+  static readonly TREE_MAX_NODES = 5000;
+
+  /**
+   * 树形列表（树形资源）：全部可见节点平铺返回，同级按排序字段、再按编号从小到大。
+   * 数据范围同样生效：看不见父节点的节点在前端当作根节点显示。
+   */
+  async tree(): Promise<{ list: CrudRow<T>[] }> {
+    const tree = this.assertTree();
+    const qb = this.select(this.crud.dataSource.manager, 'page');
+    if (tree.sortField)
+      qb.addOrderBy(`${ALIAS}.\`${this.column(tree.sortField)}\``, 'ASC');
+    qb.addOrderBy(`${ALIAS}.id`, 'ASC');
+    const rows = await qb.limit(BaseService.TREE_MAX_NODES + 1).getMany();
+    if (rows.length > BaseService.TREE_MAX_NODES)
+      throw crudErrors.badRequest(
+        `节点超过 ${BaseService.TREE_MAX_NODES} 个，不能一次加载`,
+      );
+    return { list: rows.map((r) => this.toRow(r)) };
+  }
+
   // ---------- 写 ----------
 
   /** 新增；有子表时 children 里每个子表只有 added，主表和子表在同一个事务里写入 */
@@ -259,6 +280,7 @@ export class BaseService<T extends BaseEntity> {
       });
       this.assertNullable(values);
       await this.beforeAdd(values, tx);
+      await this.checkTreeParent(tx, null, values);
       const id = await this.insertRow(tx, values);
       // 没提交的子表也要按「空」检查行数下限
       const all = this.meta.children.map(
@@ -307,6 +329,7 @@ export class BaseService<T extends BaseEntity> {
       this.dropNotEditable(changes, existing as unknown as RowOwner);
       this.assertNullable(changes);
       await this.beforeUpdate(changes, existing, tx);
+      await this.checkTreeParent(tx, id, changes);
       const clean = this.stripSystem(changes);
 
       const qb = tx.manager
@@ -343,6 +366,7 @@ export class BaseService<T extends BaseEntity> {
         .setLock('pessimistic_write')
         .getMany();
       if (rows.length !== unique.length) throw crudErrors.notFound();
+      await this.checkTreeLeaves(tx, unique);
       await this.beforeDelete(rows, tx);
 
       if (this.meta.deleteMode === 'hard') {
@@ -440,6 +464,7 @@ export class BaseService<T extends BaseEntity> {
     this.assertSoft();
     return this.transaction(async (tx) => {
       const rows = await this.lockRecycled(tx, items, 'restore');
+      await this.checkTreeRestore(tx, rows);
       await this.beforeRestore(rows, tx);
       const qb = tx.manager
         .createQueryBuilder()
@@ -548,6 +573,95 @@ export class BaseService<T extends BaseEntity> {
       throw new Error(
         `${this.meta.prefix} 的实体是 ${owner} 的子表，只能通过 ${owner} 的新增、修改一起保存`,
       );
+  }
+
+  // ---------- 树形资源 ----------
+
+  private assertTree() {
+    const tree = this.meta.tree;
+    if (!tree) throw new Error(`${this.meta.prefix} 不是树形资源`);
+    return tree;
+  }
+
+  /** 只按租户查（不按数据范围）：成环、有没有下级要看整棵树，包括当前用户看不见的节点 */
+  private tenantTree(tx: CrudTx) {
+    return tx.manager
+      .createQueryBuilder(this.meta.entity, 't')
+      .where('t.`tenant_id` = :__tid', { __tid: tx.ctx.tenantId })
+      .andWhere('t.`deleted_at` IS NULL');
+  }
+
+  /**
+   * 新增、修改时的父节点校验：父节点要存在且当前用户看得见，不能是自己，不能是自己的下级（成环）。
+   * values 里没有父级字段时（修改时没改父节点）不检查；null 表示根节点。
+   */
+  private async checkTreeParent(
+    tx: CrudTx,
+    id: string | null,
+    values: Partial<T>,
+  ): Promise<void> {
+    const tree = this.meta.tree;
+    if (!tree || !Object.hasOwn(values, tree.parentField)) return;
+    const raw = (values as Record<string, unknown>)[tree.parentField];
+    if (raw === null || raw === undefined || raw === '') {
+      (values as Record<string, unknown>)[tree.parentField] = null;
+      return;
+    }
+    const parentId = String(raw as string);
+    const bad = (message: string) =>
+      crudErrors.badRequest(message, [
+        { field: `data.${tree.parentField}`, messages: [message] },
+      ]);
+    if (id !== null && parentId === id) throw bad('上级不能是自己');
+    if (!(await this.findOne(tx.manager, parentId, id ? 'update' : 'add')))
+      throw bad('上级节点不存在或没有权限');
+    if (id === null) return;
+    const col = this.column(tree.parentField);
+    let current: string | null = parentId;
+    for (let depth = 0; current; depth++) {
+      if (depth >= 100) throw bad('层级太深（超过 100 层）');
+      const row: { p: string | null } | undefined = await this.tenantTree(tx)
+        .select(`t.\`${col}\``, 'p')
+        .andWhere('t.id = :__cur', { __cur: current })
+        .getRawOne();
+      current = row?.p != null ? String(row.p) : null;
+      if (current === id) throw bad('不能把节点移到它自己的下级');
+    }
+  }
+
+  /** 有下级的节点不能删除；同一批里连同下级一起删可以 */
+  private async checkTreeLeaves(tx: CrudTx, ids: string[]): Promise<void> {
+    const tree = this.meta.tree;
+    if (!tree) return;
+    const col = this.column(tree.parentField);
+    const child = await this.tenantTree(tx)
+      .andWhere(`t.\`${col}\` IN (:...__ids)`, { __ids: ids })
+      .andWhere('t.id NOT IN (:...__ids)', { __ids: ids })
+      .getCount();
+    if (child)
+      throw crudErrors.badRequest('有下级节点，不能删除，请先删除或移走下级');
+  }
+
+  /** 恢复时上级必须是有效的（没删除），或者在同一批里一起恢复 */
+  private async checkTreeRestore(tx: CrudTx, rows: T[]): Promise<void> {
+    const tree = this.meta.tree;
+    if (!tree) return;
+    const batch = new Set(rows.map((r) => String(r.id)));
+    const parents = [
+      ...new Set(
+        rows
+          .map((r) => (r as Record<string, unknown>)[tree.parentField])
+          .filter((p) => p !== null && p !== undefined)
+          .map((p) => String(p as string))
+          .filter((p) => !batch.has(p)),
+      ),
+    ];
+    if (!parents.length) return;
+    const alive = await this.tenantTree(tx)
+      .andWhere('t.id IN (:...__ps)', { __ps: parents })
+      .getCount();
+    if (alive !== parents.length)
+      throw crudErrors.badRequest('上级节点已删除，请先恢复上级');
   }
 
   private assertSoft(): void {

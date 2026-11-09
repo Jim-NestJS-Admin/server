@@ -18,11 +18,21 @@ const childBusiness = (c: CodegenConfig, table: string) =>
 /** 文字一律按 JSON 字符串转义写进代码，不会拼成可执行的内容 */
 const lit = (s: string) => JSON.stringify(s);
 
-function column(f: CodegenField): {
+function column(
+  f: CodegenField,
+  asId = false,
+): {
   ts: string;
   col: string;
   validators: string[];
 } {
+  // 树表的父级字段：和编号一样是 bigint，按字符串处理，根节点为空
+  if (asId)
+    return {
+      ts: 'string',
+      col: `{ type: 'bigint', unsigned: true, nullable: true }`,
+      validators: ['@IsOptional()', '@Matches(/^[1-9]\\d{0,19}$/)'],
+    };
   const nullable = f.nullable ? ', nullable: true' : '';
   const v: string[] = [];
   if (!f.required) v.push('@IsOptional()');
@@ -81,6 +91,7 @@ function column(f: CodegenField): {
 function entity(
   c: Pick<CodegenConfig, 'module' | 'business' | 'table' | 'fields'>,
   foreignKey?: string,
+  treeParent?: string,
 ): string {
   const name = `${pascal(c.business)}Entity`;
   const uniques = c.fields.filter((f) => f.unique);
@@ -89,13 +100,15 @@ function entity(
     : '';
   const body = c.fields
     .map((f) => {
-      const { ts, col, validators } = column(f);
+      const isParent = f.name === treeParent;
+      const { ts, col, validators } = column(f, isParent);
       const crud: string[] = [`label: ${lit(f.label)}`];
-      if (f.list === false) crud.push('list: false');
+      if (f.list === false || isParent) crud.push('list: false');
       else if (f.type !== 'json') crud.push('list: { sortable: true }');
       if (f.form === false) crud.push('form: false');
+      else if (isParent) crud.push("form: { component: 'tree-select' }");
       else if (f.required) crud.push('form: { required: true }');
-      if (f.nullable) crud.push('nullable: true');
+      if (f.nullable || isParent) crud.push('nullable: true');
 
       const perm = f.fieldPerm?.default
         ? `  @FieldPerm({ label: ${lit(f.label)}, default: ${lit(f.fieldPerm.default)}${f.fieldPerm.mask ? `, mask: ${lit(f.fieldPerm.mask)}` : ''} })\n`
@@ -104,7 +117,7 @@ function entity(
       const dict = f.dict
         ? `  // 字典：${f.dict.replace(/[^a-z0-9_]/g, '')}\n`
         : '';
-      return `${dict}  @CrudField({ ${crud.join(', ')} })\n${perm}${validators.map((x) => `  ${x}\n`).join('')}  @Column(${col.replace('{ ', `{ name: ${lit(f.column)}, `)})\n  ${f.name}: ${ts}${f.nullable ? ' | null' : ''};`;
+      return `${dict}  @CrudField({ ${crud.join(', ')} })\n${perm}${validators.map((x) => `  ${x}\n`).join('')}  @Column(${col.replace('{ ', `{ name: ${lit(f.column)}, `)})\n  ${f.name}: ${ts}${f.nullable || isParent ? ' | null' : ''};`;
     })
     .join('\n\n');
   const idx = uniques
@@ -120,7 +133,7 @@ function entity(
   ]);
   const validators = new Set<string>();
   for (const f of c.fields)
-    for (const v of column(f).validators)
+    for (const v of column(f, f.name === treeParent).validators)
       validators.add(v.replace(/^@(\w+).*/, '$1'));
   return `// 由代码生成器生成（${c.module}.${c.business}），可以继续手改；再次生成时手改过的文件默认不覆盖
 import { ${[...validators].sort().join(', ')} } from 'class-validator';
@@ -136,6 +149,10 @@ ${fk}${body}
 
 function controller(c: CodegenConfig): string {
   const name = pascal(c.business);
+  const tree = c.template === 'tree' ? c.tree : null;
+  const treeOption = tree
+    ? `\n  tree: { parentField: ${lit(tree.parentField)}, nameField: ${lit(tree.nameField)}${tree.sortField ? `, sortField: ${lit(tree.sortField)}` : ''} },`
+    : '';
   const kids = c.template === 'master-detail' ? (c.children ?? []) : [];
   const kidImports = kids
     .map((k) => {
@@ -161,6 +178,7 @@ function controller(c: CodegenConfig): string {
       ? []
       : ['recycle', 'restore', 'purge']),
     ...(c.options?.export ? ['export'] : []),
+    ...(tree ? ['tree'] : []),
   ];
   const keyWords = c.fields
     .filter((f) => f.query === 'like')
@@ -181,7 +199,7 @@ ${kidImports}
   pageQuery: {
     keyWords: [${keyWords.join(', ')}],
     fieldEq: [${fieldEq.join(', ')}],
-  },${kidOptions}
+  },${kidOptions}${treeOption}
 })
 export class ${name}Controller extends BaseController<${name}Entity> {}
 `;
@@ -210,9 +228,13 @@ function migration(
   c: Pick<CodegenConfig, 'module' | 'business' | 'table' | 'fields'>,
   stamp: number,
   foreignKey?: string,
+  treeParent?: string,
 ): string {
   const name = `Create${pascal(c.table)}${stamp}`;
+  const parentCol = c.fields.find((f) => f.name === treeParent)?.column;
   const col = (f: CodegenField) => {
+    if (f.name === treeParent)
+      return `          { name: ${lit(f.column)}, type: 'bigint', unsigned: true, isNullable: true, comment: ${lit(f.label)} },`;
     const t =
       f.type === 'int'
         ? "type: 'int'"
@@ -253,7 +275,7 @@ ${foreignKey ? `          { name: ${lit(snake(foreignKey))}, type: 'bigint', uns
         ],
         indices: [
           { columnNames: ['tenant_id'] },
-          { columnNames: ['org_id'] },${foreignKey ? `\n          { columnNames: [${lit(snake(foreignKey))}] },` : ''}
+          { columnNames: ['org_id'] },${foreignKey ? `\n          { columnNames: [${lit(snake(foreignKey))}] },` : ''}${parentCol ? `\n          { columnNames: ['tenant_id', ${lit(parentCol)}] },` : ''}
 ${c.fields
   .filter((f) => f.unique)
   .map(
@@ -323,8 +345,12 @@ function menu(c: CodegenConfig): string {
 /**
  * 渲染后端文件（T21 第二步）。路径只会落在白名单目录：src/modules/<module>/ 和 src/database/migrations/。
  * stamp 是迁移时间戳（第一次生成时定下，存在配置的指纹里，之后不变）。
- * 主子表：每个子表生成实体和迁移，控制器里配 children；树表先按单表生成（parentField 作为普通字段）。
+ * 主子表：每个子表生成实体和迁移，控制器里配 children；
+ * 树表：父级字段生成为可空 bigint（带索引），控制器配 tree 并开放 tree 接口，表单里父级字段用树形选择。
  */
+const treeParentOf = (c: CodegenConfig) =>
+  c.template === 'tree' ? c.tree?.parentField : undefined;
+
 export function renderServer(c: CodegenConfig, stamp: number): GeneratedFile[] {
   const base = `src/modules/${c.module}`;
   const kids: GeneratedFile[] = [];
@@ -354,7 +380,7 @@ export function renderServer(c: CodegenConfig, stamp: number): GeneratedFile[] {
     {
       project: 'server',
       path: `${base}/entity/${c.business}.entity.ts`,
-      content: entity(c),
+      content: entity(c, undefined, treeParentOf(c)),
     },
     {
       project: 'server',
@@ -374,7 +400,7 @@ export function renderServer(c: CodegenConfig, stamp: number): GeneratedFile[] {
     {
       project: 'server',
       path: `src/database/migrations/${stamp}-Create${pascal(c.table)}.ts`,
-      content: migration(c, stamp),
+      content: migration(c, stamp, undefined, treeParentOf(c)),
     },
     ...kids,
   ];

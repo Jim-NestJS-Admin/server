@@ -8,6 +8,7 @@ import {
   type CrudChildOptions,
   type CrudControllerOptions,
   type CrudResourceMeta,
+  type CrudTreeMeta,
 } from './crud.types.js';
 
 const PREFIX = /^[a-z][a-z0-9-]*(\/[a-z][a-z0-9-]*)+$/;
@@ -222,6 +223,29 @@ export function resolveCrudMeta<T extends BaseEntity>(
   if (new Set(children.map((c) => c.entity)).size !== children.length)
     fail('同一个子表实体只能挂一次');
 
+  let tree: CrudTreeMeta | null = null;
+  if (options.tree) {
+    const t = options.tree;
+    const parentField = t.parentField ?? 'parentId';
+    const columns = columnProps(options.entity);
+    if (!columns.has(parentField))
+      fail(`树形资源：父级字段 ${parentField} 不是实体上的列`);
+    if (!addable.includes(parentField))
+      fail(
+        `树形资源：父级字段 ${parentField} 要用 @CrudField 声明为可写（新增时选父节点）`,
+      );
+    if (!names.has(t.nameField))
+      fail(`树形资源：名称字段 ${t.nameField} 没有用 @CrudField 声明`);
+    if (t.sortField && !columns.has(t.sortField))
+      fail(`树形资源：排序字段 ${t.sortField} 不是实体上的列`);
+    tree = {
+      parentField,
+      nameField: t.nameField,
+      ...(t.sortField ? { sortField: t.sortField } : {}),
+    };
+  } else if (options.api.includes('tree'))
+    fail('开放 tree 接口要配置 tree（父级字段、名称字段）');
+
   return {
     prefix: options.prefix,
     label: options.label,
@@ -241,5 +265,6 @@ export function resolveCrudMeta<T extends BaseEntity>(
     defaultSort,
     maxSize,
     children,
+    tree,
   };
 }

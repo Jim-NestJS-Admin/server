@@ -16,7 +16,8 @@ export type CrudApi =
   | 'recycle'
   | 'restore'
   | 'purge'
-  | 'export';
+  | 'export'
+  | 'tree';
 export const CRUD_APIS: readonly CrudApi[] = [
   'page',
   'info',
@@ -27,6 +28,7 @@ export const CRUD_APIS: readonly CrudApi[] = [
   'restore',
   'purge',
   'export',
+  'tree',
 ];
 
 export type CrudAction = CrudApi;
@@ -45,6 +47,26 @@ export interface PageQueryOptions<T> {
   defaultSort?: { field: keyof T & string; order: 'asc' | 'desc' }[];
   /** 每页最多条数，不超过 500（架构「安全基线」分页上限） */
   maxSize?: number;
+}
+
+/**
+ * 树形资源（架构「通用 CRUD · 树形资源」）：组织、菜单、栏目这类数据。
+ * 开放 tree 接口返回全部可见节点（平铺，前端按 parentField 组树）；新增、修改时校验父节点存在、可见、不成环；
+ * 有下级的节点不能删除；恢复时父节点必须是有效的。移动节点就是修改父节点（和排序字段）。
+ */
+export interface CrudTreeOptions {
+  /** 指向父节点编号的字段（属性名），默认 parentId；根节点为 null */
+  parentField?: string;
+  /** 节点显示名称字段，如 name */
+  nameField: string;
+  /** 同级排序字段（从小到大）；不写按编号 */
+  sortField?: string;
+}
+
+export interface CrudTreeMeta {
+  parentField: string;
+  nameField: string;
+  sortField?: string;
 }
 
 /** 主子表里的一个子表（架构「通用 CRUD · 主子表」） */
@@ -85,6 +107,8 @@ export interface CrudControllerOptions<T extends BaseEntity> {
    * 读、改、删、回收站和 BaseService.select 都生效，范围外的数据和不存在一样。
    */
   dataScope?: boolean;
+  /** 树形资源；开放 tree 接口时必填 */
+  tree?: CrudTreeOptions;
 }
 
 /** 子表整理好的定义 */
@@ -130,6 +154,8 @@ export interface CrudResourceMeta<T extends BaseEntity = BaseEntity> {
   defaultSort: SortItem[];
   maxSize: number;
   children: CrudChildMeta[];
+  /** 树形资源配置；不是树时为 null */
+  tree: CrudTreeMeta | null;
 }
 
 /** 请求上下文：租户、当前用户、当前组织，由端的认证守卫写入（见 core/tenant/request-context） */

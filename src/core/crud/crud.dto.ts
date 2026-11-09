@@ -66,6 +66,8 @@ export interface CrudDtos {
   DeleteResult: Type;
   RecyclePageBody: Type;
   RecyclePageResult: Type;
+  /** 树形列表：平铺的全部可见节点 */
+  TreeResult: Type;
   RecycleActionBody: Type;
 }
 
@@ -368,6 +370,15 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     TransformType(() => RecycleItem),
   ]);
 
+  const TreeResult = named(class {}, `${n}TreeResult`);
+  prop(TreeResult, 'list', Array, [
+    ApiProperty({
+      type: [Row],
+      description:
+        '全部可见节点（平铺），前端按页面描述 tree.parentField 组树；父节点不在列表里的当作根节点',
+    }),
+  ]);
+
   const DeleteResult = named(class {}, `${n}DeleteResult`);
   prop(DeleteResult, 'count', Number, [
     ApiProperty({ description: '处理的行数' }),
@@ -386,5 +397,6 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     RecyclePageBody,
     RecyclePageResult,
     RecycleActionBody,
+    TreeResult,
   };
 }

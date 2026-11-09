@@ -89,4 +89,41 @@ describe('后端代码渲染（T21）', () => {
       ),
     ).toBe(true);
   });
+
+  it('树表：父级字段生成可空 bigint 和索引，控制器配 tree 并开放 tree 接口', () => {
+    const files = renderServer(
+      {
+        ...config,
+        template: 'tree',
+        tree: { parentField: 'parentId', nameField: 'name', sortField: 'sort' },
+        fields: [
+          ...config.fields,
+          {
+            name: 'parentId',
+            column: 'parent_id',
+            label: '上级',
+            type: 'int',
+            nullable: true,
+          },
+          { name: 'sort', column: 'sort', label: '排序', type: 'int' },
+        ],
+      },
+      1800000000000,
+    );
+    const by = (p: string) => files.find((f) => f.path.endsWith(p))!.content;
+    const entity = by('entity/customer.entity.ts');
+    expect(entity).toContain('parentId: string | null');
+    expect(entity).toContain("type: 'bigint', unsigned: true, nullable: true");
+    expect(entity).toContain("component: 'tree-select'");
+    const ctrl = by('customer.controller.ts');
+    expect(ctrl).toContain('tree: { parentField: "parentId"');
+    expect(ctrl).toContain('"tree"');
+    const mig = by('CreateCrmCustomer.ts');
+    expect(mig).toContain('{ columnNames: [\'tenant_id\', "parent_id"] }');
+    // 树形列表用列表的权限码，不单独生成按钮
+    const menu = JSON.parse(by('.menu.json'));
+    expect(
+      menu.buttons.map((b: { permission: string }) => b.permission),
+    ).not.toContain('crm:customer:tree');
+  });
 });

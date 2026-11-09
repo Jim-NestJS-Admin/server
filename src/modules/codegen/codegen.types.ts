@@ -67,7 +67,7 @@ export interface CodegenConfig {
   permPrefix: string;
   table: string;
   template: 'single' | 'tree' | 'master-detail';
-  tree?: { parentField: string; nameField: string } | null;
+  tree?: { parentField: string; nameField: string; sortField?: string } | null;
   children?: CodegenChild[];
   options?: {
     deleteMode?: 'soft' | 'hard';
@@ -169,6 +169,22 @@ export function validateCodegenConfig(raw: unknown): Err[] {
       !CAMEL.test(c.tree.nameField))
   )
     bad('tree', '树表要选父级字段和名称字段');
+  if (c.template === 'tree' && c.tree && Array.isArray(c.fields)) {
+    const has = (n: string) => c.fields!.some((f) => f?.name === n);
+    const parent = c.fields.find((f) => f?.name === c.tree!.parentField);
+    if (!parent) bad('tree.parentField', '父级字段要在字段列表里');
+    else if (parent.type !== 'int')
+      bad(
+        'tree.parentField',
+        '父级字段类型选整数（生成为 bigint，根节点为空）',
+      );
+    if (!has(c.tree.nameField)) bad('tree.nameField', '名称字段要在字段列表里');
+    if (
+      c.tree.sortField !== undefined &&
+      (!CAMEL.test(c.tree.sortField) || !has(c.tree.sortField))
+    )
+      bad('tree.sortField', '排序字段要在字段列表里');
+  }
   if (c.template === 'master-detail') {
     if (
       !Array.isArray(c.children) ||

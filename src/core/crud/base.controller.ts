@@ -143,6 +143,10 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
     return this.service.delete(body.ids);
   }
 
+  tree() {
+    return this.service.tree();
+  }
+
   recyclePage(body: { page?: number; size?: number; keyword?: string }) {
     return this.service.recyclePage(body);
   }
