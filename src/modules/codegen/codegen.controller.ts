@@ -1,4 +1,5 @@
-import { Body, HttpCode, Post } from '@nestjs/common';
+import { Body, HttpCode, Post, StreamableFile } from '@nestjs/common';
+import { RawResponse } from '../../core/decorators/raw-response.decorator.js';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -171,6 +172,23 @@ export class CodegenController {
   @ApiErrors(400, 404, 409)
   write(@Body() b: WriteBody) {
     return this.codegen.write(b.id, b.token, b.overwrite ?? []);
+  }
+
+  @Post('download')
+  @HttpCode(200)
+  @RawResponse()
+  @Perms('dev:codegen:save')
+  @ApiOperation({
+    operationId: 'devCodegenDownload',
+    summary: '下载生成的代码压缩包',
+  })
+  @ApiErrors(400, 404)
+  async download(@Body() b: IdBody) {
+    const { name, zip } = await this.codegen.download(b.id);
+    return new StreamableFile(Buffer.from(zip), {
+      type: 'application/zip',
+      disposition: `attachment; filename="${name}"`,
+    });
   }
 
   @Post('sync')

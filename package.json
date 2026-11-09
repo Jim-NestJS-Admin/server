@@ -37,6 +37,7 @@
     "bcryptjs": "3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "fflate": "0.8.3",
     "ioredis": "6.0.0",
     "jose": "6.2.15",
     "mysql2": "3.24.6",

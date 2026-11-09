@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
+import { strToU8, zipSync } from 'fflate';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { BusinessException } from '../../core/exceptions/business.exception.js';
@@ -99,6 +100,35 @@ export class CodegenService {
       )
       .digest('base64url');
     return { row, items, token };
+  }
+
+  /**
+   * 下载压缩包：和预览同样的文件，按 server/、admin/ 分目录；路径照样经过白名单校验（不依赖本机目录）。
+   */
+  async download(id: string): Promise<{ name: string; zip: Uint8Array }> {
+    const row = await this.repo()
+      .query('g')
+      .andWhere('g.id = :id', { id })
+      .getOne();
+    if (!row) throw crudErrors.notFound();
+    const config = row.config as CodegenConfig;
+    const files = renderServer(config, row.createdAt.getTime());
+    const entries: Record<string, Uint8Array> = {};
+    for (const f of files) {
+      const rel = f.path;
+      if (
+        rel.includes('..') ||
+        rel.includes('\\') ||
+        rel.includes(':') ||
+        rel.startsWith('/')
+      )
+        throw crudErrors.badRequest(`路径不合法：${rel}`);
+      entries[`${f.project}/${rel}`] = strToU8(f.content);
+    }
+    return {
+      name: `${config.module}-${config.business}.zip`,
+      zip: zipSync(entries),
+    };
   }
 
   async preview(id: string) {

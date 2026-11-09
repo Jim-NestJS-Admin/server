@@ -52,4 +52,41 @@ describe('后端代码渲染（T21）', () => {
       menu.buttons.map((b: { permission: string }) => b.permission),
     ).toContain('crm:customer:export');
   });
+
+  it('主子表：子表生成实体和迁移，控制器配 children，模块登记子表实体', () => {
+    const files = renderServer(
+      {
+        ...config,
+        template: 'master-detail',
+        children: [
+          {
+            table: 'crm_customer_contact',
+            foreignKey: 'customerId',
+            label: '联系人',
+            fields: [
+              {
+                name: 'phone',
+                column: 'phone',
+                label: '电话',
+                type: 'string',
+                length: 20,
+              },
+            ],
+          },
+        ],
+      },
+      1800000000000,
+    );
+    const by = (p: string) => files.find((f) => f.path.endsWith(p))!.content;
+    expect(by('entity/customer_contact.entity.ts')).toContain(
+      'customerId: string',
+    );
+    expect(by('customer.controller.ts')).toContain('foreignKey: "customerId"');
+    expect(by('customer.module.ts')).toContain('CustomerContactEntity');
+    expect(
+      files.some((f) =>
+        f.path.endsWith('1800000000001-CreateCrmCustomerContact.ts'),
+      ),
+    ).toBe(true);
+  });
 });

@@ -11,6 +11,10 @@ const pascal = (s: string) =>
   s.replace(/(^|_)([a-z0-9])/g, (_, __, c: string) => c.toUpperCase());
 const camel = (s: string) => pascal(s).replace(/^./, (c) => c.toLowerCase());
 const kebab = (s: string) => s.replace(/_/g, '-');
+const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+/** 子表的业务名：表名去掉模块前缀，如 crm_customer_contact → customer_contact */
+const childBusiness = (c: CodegenConfig, table: string) =>
+  table.startsWith(`${c.module}_`) ? table.slice(c.module.length + 1) : table;
 /** 文字一律按 JSON 字符串转义写进代码，不会拼成可执行的内容 */
 const lit = (s: string) => JSON.stringify(s);
 
@@ -74,9 +78,15 @@ function column(f: CodegenField): {
   }
 }
 
-function entity(c: CodegenConfig): string {
+function entity(
+  c: Pick<CodegenConfig, 'module' | 'business' | 'table' | 'fields'>,
+  foreignKey?: string,
+): string {
   const name = `${pascal(c.business)}Entity`;
   const uniques = c.fields.filter((f) => f.unique);
+  const fk = foreignKey
+    ? `  /** 指向主表编号，由框架填写，前端不能传 */\n  @Column({ name: ${lit(snake(foreignKey))}, type: 'bigint', unsigned: true })\n  ${foreignKey}: string;\n\n`
+    : '';
   const body = c.fields
     .map((f) => {
       const { ts, col, validators } = column(f);
@@ -119,13 +129,28 @@ import { BaseEntity, CrudField } from '../../../core/crud/index.js';
 ${c.fields.some((f) => f.fieldPerm?.default) ? "import { FieldPerm } from '../../../core/field-perm/field-perm.decorator.js';\n" : ''}
 @Entity(${lit(c.table)})
 ${idx}export class ${name} extends BaseEntity {
-${body}
+${fk}${body}
 }
 `;
 }
 
 function controller(c: CodegenConfig): string {
   const name = pascal(c.business);
+  const kids = c.template === 'master-detail' ? (c.children ?? []) : [];
+  const kidImports = kids
+    .map((k) => {
+      const b = childBusiness(c, k.table);
+      return `import { ${pascal(b)}Entity } from '../../entity/${b}.entity.js';\n`;
+    })
+    .join('');
+  const kidOptions = kids.length
+    ? `\n  children: [\n${kids
+        .map((k) => {
+          const b = childBusiness(c, k.table);
+          return `    { resource: ${lit(camel(b))}, label: ${lit(k.label)}, entity: ${pascal(b)}Entity, foreignKey: ${lit(k.foreignKey)} },`;
+        })
+        .join('\n')}\n  ],`
+    : '';
   const api = [
     'page',
     'info',
@@ -146,7 +171,7 @@ function controller(c: CodegenConfig): string {
   return `// 由代码生成器生成（${c.module}.${c.business}）
 import { BaseController, CrudController } from '../../../../core/crud/index.js';
 import { ${name}Entity } from '../../entity/${c.business}.entity.js';
-
+${kidImports}
 @CrudController({
   prefix: ${lit(c.permPrefix.replace(/:/g, '/'))},
   label: ${lit(c.label)},
@@ -156,7 +181,7 @@ import { ${name}Entity } from '../../entity/${c.business}.entity.js';
   pageQuery: {
     keyWords: [${keyWords.join(', ')}],
     fieldEq: [${fieldEq.join(', ')}],
-  },
+  },${kidOptions}
 })
 export class ${name}Controller extends BaseController<${name}Entity> {}
 `;
@@ -164,21 +189,28 @@ export class ${name}Controller extends BaseController<${name}Entity> {}
 
 function module_(c: CodegenConfig): string {
   const name = pascal(c.business);
+  const kids = (c.template === 'master-detail' ? (c.children ?? []) : []).map(
+    (k) => childBusiness(c, k.table),
+  );
   return `// 由代码生成器生成（${c.module}.${c.business}）。在 AppModule 的 imports 里加上 ${name}Module
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ${name}Controller } from './controller/admin/${c.business}.controller.js';
 import { ${name}Entity } from './entity/${c.business}.entity.js';
-
+${kids.map((b) => `import { ${pascal(b)}Entity } from './entity/${b}.entity.js';\n`).join('')}
 @Module({
-  imports: [TypeOrmModule.forFeature([${name}Entity])],
+  imports: [TypeOrmModule.forFeature([${[name, ...kids.map(pascal)].map((k) => `${k}Entity`).join(', ')}])],
   controllers: [${name}Controller],
 })
 export class ${name}Module {}
 `;
 }
 
-function migration(c: CodegenConfig, stamp: number): string {
+function migration(
+  c: Pick<CodegenConfig, 'module' | 'business' | 'table' | 'fields'>,
+  stamp: number,
+  foreignKey?: string,
+): string {
   const name = `Create${pascal(c.table)}${stamp}`;
   const col = (f: CodegenField) => {
     const t =
@@ -217,11 +249,11 @@ export class ${name} implements MigrationInterface {
           { name: 'deleted_at', type: 'datetime', precision: 3, isNullable: true },
           { name: 'active_guard', type: 'tinyint', isNullable: true, asExpression: 'IF(\`deleted_at\` IS NULL, 1, NULL)', generatedType: 'STORED' },
           { name: 'delete_batch', type: 'char', length: '36', isNullable: true },
-${c.fields.map(col).join('\n')}
+${foreignKey ? `          { name: ${lit(snake(foreignKey))}, type: 'bigint', unsigned: true },\n` : ''}${c.fields.map(col).join('\n')}
         ],
         indices: [
           { columnNames: ['tenant_id'] },
-          { columnNames: ['org_id'] },
+          { columnNames: ['org_id'] },${foreignKey ? `\n          { columnNames: [${lit(snake(foreignKey))}] },` : ''}
 ${c.fields
   .filter((f) => f.unique)
   .map(
@@ -291,10 +323,33 @@ function menu(c: CodegenConfig): string {
 /**
  * 渲染后端文件（T21 第二步）。路径只会落在白名单目录：src/modules/<module>/ 和 src/database/migrations/。
  * stamp 是迁移时间戳（第一次生成时定下，存在配置的指纹里，之后不变）。
- * 主子表的子表实体和 children 配置在后续批次补；树表先按单表生成（parentField 作为普通字段）。
+ * 主子表：每个子表生成实体和迁移，控制器里配 children；树表先按单表生成（parentField 作为普通字段）。
  */
 export function renderServer(c: CodegenConfig, stamp: number): GeneratedFile[] {
   const base = `src/modules/${c.module}`;
+  const kids: GeneratedFile[] = [];
+  if (c.template === 'master-detail')
+    (c.children ?? []).forEach((k, i) => {
+      const b = childBusiness(c, k.table);
+      const cfg = {
+        module: c.module,
+        business: b,
+        table: k.table,
+        fields: k.fields,
+      };
+      kids.push(
+        {
+          project: 'server',
+          path: `${base}/entity/${b}.entity.ts`,
+          content: entity(cfg, k.foreignKey),
+        },
+        {
+          project: 'server',
+          path: `src/database/migrations/${stamp + i + 1}-Create${pascal(k.table)}.ts`,
+          content: migration(cfg, stamp + i + 1, k.foreignKey),
+        },
+      );
+    });
   return [
     {
       project: 'server',
@@ -321,6 +376,7 @@ export function renderServer(c: CodegenConfig, stamp: number): GeneratedFile[] {
       path: `src/database/migrations/${stamp}-Create${pascal(c.table)}.ts`,
       content: migration(c, stamp),
     },
+    ...kids,
   ];
 }
 
