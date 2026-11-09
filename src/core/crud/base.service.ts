@@ -245,6 +245,10 @@ export class BaseService<T extends BaseEntity> {
     );
     return this.transaction(async (tx) => {
       const values = this.pick(data, this.meta.addable);
+      this.dropChildNotEditable(plans, {
+        orgId: tx.ctx.orgId,
+        createdBy: tx.ctx.userId,
+      });
       // 字段权限：新增的这一行属于当前组织、创建人是自己
       this.dropNotEditable(values, {
         orgId: tx.ctx.orgId,
@@ -292,6 +296,8 @@ export class BaseService<T extends BaseEntity> {
     return this.transaction(async (tx) => {
       // 锁住主表这一行：同一张单据的聚合保存排队执行，子表的行数、唯一检查基于一致的数据
       const existing = await this.findOne(tx.manager, id, 'update', true);
+      // 子表字段权限按主表这一行的归属判断
+      this.dropChildNotEditable(plans, existing as unknown as RowOwner);
       if (!existing) throw crudErrors.notFound();
       if (existing.version !== version) throw crudErrors.versionConflict();
       const changes = this.pick(data, this.meta.updatable);
@@ -640,13 +646,37 @@ export class BaseService<T extends BaseEntity> {
     tenantId: string,
   ): Promise<CrudRow<T>> {
     const out = this.toRow(row) as Record<string, unknown>;
-    if (this.meta.children.length)
-      out.children = await loadChildren(
+    if (this.meta.children.length) {
+      const children = await loadChildren(
         manager,
         this.meta as CrudResourceMeta,
         tenantId,
         String(row.id),
       );
+      // 子表字段权限（T16）：资源是「主表前缀.子表名」，按主表这一行的归属判断
+      const src = row as unknown as Record<string, unknown>;
+      const owner: RowOwner = {
+        orgId: (src.orgId as string | null | undefined) ?? null,
+        createdBy: (src.createdBy as string | null | undefined) ?? null,
+      };
+      for (const child of this.meta.children) {
+        const verdict = this.childAccess(child, owner);
+        if (!verdict) continue;
+        for (const r of children[child.resource] ?? []) {
+          const states: Record<string, string> = {};
+          for (const k of Object.keys(r)) {
+            if (FIELD_PERM_EXEMPT.has(k) || k === child.foreignKey) continue;
+            const v = verdict(k);
+            if (v.state === 'editable') continue;
+            states[k] = v.state;
+            if (v.state === 'hidden') delete r[k];
+            else if (v.state === 'masked') r[k] = mask(r[k], v.mask);
+          }
+          if (Object.keys(states).length) r._fieldState = states;
+        }
+      }
+      out.children = children;
+    }
     return out as CrudRow<T>;
   }
 
@@ -755,6 +785,56 @@ export class BaseService<T extends BaseEntity> {
       FIELD_PERM_EXEMPT.has(field) ||
       (!!authz &&
         rawVisibleToAll(authz, this.meta.permPrefix, this.meta.entity, field));
+  }
+
+  /** 子表字段的判断函数：资源 = 主表权限前缀 + . + 子表名，归属看主表这一行 */
+  private childAccess(
+    child: { resource: string; entity: Function },
+    owner: RowOwner,
+  ): ((field: string) => FieldVerdict) | null {
+    const ctx = this.crud.context.current();
+    if (ctx.endpoint === 'system') return null;
+    const authz = this.crud.authz.get();
+    return (field) =>
+      authz
+        ? fieldVerdict(
+            authz,
+            ctx.userId,
+            `${this.meta.permPrefix}.${child.resource}`,
+            child.entity,
+            field,
+            this.meta.dataScope,
+            owner,
+          )
+        : { state: 'hidden', mask: null };
+  }
+
+  /** 子表新增、修改的行：剔除不可编辑的字段并记日志 */
+  private dropChildNotEditable(
+    plans: {
+      child: { resource: string; entity: Function };
+      added: { values: Record<string, unknown> }[];
+      updated: { values: Record<string, unknown> }[];
+    }[],
+    owner: RowOwner,
+  ): void {
+    for (const p of plans) {
+      const verdict = this.childAccess(p.child, owner);
+      if (!verdict) return;
+      const dropped = new Set<string>();
+      for (const r of [...p.added, ...p.updated])
+        for (const k of Object.keys(r.values))
+          if (!FIELD_PERM_EXEMPT.has(k) && verdict(k).state !== 'editable') {
+            delete r.values[k];
+            dropped.add(k);
+          }
+      if (dropped.size)
+        fieldLogger.warn({
+          event: 'field-perm.write-dropped',
+          resource: `${this.meta.permPrefix}.${p.child.resource}`,
+          fields: [...dropped],
+        });
+    }
   }
 
   /** 写入前剔除这一行上不可编辑的字段，并记日志（架构「字段权限 · 后端强制执行」） */
