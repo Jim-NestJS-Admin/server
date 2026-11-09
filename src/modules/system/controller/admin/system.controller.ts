@@ -146,7 +146,8 @@ export class SystemRoleController extends BaseController<SystemRole> {}
   label: '组织',
   entity: SystemOrg,
   service: SystemOrgService,
-  api: ['export', 'page', 'info', 'add', 'update', 'delete'],
+  api: ['export', 'page', 'info', 'add', 'update', 'delete', 'tree'],
+  tree: { parentField: 'parentId', nameField: 'name', sortField: 'rank' },
   pageQuery: {
     keyWords: ['name'],
     fieldEq: ['parentId', 'enabled'],
@@ -161,7 +162,8 @@ export class SystemOrgController extends BaseController<SystemOrg> {}
   label: '菜单',
   entity: SystemMenu,
   service: SystemMenuService,
-  api: ['export', 'page', 'info', 'add', 'update', 'delete'],
+  api: ['export', 'page', 'info', 'add', 'update', 'delete', 'tree'],
+  tree: { parentField: 'parentId', nameField: 'title', sortField: 'rank' },
   pageQuery: {
     keyWords: ['title', 'path'],
     fieldEq: ['parentId', 'type'],
