@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { AuthzContext } from '../permission/authz-context.js';
 import { CrudAudit } from './crud-audit.js';
 import { CrudContextProvider, CrudScope } from './crud-scope.js';
+import { IdempotencyLedger } from '../security/idempotency.ledger.js';
 import type { CrudResourceMeta } from './crud.types.js';
 
 /**
@@ -20,6 +21,8 @@ export class CrudRuntime {
     readonly audit: CrudAudit,
     /** 本次请求的授权（数据范围、本次有效角色、字段权限配置） */
     readonly authz: AuthzContext,
+    /** 幂等记录账本：写事务提交前带上幂等记录（T25） */
+    readonly idempotency: IdempotencyLedger,
   ) {}
 
   register(meta: CrudResourceMeta): void {

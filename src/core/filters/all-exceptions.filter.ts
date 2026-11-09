@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { QueryFailedError } from 'typeorm';
 import { BusinessException } from '../exceptions/business.exception.js';
 import {
   codeFromStatus,
@@ -54,6 +55,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
+    // 只读查询超过 DB_QUERY_TIMEOUT_MS 被 MySQL 中止（T25 查询超时）
+    if (isQueryTimeout(exception)) {
+      this.logger.warn(`查询超时：${(exception as Error).message}`);
+      res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        code: ErrorCode.ServiceUnavailable,
+        data: null,
+        message: '查询超时，请缩小查询范围后重试',
+      });
+      return;
+    }
+
     this.logger.error(
       exception instanceof Error
         ? (exception.stack ?? exception.message)
@@ -65,4 +77,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message: DEFAULT_MESSAGES[ErrorCode.Internal],
     });
   }
+}
+
+function isQueryTimeout(e: unknown): boolean {
+  if (!(e instanceof QueryFailedError)) return false;
+  const d = (
+    e as QueryFailedError & { driverError?: { code?: string; errno?: number } }
+  ).driverError;
+  return d?.code === 'ER_QUERY_TIMEOUT' || d?.errno === 3024;
 }

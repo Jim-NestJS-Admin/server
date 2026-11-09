@@ -19,6 +19,7 @@ import request from 'supertest';
 import { FileModule } from './file.module.js';
 import {
   FileCatalog,
+  FileMetadataWriteFailure,
   type FilePrincipal,
   type StoredFile,
 } from './file.ports.js';
@@ -187,12 +188,17 @@ describe('真实 HTTP 的独立文件模块（无数据库、测试替身仅在�
   let app: INestApplication,
     store: BlobStore,
     principal: FilePrincipal = { tenantId: '1', userId: '1' },
-    failCatalog = false;
+    failCatalog = false,
+    uncertainCommit = false;
   const files = new Map<string, StoredFile>();
   const fakeCatalog: FileCatalog = {
     ready: async () => {},
     insert: async (file) => {
-      if (failCatalog) throw Error('测试保存失败');
+      if (failCatalog)
+        throw new FileMetadataWriteFailure(
+          Error('测试保存失败'),
+          !uncertainCommit,
+        );
       const record = { ...file, id: String(files.size + 1) };
       files.set(record.id, record);
       return record;
@@ -296,6 +302,22 @@ describe('真实 HTTP 的独立文件模块（无数据库、测试替身仅在�
     expect(discard).toHaveBeenCalledOnce();
     discard.mockRestore();
     failCatalog = false;
+  });
+  it('提交结果不确定时不删除可能已被引用的对象', async () => {
+    failCatalog = true;
+    uncertainCommit = true;
+    const discard = vi.spyOn(store, 'discard');
+    try {
+      await request(app.getHttpServer())
+        .post('/admin/file/asset/upload')
+        .attach('file', png, { filename: 'x.png' })
+        .expect(500);
+      expect(discard).not.toHaveBeenCalled();
+    } finally {
+      discard.mockRestore();
+      failCatalog = false;
+      uncertainCommit = false;
+    }
   });
   it('导出文档包含 multipart、二进制下载和明确权限扩展', () => {
     const doc = buildOpenApiDocument(app, 'test');

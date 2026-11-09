@@ -4,6 +4,7 @@ import { BusinessException } from '../../../core/exceptions/business.exception.j
 import { ErrorCode } from '../../../core/exceptions/error-code.js';
 import { FileAssetEntity } from '../entity/file-asset.entity.js';
 import type { FileCatalog, StoredFile } from '../file.ports.js';
+import { FileMetadataWriteFailure } from '../file.ports.js';
 import { assertBlobKey } from '../storage/blob-store.js';
 
 /** 文件目录的数据库实现：读写统一复用 core 的上下文、租户范围和事务。 */
@@ -51,9 +52,26 @@ export class FileAssetService
       sha256: file.sha256,
     };
     // 不接收任何身份/系统字段，由 insertRow 按事务上下文填租户和审计主体。
-    const id = await this.transaction((tx) => this.insertRow(tx, values));
+    let workFinished = false;
+    let receipt: { id: string; name: string; mime: string; bytes: number };
+    try {
+      receipt = await this.transaction(async (tx) => {
+        const id = await this.insertRow(tx, values);
+        // 账本在这个事务中记录公开回执，崩溃重放不返回内部key/hash或单独的id。
+        const result = {
+          id,
+          name: values.name,
+          mime: values.mime,
+          bytes: values.bytes,
+        };
+        workFinished = true;
+        return result;
+      });
+    } catch (reason) {
+      throw new FileMetadataWriteFailure(reason, !workFinished);
+    }
     return {
-      id,
+      id: receipt.id,
       key: values.objectKey,
       mime: values.mime,
       bytes: values.bytes,

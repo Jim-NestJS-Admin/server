@@ -22,6 +22,8 @@ export default defineConfig({
       DB_SYNCHRONIZE: 'true',
       // Redis 和开发共用同一个服务，测试只用自己的前缀，清理时也只删这个前缀下的键
       REDIS_KEY_PREFIX: 'jna-test:',
+      // 测试会在一分钟里发很多请求：IP 总闸调高；接口级限流的计数随 clearTestRedis 清掉
+      RATE_LIMIT_IP_PER_MINUTE: '100000',
       AUTH_JWT_SECRET: 'e2e-jwt-secret-0123456789abcdefghijklmnop',
       AUTH_ADMIN_ORIGINS: 'http://localhost:8848',
     },

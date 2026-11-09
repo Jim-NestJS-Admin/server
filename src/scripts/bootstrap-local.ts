@@ -20,6 +20,7 @@ import { SystemLogs1793937600000 } from '../database/migrations/1793937600000-Sy
 import { SystemFields1793941200000 } from '../database/migrations/1793941200000-SystemFields.js';
 import { CreateFileAsset1793923200000 } from '../database/migrations/1793923200000-CreateFileAsset.js';
 import { FileAssetOrganization1793934000000 } from '../database/migrations/1793934000000-FileAssetOrganization.js';
+import { CoreTables1793944800000 } from '../database/migrations/1793944800000-CoreTables.js';
 import {
   SystemOrg,
   SystemRole,
@@ -63,6 +64,7 @@ async function bootstrapLocal(): Promise<void> {
       FileAssetOrganization1793934000000,
       SystemLogs1793937600000,
       SystemFields1793941200000,
+      CoreTables1793944800000,
     ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,

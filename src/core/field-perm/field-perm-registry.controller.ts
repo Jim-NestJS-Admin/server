@@ -51,6 +51,28 @@ class FieldPermRegistryDto {
   @ApiProperty({ type: [MaskRuleDto] }) masks!: MaskRuleDto[];
 }
 
+/** 一个实体的可配置字段（排除系统字段、外键和 configurable: false） */
+function describe(
+  entity: Function,
+  fields: { property: string; label?: string }[],
+  foreignKey?: string,
+) {
+  return fields
+    .filter((f) => !SYSTEM.has(f.property) && f.property !== foreignKey)
+    .map((f) => {
+      const code = fieldPermOf(entity, f.property);
+      return {
+        field: f.property,
+        label: code?.label ?? f.label ?? f.property,
+        default: code?.default ?? 'editable',
+        mask: code?.mask ?? null,
+        delegable: code?.delegable ?? null,
+        configurable: code?.configurable ?? true,
+      };
+    })
+    .filter((f) => f.configurable);
+}
+
 /**
  * 字段权限清单（契约 field-perm.md 第 3 节）：启动时注册的全部 CRUD 资源的业务字段和代码默认值。
  * 后台改过的默认值在 sys_field，由 T07 的管理接口提供；前端两者合并展示。
@@ -71,24 +93,19 @@ export class FieldPermRegistryController {
   @ApiErrors(401, 403, 503)
   registry(): FieldPermRegistryDto {
     return {
-      resources: this.crud.list().map((meta) => ({
-        resource: meta.permPrefix,
-        label: meta.label,
-        fields: meta.fields
-          .filter((f) => !SYSTEM.has(f.property))
-          .map((f) => {
-            const code = fieldPermOf(meta.entity, f.property);
-            return {
-              field: f.property,
-              label: code?.label ?? f.label ?? f.property,
-              default: code?.default ?? 'editable',
-              mask: code?.mask ?? null,
-              delegable: code?.delegable ?? null,
-              configurable: code?.configurable ?? true,
-            };
-          })
-          .filter((f) => f.configurable),
-      })),
+      resources: this.crud.list().flatMap((meta) => [
+        {
+          resource: meta.permPrefix,
+          label: meta.label,
+          fields: describe(meta.entity, meta.fields),
+        },
+        // 子表：资源是「主表前缀.子表名」，字段权限按主表那一行的归属判断
+        ...meta.children.map((c) => ({
+          resource: `${meta.permPrefix}.${c.resource}`,
+          label: `${meta.label} · ${c.label}`,
+          fields: describe(c.entity, c.fields, c.foreignKey),
+        })),
+      ]),
       masks: MASK_RULES,
     };
   }

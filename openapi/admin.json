@@ -156,7 +156,9 @@
                 "delete",
                 "recycle",
                 "restore",
-                "purge"
+                "purge",
+                "export",
+                "tree"
               ],
               "type": "string"
             },
@@ -197,6 +199,13 @@
             },
             "type": "object"
           },
+          "fieldPerms": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FieldPermStateDto"
+            },
+            "description": "每个业务字段在本页面（列表权限的本次有效角色）下的最宽字段权限状态；逐行以 _fieldState 为准",
+            "type": "object"
+          },
           "form": {
             "items": {
               "$ref": "#/components/schemas/CrudSchemaFormItem"
@@ -223,6 +232,20 @@
           "resource": {
             "example": "system/user",
             "type": "string"
+          },
+          "tree": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CrudSchemaTree"
+              }
+            ],
+            "description": "树形资源配置；不是树时为 null",
+            "nullable": true,
+            "type": "object"
+          },
+          "view": {
+            "description": "生效的显示配置（代码默认 → 模块配置 → 用户列设置，按字段权限裁剪后），结构见契约 page-config.md 第 2、4 节",
+            "type": "object"
           }
         },
         "required": [
@@ -238,7 +261,8 @@
           "actions",
           "defaultSort",
           "maxSize",
-          "children"
+          "children",
+          "tree"
         ],
         "type": "object"
       },
@@ -377,7 +401,8 @@
               "select",
               "switch",
               "date",
-              "datetime"
+              "datetime",
+              "tree-select"
             ],
             "type": "string"
           },
@@ -461,17 +486,43 @@
             "type": "string"
           },
           "operators": {
-            "description": "可用的运算符；高级查询在 T18 扩展",
+            "description": "这个字段可用的运算符",
             "items": {
+              "enum": [
+                "eq",
+                "ne",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "in",
+                "notIn",
+                "contains",
+                "startsWith",
+                "between",
+                "isNull",
+                "notNull"
+              ],
               "type": "string"
             },
             "type": "array"
+          },
+          "type": {
+            "description": "值的类型，前端据此选输入控件",
+            "enum": [
+              "string",
+              "number",
+              "boolean",
+              "date"
+            ],
+            "type": "string"
           }
         },
         "required": [
           "field",
           "label",
-          "operators"
+          "operators",
+          "type"
         ],
         "type": "object"
       },
@@ -491,6 +542,30 @@
         "required": [
           "field",
           "order"
+        ],
+        "type": "object"
+      },
+      "CrudSchemaTree": {
+        "properties": {
+          "nameField": {
+            "description": "节点显示名称字段",
+            "example": "name",
+            "type": "string"
+          },
+          "parentField": {
+            "description": "指向父节点编号的字段",
+            "example": "parentId",
+            "type": "string"
+          },
+          "sortField": {
+            "description": "同级排序字段",
+            "example": "sort",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parentField",
+          "nameField"
         ],
         "type": "object"
       },
@@ -842,6 +917,35 @@
         ],
         "type": "object"
       },
+      "FieldPermStateDto": {
+        "properties": {
+          "mask": {
+            "enum": [
+              "phone",
+              "email",
+              "idcard",
+              "last4",
+              "all"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "editable",
+              "readonly",
+              "masked",
+              "hidden"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "mask"
+        ],
+        "type": "object"
+      },
       "FileAssetInfoBody": {
         "properties": {
           "id": {
@@ -886,6 +990,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -1051,6 +1163,53 @@
           "name",
           "mime",
           "bytes"
+        ],
+        "type": "object"
+      },
+      "HistoryBody": {
+        "properties": {
+          "page": {
+            "type": "number"
+          },
+          "resource": {
+            "description": "资源（权限码前缀）",
+            "example": "system:user",
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "resource"
+        ],
+        "type": "object"
+      },
+      "HistoryInfoBody": {
+        "properties": {
+          "historyId": {
+            "type": "string"
+          },
+          "resource": {
+            "description": "资源（权限码前缀）",
+            "example": "system:user",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "historyId"
+        ],
+        "type": "object"
+      },
+      "IdBody": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
         ],
         "type": "object"
       },
@@ -1244,6 +1403,34 @@
         ],
         "type": "object"
       },
+      "PreferenceKeyDto": {
+        "properties": {
+          "key": {
+            "description": "小写字母开头，最多 100 字",
+            "example": "query:system:user",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "PreferenceResult": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "description": "没有保存过时是 null",
+            "type": "object"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
       "ProfileResult": {
         "properties": {
           "currentOrg": {
@@ -1302,6 +1489,70 @@
         ],
         "type": "object"
       },
+      "QueryConditionDto": {
+        "properties": {
+          "field": {
+            "description": "可筛选字段（页面描述 query[].field）",
+            "type": "string"
+          },
+          "op": {
+            "enum": [
+              "eq",
+              "ne",
+              "gt",
+              "gte",
+              "lt",
+              "lte",
+              "in",
+              "notIn",
+              "contains",
+              "startsWith",
+              "between",
+              "isNull",
+              "notNull"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "description": "值：eq…lte 是简单值；in / notIn 是数组；between 是 [下限, 上限]；isNull / notNull 不要",
+            "type": "object"
+          }
+        },
+        "required": [
+          "field",
+          "op"
+        ],
+        "type": "object"
+      },
+      "QueryGroupDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/QueryConditionDto"
+                },
+                {
+                  "$ref": "#/components/schemas/QueryGroupDto"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "op": {
+            "enum": [
+              "and",
+              "or"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "op",
+          "items"
+        ],
+        "type": "object"
+      },
       "ResetSystemPassword": {
         "properties": {
           "id": {
@@ -1322,6 +1573,47 @@
         ],
         "type": "object"
       },
+      "RestoreBody": {
+        "properties": {
+          "historyId": {
+            "type": "string"
+          },
+          "resource": {
+            "description": "资源（权限码前缀）",
+            "example": "system:user",
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "resource",
+          "historyId",
+          "version"
+        ],
+        "type": "object"
+      },
+      "SaveBody": {
+        "properties": {
+          "config": {
+            "description": "生成配置（契约 codegen.md 第 2 节）",
+            "type": "object"
+          },
+          "id": {
+            "description": "不带是新建",
+            "type": "string"
+          },
+          "version": {
+            "description": "修改时带读到的版本",
+            "type": "number"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "type": "object"
+      },
       "SaveFieldConfigurations": {
         "properties": {
           "changes": {
@@ -1334,6 +1626,24 @@
         },
         "required": [
           "changes"
+        ],
+        "type": "object"
+      },
+      "SavePreferenceDto": {
+        "properties": {
+          "key": {
+            "description": "小写字母开头，最多 100 字",
+            "example": "query:system:user",
+            "type": "string"
+          },
+          "value": {
+            "description": "任意 JSON，最多 64KB（常用查询就是 query.md 的 where 加名字）",
+            "type": "object"
+          }
+        },
+        "required": [
+          "key",
+          "value"
         ],
         "type": "object"
       },
@@ -1481,6 +1791,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -1778,6 +2096,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -2092,6 +2418,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -2390,6 +2724,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -2675,6 +3017,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -2995,6 +3345,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -3259,6 +3617,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -3559,6 +3925,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -3947,6 +4321,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -4211,6 +4593,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -4536,6 +4926,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -4711,6 +5109,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -5084,6 +5490,14 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
           }
         },
         "type": "object"
@@ -5310,6 +5724,18 @@
         },
         "type": "object"
       },
+      "TableBody": {
+        "properties": {
+          "table": {
+            "example": "crm_customer",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table"
+        ],
+        "type": "object"
+      },
       "TokenResult": {
         "properties": {
           "accessToken": {
@@ -5332,6 +5758,46 @@
           "accessToken",
           "tokenType",
           "expiresIn"
+        ],
+        "type": "object"
+      },
+      "VersionBody": {
+        "properties": {
+          "resource": {
+            "description": "资源（权限码前缀）",
+            "example": "system:user",
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "resource",
+          "version"
+        ],
+        "type": "object"
+      },
+      "WriteBody": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "overwrite": {
+            "description": "手改过但仍要覆盖的文件路径",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "token": {
+            "description": "预览返回的 token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "token"
         ],
         "type": "object"
       }
@@ -5654,6 +6120,795 @@
         "tags": [
           "auth 登录认证"
         ]
+      }
+    },
+    "/admin/dev/codegen/delete": {
+      "post": {
+        "operationId": "devCodegenDelete",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "删除生成配置（不删已生成的代码）",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:delete",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/download": {
+      "post": {
+        "operationId": "devCodegenDownload",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "下载生成的代码压缩包",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/import": {
+      "post": {
+        "operationId": "devCodegenImport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TableBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "按表结构生成初始配置（不保存）",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/info": {
+      "post": {
+        "operationId": "devCodegenInfo",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "生成配置详情",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:list",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/list": {
+      "post": {
+        "operationId": "devCodegenList",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "生成配置列表",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:list",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/preview": {
+      "post": {
+        "operationId": "devCodegenPreview",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "预览要生成的文件和每个文件的处理方式",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/save": {
+      "post": {
+        "operationId": "devCodegenSave",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "保存生成配置（新建或修改）",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/sync": {
+      "post": {
+        "operationId": "devCodegenSync",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "表结构和配置的差异",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/tables": {
+      "post": {
+        "operationId": "devCodegenTables",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "数据库里还没导入的表",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/write": {
+      "post": {
+        "operationId": "devCodegenWrite",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "确认写入本机项目（只写文件，不执行命令）",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:write",
+          "risk": "high"
+        }
       }
     },
     "/admin/file/asset/download": {
@@ -6144,6 +7399,239 @@
         ]
       }
     },
+    "/admin/session/preference": {
+      "get": {
+        "operationId": "sessionPreferenceGet",
+        "parameters": [
+          {
+            "description": "小写字母开头，最多 100 字",
+            "in": "query",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "example": "query:system:user",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PreferenceResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "读一项个人偏好",
+        "tags": [
+          "auth 登录认证"
+        ]
+      }
+    },
+    "/admin/session/preference/delete": {
+      "post": {
+        "operationId": "sessionPreferenceDelete",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferenceKeyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "删除一项个人偏好",
+        "tags": [
+          "auth 登录认证"
+        ]
+      }
+    },
+    "/admin/session/preference/save": {
+      "post": {
+        "operationId": "sessionPreferenceSave",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavePreferenceDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PreferenceResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "保存一项个人偏好（覆盖）",
+        "tags": [
+          "auth 登录认证"
+        ]
+      }
+    },
     "/admin/session/profile": {
       "get": {
         "operationId": "sessionProfile",
@@ -6448,6 +7936,83 @@
         "x-permission": {
           "code": "system:dict-item:delete",
           "risk": "high"
+        }
+      }
+    },
+    "/admin/system/dict-item/export": {
+      "post": {
+        "operationId": "systemDictItemExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemDictItemPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出字典项（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/dict-item 字典项"
+        ],
+        "x-permission": {
+          "code": "system:dict-item:export",
+          "risk": "normal"
         }
       }
     },
@@ -6915,6 +8480,83 @@
         "x-permission": {
           "code": "system:dict-type:delete",
           "risk": "high"
+        }
+      }
+    },
+    "/admin/system/dict-type/export": {
+      "post": {
+        "operationId": "systemDictTypeExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemDictTypePageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出字典类型（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/dict-type 字典类型"
+        ],
+        "x-permission": {
+          "code": "system:dict-type:export",
+          "risk": "normal"
         }
       }
     },
@@ -7841,6 +9483,83 @@
         }
       }
     },
+    "/admin/system/login-log/export": {
+      "post": {
+        "operationId": "systemLoginLogExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemLoginLogPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出登录日志（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/login-log 登录日志"
+        ],
+        "x-permission": {
+          "code": "system:login-log:export",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/login-log/info": {
       "post": {
         "operationId": "systemLoginLogInfo",
@@ -8171,6 +9890,83 @@
         }
       }
     },
+    "/admin/system/menu/export": {
+      "post": {
+        "operationId": "systemMenuExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemMenuPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出菜单（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/menu 菜单"
+        ],
+        "x-permission": {
+          "code": "system:menu:export",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/menu/info": {
       "post": {
         "operationId": "systemMenuInfo",
@@ -8441,6 +10237,83 @@
         ],
         "x-permission": {
           "code": "system:menu:update",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/system/operation-log/export": {
+      "post": {
+        "operationId": "systemOperationLogExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemOperationLogPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出操作日志（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/operation-log 操作日志"
+        ],
+        "x-permission": {
+          "code": "system:operation-log:export",
           "risk": "normal"
         }
       }
@@ -8775,6 +10648,83 @@
         }
       }
     },
+    "/admin/system/org/export": {
+      "post": {
+        "operationId": "systemOrgExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemOrgPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出组织（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/org 组织"
+        ],
+        "x-permission": {
+          "code": "system:org:export",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/org/info": {
       "post": {
         "operationId": "systemOrgInfo",
@@ -9049,6 +10999,589 @@
         }
       }
     },
+    "/admin/system/page-config": {
+      "get": {
+        "operationId": "systemPageConfigInfo",
+        "parameters": [
+          {
+            "description": "资源（权限码前缀）",
+            "in": "query",
+            "name": "resource",
+            "required": true,
+            "schema": {
+              "example": "system:user",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "模块显示配置",
+        "tags": [
+          "system 模块配置"
+        ],
+        "x-permission": {
+          "code": "system:page-config:info",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/system/page-config/history": {
+      "post": {
+        "operationId": "systemPageConfigHistory",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HistoryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "修改历史",
+        "tags": [
+          "system 模块配置"
+        ],
+        "x-permission": {
+          "code": "system:page-config:info",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/system/page-config/history-info": {
+      "post": {
+        "operationId": "systemPageConfigHistoryInfo",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HistoryInfoBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "历史版本内容",
+        "tags": [
+          "system 模块配置"
+        ],
+        "x-permission": {
+          "code": "system:page-config:info",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/system/page-config/reset": {
+      "post": {
+        "operationId": "systemPageConfigReset",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "恢复代码默认",
+        "tags": [
+          "system 模块配置"
+        ],
+        "x-permission": {
+          "code": "system:page-config:update",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/system/page-config/restore": {
+      "post": {
+        "operationId": "systemPageConfigRestore",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "恢复历史版本",
+        "tags": [
+          "system 模块配置"
+        ],
+        "x-permission": {
+          "code": "system:page-config:update",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/system/page-config/save": {
+      "post": {
+        "operationId": "systemPageConfigSave",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "保存模块显示配置",
+        "tags": [
+          "system 模块配置"
+        ],
+        "x-permission": {
+          "code": "system:page-config:update",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/parameter/add": {
       "post": {
         "operationId": "systemParameterAdd",
@@ -9188,6 +11721,83 @@
         "x-permission": {
           "code": "system:parameter:delete",
           "risk": "high"
+        }
+      }
+    },
+    "/admin/system/parameter/export": {
+      "post": {
+        "operationId": "systemParameterExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemParameterPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出系统参数（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/parameter 系统参数"
+        ],
+        "x-permission": {
+          "code": "system:parameter:export",
+          "risk": "normal"
         }
       }
     },
@@ -10240,6 +12850,83 @@
         }
       }
     },
+    "/admin/system/role/export": {
+      "post": {
+        "operationId": "systemRoleExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemRolePageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出角色（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/role 角色"
+        ],
+        "x-permission": {
+          "code": "system:role:export",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/role/info": {
       "post": {
         "operationId": "systemRoleInfo",
@@ -10656,6 +13343,83 @@
         }
       }
     },
+    "/admin/system/user-role/export": {
+      "post": {
+        "operationId": "systemUserRoleExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemUserRolePageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出用户组织角色分配（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/user-role 用户组织角色分配"
+        ],
+        "x-permission": {
+          "code": "system:user-role:export",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/user-role/info": {
       "post": {
         "operationId": "systemUserRoleInfo",
@@ -11069,6 +13833,83 @@
         "x-permission": {
           "code": "system:user-supervisor:delete",
           "risk": "high"
+        }
+      }
+    },
+    "/admin/system/user-supervisor/export": {
+      "post": {
+        "operationId": "systemUserSupervisorExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemUserSupervisorPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出用户多上级（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/user-supervisor 用户多上级"
+        ],
+        "x-permission": {
+          "code": "system:user-supervisor:export",
+          "risk": "normal"
         }
       }
     },
@@ -11577,6 +14418,83 @@
         "x-permission": {
           "code": "system:user:delete",
           "risk": "high"
+        }
+      }
+    },
+    "/admin/system/user/export": {
+      "post": {
+        "operationId": "systemUserExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemUserPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出用户（CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "system/user 用户"
+        ],
+        "x-permission": {
+          "code": "system:user:export",
+          "risk": "normal"
         }
       }
     },

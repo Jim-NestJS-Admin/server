@@ -14,6 +14,7 @@ import {
 import { SnakeNamingStrategy } from '../../core/database/naming.strategy.js';
 import { RequestContext } from '../../core/tenant/request-context.js';
 import { AuthzContext } from '../../core/permission/authz-context.js';
+import { IdempotencyLedger } from '../../core/security/idempotency.ledger.js';
 import { ScopedSelectQueryBuilder } from '../../core/tenant/scoped-query-builder.js';
 import { CreateFileAsset1793923200000 } from '../../database/migrations/1793923200000-CreateFileAsset.js';
 import { FileAssetEntity } from './entity/file-asset.entity.js';
@@ -60,6 +61,7 @@ beforeAll(async () => {
     childOwner: () => undefined,
     audit: { beforeHardDelete: async () => {} } as never,
     authz: new AuthzContext(ClsServiceManager.getClsService()),
+    idempotency: new IdempotencyLedger(ClsServiceManager.getClsService(), ds),
   });
 });
 afterEach(() => vi.restoreAllMocks());
@@ -108,11 +110,13 @@ it('插入只取模块白名单，身份审计字段由实际 insertRow 填入',
   const transaction = (async (fn: (m: EntityManager) => Promise<unknown>) =>
     fn(writer)) as DataSource['transaction'];
   vi.spyOn(ds, 'transaction').mockImplementation(transaction);
-  await context.run({ tenantId: '2', userId: '7' }, async () => {
+  const recorded = vi.spyOn(IdempotencyLedger.prototype, 'recordInTx');
+  await context.run({ tenantId: '2', userId: '7', orgId: '3' }, async () => {
     const result = await service.insert({
       ...file('2'),
       tenantId: '99',
       createdBy: '99',
+      orgId: '99',
       id: '99',
       version: 99,
     } as never);
@@ -124,8 +128,15 @@ it('插入只取模块白名单，身份审计字段由实际 insertRow 填入',
       bytes: 50,
       sha256: 'a'.repeat(64),
       tenantId: '2',
+      orgId: '3',
       createdBy: '7',
       updatedBy: '7',
+    });
+    expect(recorded).toHaveBeenCalledWith(writer, {
+      id: '9007199254740993',
+      name: key('2').split('/').at(-1),
+      mime: 'image/png',
+      bytes: 50,
     });
   });
 });

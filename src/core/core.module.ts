@@ -21,6 +21,9 @@ import { DatabaseModule } from './database/database.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { EndpointCheck } from './endpoint/endpoint-check.js';
 import { EndpointGuard } from './endpoint/endpoint.guard.js';
+import { RateLimitGuard } from './security/rate-limit.js';
+import { IdempotencyInterceptor } from './security/idempotency.interceptor.js';
+import { UserRateLimitInterceptor } from './security/user-rate-limit.js';
 import { RequestContext } from './tenant/request-context.js';
 import { TenantGuardSubscriber } from './tenant/tenant-guard.subscriber.js';
 import { TenantRepositoryFactory } from './tenant/tenant-repository.js';
@@ -63,8 +66,13 @@ import { TenantRepositoryFactory } from './tenant/tenant-repository.js';
     TenantRepositoryFactory,
     TenantGuardSubscriber,
     EndpointCheck,
+    // 限流排在认证前面：没登录的请求也计数
+    { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: EndpointGuard },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    // 排在统一响应里面：保存和重放的是业务数据，外面再包统一结构
+    { provide: APP_INTERCEPTOR, useClass: UserRateLimitInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
   exports: [

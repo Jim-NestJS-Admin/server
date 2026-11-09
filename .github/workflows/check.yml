@@ -1,0 +1,67 @@
+name: 后端检查
+on: [push, pull_request]
+
+# 架构「部署与 CI」：代码检查、单元测试、租户隔离等端到端测试、构建、接口文档一致性；
+# 安全基线（T25）：依赖漏洞检查、密钥泄露检查。
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root
+          MYSQL_DATABASE: jim_admin_test
+          MYSQL_USER: jim_admin
+          MYSQL_PASSWORD: ci-password
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-root"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping" --health-interval=5s
+          --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_NAME: jim_admin
+      DB_TEST_NAME: jim_admin_test
+      DB_USER: jim_admin
+      DB_PASSWORD: ci-password
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: '6379'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm test:e2e
+      - run: pnpm build
+      # 接口文档必须和代码一致：重新导出后不能有差异
+      - run: pnpm openapi:export
+      - run: git diff --exit-code -- openapi/
+      # 依赖漏洞检查：生产依赖出现高危及以上就失败
+      - run: pnpm audit --prod --audit-level=high
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # 密钥泄露检查：扫描全部提交历史；示例配置和测试用的假密钥在 .gitleaks.toml 里放行
+      - name: gitleaks
+        run: >-
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.2
+          git /repo --config /repo/.gitleaks.toml --redact --verbose

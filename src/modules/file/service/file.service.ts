@@ -5,6 +5,7 @@ import { ErrorCode } from '../../../core/exceptions/error-code.js';
 import {
   FileAccess,
   FileCatalog,
+  FileMetadataWriteFailure,
   assertPrincipal,
   type StoredFile,
 } from '../file.ports.js';
@@ -48,14 +49,23 @@ export class FileService {
       });
       return this.receipt(file);
     } catch (reason) {
-      try {
-        await this.store.discard(key);
-      } catch {
+      if (
+        reason instanceof FileMetadataWriteFailure &&
+        reason.commitNotAttempted
+      ) {
+        try {
+          await this.store.discard(key);
+        } catch {
+          this.logger.error(
+            '文件写入未提交，但对象清理失败，需要维护任务回收孤立对象',
+          );
+        }
+      } else {
         this.logger.error(
-          '文件元数据保存失败后的对象清理未完成，需要维护任务清理孤立对象',
+          '文件元数据提交状态不确定，保留对象，需维护任务核对引用后再回收',
         );
       }
-      throw reason;
+      throw reason instanceof FileMetadataWriteFailure ? reason.reason : reason;
     }
   }
   async download(id: string) {

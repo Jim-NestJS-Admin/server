@@ -1,3 +1,4 @@
+import { FieldPermStateDto, QUERY_OPS } from './crud-query.dto.js';
 import {
   ApiProperty,
   ApiPropertyOptional,
@@ -43,6 +44,7 @@ export class CrudSchemaFormItem {
       'switch',
       'date',
       'datetime',
+      'tree-select',
     ],
   })
   component: FormComponent;
@@ -60,10 +62,16 @@ export class CrudSchemaQueryItem {
   @ApiProperty() field: string;
   @ApiProperty() label: string;
   @ApiProperty({
-    type: [String],
-    description: '可用的运算符；高级查询在 T18 扩展',
+    enum: QUERY_OPS,
+    isArray: true,
+    description: '这个字段可用的运算符',
   })
   operators: string[];
+  @ApiProperty({
+    enum: ['string', 'number', 'boolean', 'date'],
+    description: '值的类型，前端据此选输入控件',
+  })
+  type: string;
 }
 
 export class CrudSchemaDictItem {
@@ -102,6 +110,15 @@ export class CrudSchemaActions {
 export class CrudSchemaSort {
   @ApiProperty() field: string;
   @ApiProperty({ enum: ['asc', 'desc'] }) order: 'asc' | 'desc';
+}
+
+export class CrudSchemaTree {
+  @ApiProperty({ example: 'parentId', description: '指向父节点编号的字段' })
+  parentField: string;
+  @ApiProperty({ example: 'name', description: '节点显示名称字段' })
+  nameField: string;
+  @ApiPropertyOptional({ example: 'sort', description: '同级排序字段' })
+  sortField?: string;
 }
 
 export class CrudSchemaChild {
@@ -156,6 +173,25 @@ export class CrudSchema {
     description: '子表；没有子表时为空数组',
   })
   children: CrudSchemaChild[];
+  @ApiProperty({
+    type: CrudSchemaTree,
+    nullable: true,
+    description: '树形资源配置；不是树时为 null',
+  })
+  tree: CrudSchemaTree | null;
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: { $ref: getSchemaPath('FieldPermStateDto') },
+    description:
+      '每个业务字段在本页面（列表权限的本次有效角色）下的最宽字段权限状态；逐行以 _fieldState 为准',
+  })
+  fieldPerms?: Record<string, FieldPermStateDto>;
+  @ApiPropertyOptional({
+    type: Object,
+    description:
+      '生效的显示配置（代码默认 → 模块配置 → 用户列设置，按字段权限裁剪后），结构见契约 page-config.md 第 2、4 节',
+  })
+  view?: unknown;
 }
 
 export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
@@ -185,7 +221,13 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
       return {
         field: f.property,
         label: f.label,
-        component: cfg.component ?? (f.dict ? 'select' : 'input'),
+        component:
+          cfg.component ??
+          (meta.tree?.parentField === f.property
+            ? 'tree-select'
+            : f.dict
+              ? 'select'
+              : 'input'),
         required: Boolean(cfg.required),
         ...(cfg.placeholder ? { placeholder: cfg.placeholder } : {}),
         edit: f.edit ?? 'both',
@@ -193,11 +235,30 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
       };
     });
 
-  const query: CrudSchemaQueryItem[] = meta.fieldEq.map((p) => ({
-    field: p,
-    label: label(p),
-    operators: ['eq'],
-  }));
+  // 可筛选字段和运算符（T18）：文字可以模糊匹配，数字和日期可以比大小和区间
+  const query: CrudSchemaQueryItem[] = meta.fieldEq.map((p) => {
+    const t = Reflect.getMetadata(
+      'design:type',
+      meta.entity.prototype,
+      p,
+    ) as unknown;
+    const type =
+      t === Number
+        ? 'number'
+        : t === Boolean
+          ? 'boolean'
+          : t === Date
+            ? 'date'
+            : 'string';
+    const common = ['eq', 'ne', 'in', 'notIn', 'isNull', 'notNull'];
+    const operators =
+      type === 'string'
+        ? [...common, 'contains', 'startsWith']
+        : type === 'boolean'
+          ? ['eq', 'ne', 'isNull', 'notNull']
+          : [...common, 'gt', 'gte', 'lt', 'lte', 'between'];
+    return { field: p, label: label(p), operators, type };
+  });
 
   const actions: CrudSchemaActions = {};
   if (meta.api.includes('page'))
@@ -268,5 +329,6 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
     defaultSort: meta.defaultSort,
     maxSize: meta.maxSize,
     children,
+    tree: meta.tree ? { ...meta.tree } : null,
   };
 }

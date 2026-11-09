@@ -92,6 +92,14 @@ export class EnvironmentVariables {
   @IsBoolean()
   DB_SYNCHRONIZE?: boolean;
 
+  /** 只读查询的超时（毫秒），超过由 MySQL 中止；0 表示不限。导出 1 万行也要在这个时间内完成 */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(0)
+  DB_QUERY_TIMEOUT_MS: number = 30000;
+
   @IsString()
   @IsNotEmpty()
   REDIS_HOST: string = '127.0.0.1';
@@ -190,6 +198,55 @@ export class EnvironmentVariables {
   /** 验证码出现时机：always 每次登录都要；after-failure 同一账号或 IP 输错过才要 */
   @IsIn(['always', 'after-failure'])
   AUTH_CAPTCHA_MODE: 'always' | 'after-failure' = 'always';
+
+  /** 前面有几层受控的反向代理（0 表示直连，不信 X-Forwarded-For）。限流、登录计数按它取来源 IP */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(0)
+  @Max(5)
+  TRUST_PROXY: number = 0;
+
+  /** 每个来源 IP 每分钟最多请求次数（总闸） */
+  @Transform(({ value }) =>
+    value === undefined || value === '' ? undefined : Number(value),
+  )
+  @IsInt()
+  @Min(10)
+  RATE_LIMIT_IP_PER_MINUTE: number = 600;
+
+  /** 网站端前端地址（跨域白名单，/web 接口用），多个用逗号分隔。后台端直接用 AUTH_ADMIN_ORIGINS */
+  @IsOptional()
+  @IsString()
+  CORS_WEB_ORIGINS?: string;
+
+  /** APP / 小程序端的 H5 地址（跨域白名单，/app 接口用），多个用逗号分隔 */
+  @IsOptional()
+  @IsString()
+  CORS_APP_ORIGINS?: string;
+
+  /** 是否发送 HSTS 头；不填时生产环境开、其他环境关 */
+  @Transform(toBool)
+  @IsOptional()
+  @IsBoolean()
+  SECURITY_HSTS?: boolean;
+
+  /** 代码生成器（T21）：只在开发环境生效；还要配两个输出根目录 */
+  @Transform(toBool)
+  @IsOptional()
+  @IsBoolean()
+  CODEGEN_ENABLED?: boolean;
+
+  /** 代码生成写入的后端项目根目录（服务端写死，浏览器不能传路径） */
+  @IsOptional()
+  @IsString()
+  CODEGEN_SERVER_ROOT?: string;
+
+  /** 代码生成写入的前端项目根目录 */
+  @IsOptional()
+  @IsString()
+  CODEGEN_ADMIN_ROOT?: string;
 
   /** 只给接口文档导出脚本用：导出时不连数据库。不要手动设置 */
   @Transform(toBool)

@@ -31,6 +31,15 @@ export interface StoredFile {
   bytes: number;
   sha256: string;
 }
+/** 仅确定尚未进入提交阶段时才允许立即补偿删除对象。 */
+export class FileMetadataWriteFailure extends Error {
+  constructor(
+    readonly reason: unknown,
+    readonly commitNotAttempted: boolean,
+  ) {
+    super('文件元数据写入未完成');
+  }
+}
 /**
  * T03 全部完成并接入 T04 后，由继承 BaseService 的模块内 Service 实现持久化。
  * 查询必须使用 core 的当前上下文/范围，插入必须由 core 填充租户，不接收 tenantId 参数。

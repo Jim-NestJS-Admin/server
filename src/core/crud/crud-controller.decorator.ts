@@ -14,6 +14,8 @@ import {
 } from '@nestjs/swagger';
 import { AdminController } from '../endpoint/endpoint.decorators.js';
 import { Perms } from '../permission/perms.decorator.js';
+import { RawResponse } from '../decorators/raw-response.decorator.js';
+import { UserRateLimit } from '../security/user-rate-limit.js';
 import { ApiErrors, ApiResult } from '../swagger/api-result.js';
 import type { BaseEntity } from './base.entity.js';
 import { CRUD_RESOURCE } from './base.controller.js';
@@ -31,6 +33,8 @@ type Method =
   | 'recyclePage'
   | 'restore'
   | 'purge'
+  | 'export'
+  | 'tree'
   | 'schema';
 
 interface RouteSpec {
@@ -43,7 +47,7 @@ interface RouteSpec {
   summary: string;
   body?: Type;
   result?: Type;
-  errors: (400 | 404 | 409)[];
+  errors: (400 | 404 | 409 | 429)[];
 }
 
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -58,6 +62,7 @@ const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
  * - add    { data: {...} }
  * - update { id, version, data: { 只传要改的字段 } }
  * - delete { ids: [...] }，整批成败
+ * - tree   无参数 → { list }（树形资源，权限码同 page）
  *
  * 子类自己写了同名方法时，路由挂在子类的方法上（第 3 级定制）。
  */
@@ -142,6 +147,23 @@ export function CrudController<T extends BaseEntity>(
         result: dtos.DeleteResult,
         errors: [400, 404, 409],
       },
+      {
+        api: 'export',
+        method: 'export',
+        http: 'post',
+        summary: `导出${label}（CSV，按列表的查询条件，最多 1 万行）`,
+        body: dtos.PageBody,
+        result: undefined,
+        errors: [400, 429],
+      },
+      {
+        api: 'tree',
+        method: 'tree',
+        http: 'post',
+        summary: `${label}树形列表（全部可见节点，平铺）`,
+        result: dtos.TreeResult,
+        errors: [400],
+      },
     ];
     const enabled = specs.filter((s) => s.api && meta.api.includes(s.api));
     enabled.push({
@@ -173,8 +195,8 @@ export function CrudController<T extends BaseEntity>(
         });
       }
       const descriptor = Object.getOwnPropertyDescriptor(proto, spec.method)!;
-      // 权限码「前缀:动作」；页面描述跟列表同一个码。删除、彻底删除是高风险操作
-      const action = spec.api ?? 'page';
+      // 权限码「前缀:动作」；页面描述、树形列表跟列表同一个码。删除、彻底删除是高风险操作
+      const action = !spec.api || spec.api === 'tree' ? 'page' : spec.api;
       const decorators: MethodDecorator[] = [
         Perms(`${meta.permPrefix}:${action}`, {
           risk: action === 'delete' || action === 'purge' ? 'high' : 'normal',
@@ -190,6 +212,9 @@ export function CrudController<T extends BaseEntity>(
         ApiResult(spec.result),
         ...(spec.errors.length ? [ApiErrors(...spec.errors)] : []),
       ];
+      // 导出：原样返回文件，按用户限流（每人每小时 20 次）
+      if (spec.method === 'export')
+        decorators.push(RawResponse(), UserRateLimit('export', 20, 3600));
       // 页面描述里字典项是按 $ref 引用的，要单独登记模型，否则文档里是悬空引用
       if (spec.method === 'schema')
         decorators.push(ApiExtraModels(CrudSchemaDictItem));
