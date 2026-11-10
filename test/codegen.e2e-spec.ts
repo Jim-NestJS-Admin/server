@@ -1,9 +1,18 @@
 /* eslint-disable typescript/no-misused-spread -- 规格和 DTO 在这些测试中均为 JSON 字面量，不含类实例方法。 */
-import { Module, type INestApplication, type Type } from '@nestjs/common';
+import {
+  Injectable,
+  Module,
+  type INestApplication,
+  type Type,
+} from '@nestjs/common';
+import {
+  PermissionSource,
+  type RoleGrant,
+} from '../src/core/permission/permission-source.js';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { DataSource, type MigrationInterface } from 'typeorm';
-import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import request from 'supertest';
@@ -64,7 +73,23 @@ describe('T28 规格到代码完整链路', () => {
     adminRoot = join(root, 'admin');
     await mkdir(serverRoot, { recursive: true });
     await mkdir(join(adminRoot, 'codegen-templates'), { recursive: true });
-    for (const file of ['page.vue.tpl', 'locale.ts.tpl'])
+    for (const projectRoot of [serverRoot, adminRoot]) {
+      await writeFile(join(projectRoot, 'package.json'), '{"type":"module"}');
+      await symlink(
+        join(process.cwd(), 'node_modules'),
+        join(projectRoot, 'node_modules'),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+    }
+    await writeFile(
+      join(serverRoot, '.prettierrc'),
+      await readFile(join(process.cwd(), '.prettierrc')),
+    );
+    await writeFile(
+      join(adminRoot, '.prettierrc.js'),
+      await readFile(join(process.cwd(), '../admin/.prettierrc.js')),
+    );
+    for (const file of ['page.vue.tpl'])
       await writeFile(
         join(adminRoot, 'codegen-templates', file),
         await readFile(join(process.cwd(), '../admin/codegen-templates', file)),
@@ -115,6 +140,100 @@ describe('T28 规格到代码完整链路', () => {
     expect(
       types.body.data.find((t: { type: string }) => t.type === 'money'),
     ).toMatchObject({ databaseType: 'decimal', scale: 2 });
+  });
+
+  it('新建或重命名重复规格返回400并定位businessName，跨租户不误判', async () => {
+    const spec = newSpec('duplicate');
+    const saved = (await post('save-spec', { spec }).expect(200)).body.data;
+    const duplicate = await post('save-spec', { spec }).expect(400);
+    expect(duplicate.body.data.errors).toEqual([
+      {
+        field: 'businessName',
+        messages: ['模块 cgprobe.duplicate 已有生成记录'],
+      },
+    ]);
+    const another = (
+      await post('save-spec', { spec: newSpec('another') }).expect(200)
+    ).body.data;
+    const info = (await post('info', { id: another.id }).expect(200)).body.data;
+    await post('save-spec', {
+      id: another.id,
+      version: info.version,
+      spec,
+    }).expect(400);
+    await post('save-spec', { spec }, '2').expect(200);
+    const same = (await post('info', { id: saved.id }).expect(200)).body.data;
+    await post('save-spec', {
+      id: saved.id,
+      version: same.version,
+      spec,
+    }).expect(200);
+  });
+
+  it('写入后经MySQL JSON重排仍为已生成，嵌套权限和树配置按稳定序列化比较', async () => {
+    const spec = newSpec('stable');
+    spec.template = 'tree';
+    spec.tree = {
+      sortField: 'sort',
+      parentField: 'parentId',
+      nameField: 'name',
+    };
+    spec.fields[0].fieldPerm = { default: 'masked', mask: 'all' };
+    spec.fields.push(
+      {
+        property: 'parentId',
+        column: 'parent_id',
+        label: '上级',
+        type: 'reference',
+        nullable: true,
+      },
+      { property: 'sort', column: 'sort', label: '排序', type: 'int' },
+    );
+    const preview = (await post('preview-spec', { spec }).expect(200)).body
+      .data;
+    expect(
+      preview.files.some((file: { path: string }) =>
+        file.path.startsWith('src/locales/'),
+      ),
+    ).toBe(false);
+    const result = (
+      await post('write-spec', {
+        spec,
+        fingerprint: preview.fingerprint,
+      }).expect(200)
+    ).body.data;
+    expect(result.failed).toEqual([]);
+    const record = (await post('list', {}).expect(200)).body.data.find(
+      (row: { name: string }) => row.name === 'cgprobe.stable',
+    );
+    expect(record.status).toBe('generated');
+    const reordered = structuredClone(spec);
+    reordered.fields[0].fieldPerm = { mask: 'all', default: 'masked' };
+    reordered.tree = {
+      nameField: 'name',
+      sortField: 'sort',
+      parentField: 'parentId',
+    };
+    await post('save-spec', {
+      id: record.id,
+      version: record.version,
+      spec: reordered,
+    }).expect(200);
+    expect(
+      (await post('list', {}).expect(200)).body.data.find(
+        (row: { id: string }) => row.id === record.id,
+      ).status,
+    ).toBe('generated');
+    const tables = (await post('tables', {}).expect(200)).body.data.map(
+      (row: { table: string }) => row.table,
+    );
+    expect(
+      tables.filter((table: string) =>
+        ['migrations', 'typeorm_metadata', 'file_asset'].includes(table),
+      ),
+    ).toEqual([]);
+    for (const table of ['migrations', 'typeorm_metadata', 'file_asset'])
+      await post('import-spec', { tables: [table] }).expect(400);
   });
 
   it('损坏的旧配置只影响自身，可正常列出、导入其他表并删除坏记录', async () => {
@@ -473,7 +592,7 @@ describe('T28 规格到代码完整链路', () => {
         }).expect(200)
       ).body.data;
       expect(result.written.length).toBeGreaterThan(0);
-      expect(result.failed).toHaveLength(2);
+      expect(result.failed).toHaveLength(1);
       expect(result.recovery).toContain('Git 差异');
     } finally {
       spy.mockRestore();
@@ -508,6 +627,7 @@ describe('T28 规格到代码完整链路', () => {
     spec.businessName = 'customer';
     spec.permissionPrefix = 'cgprobe:customer';
     spec.tableName = 'cgprobe_customer';
+    spec.options = { ...spec.options, scopeEnabled: true };
     spec.children![0].tableName = 'cgprobe_customer_contact';
     await ds.query('DROP TABLE IF EXISTS cgprobe_customer_contact');
     await ds.query('DROP TABLE IF EXISTS cgprobe_customer');
@@ -564,9 +684,43 @@ describe('T28 规格到代码完整链路', () => {
       controllers: [controller],
     })
     class GeneratedTestModule {}
+    @Injectable()
+    class GeneratedCustomerScopeSource extends PermissionSource {
+      async loadGrants(_tenant: string, user: string): Promise<RoleGrant[]> {
+        if (user !== '200' && user !== '300')
+          return [
+            {
+              roleId: 'generated-super',
+              scopeOrgId: null,
+              permissions: [],
+              allPermissions: true,
+              dataScope: 'all',
+            },
+          ];
+        return [
+          {
+            roleId: `generated-org-${user}`,
+            scopeOrgId: user === '200' ? '11' : '22',
+            permissions: ['page', 'info', 'add', 'update', 'delete'].map(
+              (action) => `cgprobe:customer:${action}`,
+            ),
+            dataScope: 'org',
+          },
+        ];
+      }
+      async loadOrgs() {
+        return [];
+      }
+      async loadMenus() {
+        return [];
+      }
+    }
     const module = await createTestModule({
       imports: [GeneratedTestModule],
-    }).compile();
+    })
+      .overrideProvider(PermissionSource)
+      .useClass(GeneratedCustomerScopeSource)
+      .compile();
     const generated = module.createNestApplication();
     configureApp(generated);
     await generated.init();
@@ -614,6 +768,57 @@ describe('T28 规格到代码完整链路', () => {
       expect(page.total).toBe(1);
       await api('delete', { ids: [info.id] }).expect(200);
       await api('info', { id: info.id }).expect(404);
+      const scoped = (
+        user: string,
+        org: string,
+        action: string,
+        body: object,
+      ) =>
+        request(generated.getHttpServer())
+          .post(`/admin/cgprobe/customer/${action}`)
+          .set('x-test-user', user)
+          .set('x-test-org', org)
+          .send(body);
+      const orgA = (
+        await scoped('200', '11', 'add', {
+          data: { name: '组织甲', enabled: true },
+          children: {
+            customerContact: {
+              added: [{ clientId: 'org-a', phone: '13800000001' }],
+            },
+          },
+        }).expect(200)
+      ).body.data;
+      const orgB = (
+        await scoped('300', '22', 'add', {
+          data: { name: '组织乙', enabled: true },
+          children: {
+            customerContact: {
+              added: [{ clientId: 'org-b', phone: '13800000002' }],
+            },
+          },
+        }).expect(200)
+      ).body.data;
+      const ownA = (await scoped('200', '11', 'page', {}).expect(200)).body
+        .data;
+      expect(ownA.list.map((row: { name: string }) => row.name)).toEqual([
+        '组织甲',
+      ]);
+      expect(
+        (await scoped('300', '22', 'page', {}).expect(200)).body.data.list.map(
+          (row: { name: string }) => row.name,
+        ),
+      ).toEqual(['组织乙']);
+      await scoped('200', '11', 'info', { id: orgB.id }).expect(404);
+      await scoped('200', '11', 'update', {
+        id: orgB.id,
+        version: orgB.version,
+        data: { name: '越权' },
+      }).expect(404);
+      expect(
+        (await scoped('200', '11', 'info', { id: orgA.id }).expect(200)).body
+          .data.children.customerContact[0].phone,
+      ).toBe('13800000001');
     } finally {
       await generated.close();
     }

@@ -1,3 +1,5 @@
+import { formatFiles } from './format-files.js';
+import { stableStringify } from '../../core/swagger/swagger.js';
 import { textDiff } from './text-diff.js';
 import { CrudRuntime } from '../../core/crud/crud.runtime.js';
 import { readFile } from 'node:fs/promises';
@@ -15,7 +17,7 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { strToU8, zipSync } from 'fflate';
 import { AppConfigService } from '../../core/config/app-config.service.js';
-import { DataSource } from 'typeorm';
+import { DataSource, QueryFailedError } from 'typeorm';
 import { BusinessException } from '../../core/exceptions/business.exception.js';
 import { ErrorCode } from '../../core/exceptions/error-code.js';
 import { renderServer, pascal } from './render-server.js';
@@ -88,7 +90,7 @@ export class CodegenService {
         if (at >= 0) files.splice(at, 1);
         if (plan.file) files.push(plan.file);
       });
-      return { files, migrations };
+      return { files: await formatFiles(files, this.roots()), migrations };
     } catch (e) {
       if (e instanceof BusinessException) throw e;
       throw crudErrors.badRequest((e as Error).message);
@@ -419,12 +421,21 @@ export class CodegenService {
       }),
     );
     return rows
-      .filter((r) => !used.has(r.table) && !r.table.startsWith('sys_'))
+      .filter((r) => !used.has(r.table) && this.importableTable(r.table))
       .map((r) => ({ ...r, fieldCount: Number(r.fieldCount) }));
   }
 
+  private importableTable(table: string) {
+    const frameworkTables = new Set([
+      'migrations',
+      'typeorm_metadata',
+      'file_asset',
+    ]);
+    return !table.startsWith('sys_') && !frameworkTables.has(table);
+  }
+
   async columns(table: string): Promise<CodegenField[]> {
-    if (!/^[a-z][a-z0-9_]{0,62}$/.test(table))
+    if (!/^[a-z][a-z0-9_]{0,62}$/.test(table) || !this.importableTable(table))
       throw crudErrors.badRequest('表名格式不对');
     const cols: {
       name: string;
@@ -562,7 +573,7 @@ export class CodegenService {
   }
 
   private specHash(spec: ModuleSpec) {
-    return fingerprint(JSON.stringify(specToConfig(spec)));
+    return fingerprint(stableStringify(specToConfig(spec)));
   }
 
   private async specPlan(spec: ModuleSpec) {
@@ -583,18 +594,34 @@ export class CodegenService {
       label: spec.title,
       config: spec,
     };
-    if (!id) return { id: await this.repo().insert(values) };
-    return this.dataSource.transaction(async (manager) => {
-      const current = await this.repo()
-        .query('g', manager)
-        .andWhere('g.id = :id', { id })
-        .setLock('pessimistic_write')
-        .getOne();
-      if (!current) throw crudErrors.notFound();
-      if (current.version !== version) throw crudErrors.versionConflict();
-      await this.repo().update([id], values, manager);
-      return { id };
-    });
+    const duplicate = () => {
+      const message = `模块 ${values.name} 已有生成记录`;
+      return crudErrors.badRequest(message, [
+        { field: 'businessName', messages: [message] },
+      ]);
+    };
+    try {
+      if (!id) return { id: await this.repo().insert(values) };
+      return await this.dataSource.transaction(async (manager) => {
+        const current = await this.repo()
+          .query('g', manager)
+          .andWhere('g.id = :id', { id })
+          .setLock('pessimistic_write')
+          .getOne();
+        if (!current) throw crudErrors.notFound();
+        if (current.version !== version) throw crudErrors.versionConflict();
+        await this.repo().update([id], values, manager);
+        return { id };
+      });
+    } catch (error) {
+      if (
+        error instanceof QueryFailedError &&
+        (error.driverError as { code?: string } | undefined)?.code ===
+          'ER_DUP_ENTRY'
+      )
+        throw duplicate();
+      throw error;
+    }
   }
 
   async previewSpec(spec: ModuleSpec) {

@@ -422,7 +422,11 @@ export function validateSpec(raw: unknown): SpecError[] {
             valid =
               typeof d === 'string' &&
               /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(d) &&
-              !Number.isNaN(Date.parse(d));
+              !Number.isNaN(Date.parse(d.replace(' ', 'T') + 'Z')) &&
+              new Date(d.replace(' ', 'T') + 'Z')
+                .toISOString()
+                .slice(0, 19)
+                .replace('T', ' ') === d;
           else if (f.type === 'reference')
             valid = typeof d === 'string' && /^[1-9]\d{0,19}$/.test(d);
           else
@@ -650,7 +654,7 @@ export function migrateLegacyConfig(c: CodegenConfig): ModuleSpec {
       property: f.name,
       column: f.column,
       label: f.label,
-      type: f.type,
+      type: f.type === 'dictionary' && !f.dict ? 'string' : f.type,
       ...(f.length !== undefined ? { length: f.length } : {}),
       ...(f.precision !== undefined ? { precision: f.precision } : {}),
       ...(f.scale !== undefined ? { scale: f.scale } : {}),
@@ -689,7 +693,17 @@ export function migrateLegacyConfig(c: CodegenConfig): ModuleSpec {
             tableName: ch.table,
             foreignKey: ch.foreignKey,
             title: ch.label,
-            fields: fields(ch.fields),
+            fields: fields(
+              ch.fields.filter(
+                (field) =>
+                  field.name !== ch.foreignKey &&
+                  field.column !==
+                    ch.foreignKey.replace(
+                      /[A-Z]/g,
+                      (char) => `_${char.toLowerCase()}`,
+                    ),
+              ),
+            ),
           })),
         }
       : {}),

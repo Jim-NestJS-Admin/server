@@ -24,23 +24,21 @@ const config: CodegenConfig = {
 };
 
 describe('前端代码渲染（T21 接 Codex 模板）', () => {
-  it('输出路径固定在 src/views 和 src/locales', () => {
+  it('仅生成被实际使用的页面，不输出无人引用的TS语言包', () => {
     expect(renderAdmin(config, templates).map((f) => f.path)).toEqual([
       'src/views/crm/customer_contact/index.vue',
-      'src/locales/crm/customer_contact.ts',
     ]);
   });
 
   it('变量按契约生成：operationId 前缀和后端 CRUD 规则一致，文字一律 JSON 字面量', () => {
-    const [page, locale] = renderAdmin(config, templates);
+    const [page] = renderAdmin(config, templates);
     expect(page.content).toContain(
       'generatedCrud("crmCustomerContact", "crm:customer-contact")',
     );
     expect(page.content).toContain(`:page-key="'crm/customer-contact'"`);
     // Vue 自己的插值不动
     expect(page.content).toContain("{{ t('keep') }}");
-    expect(locale.content).toContain(JSON.stringify(config.label));
-    expect(locale.content).toContain(JSON.stringify({ name: '姓名</script>' }));
+    expect(manualSteps(config).join('\n')).not.toContain('语言入口');
   });
 
   it('模板里有不认识的变量：报错，不生成半成品', () => {

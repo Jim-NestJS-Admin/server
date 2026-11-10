@@ -5,6 +5,30 @@ const col = (
   type: CrudSchemaColumn['type'] = 'text',
 ): CrudSchemaColumn => ({ field, label: field, type, sortable: false });
 describe('导出显示值', () => {
+  it('字典的字符串值与整数列、布尔列可以对应，脱敏值仍不参与字典匹配', () => {
+    expect(
+      exportValue({ status: 1 }, col('status'), [
+        { value: '1', label: '启用' },
+      ]),
+    ).toBe('启用');
+    expect(
+      exportValue({ status: '0' }, col('status'), [
+        { value: 0, label: '停用' },
+      ]),
+    ).toBe('停用');
+    expect(
+      exportValue({ status: true }, col('status'), [
+        { value: 'true', label: '是' },
+      ]),
+    ).toBe('是');
+    expect(
+      exportValue(
+        { status: '1', _fieldState: { status: 'masked' } },
+        col('status'),
+        [{ value: 1, label: '原值标签' }],
+      ),
+    ).toBe('1');
+  });
   it('字典、关联名称、布尔及数字使用列表语义', () => {
     expect(exportValue({ enabled: true }, col('enabled', 'boolean'))).toBe(
       '是',

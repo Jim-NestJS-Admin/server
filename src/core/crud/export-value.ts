@@ -18,7 +18,11 @@ export function exportValue(
     column.field
   ];
   if (named) return named;
-  const option = dictionary?.find((item) => item.value === value);
+  const option = dictionary?.find(
+    (item) =>
+      ['string', 'number', 'boolean'].includes(typeof value) &&
+      String(item.value) === String(value as string | number | boolean),
+  );
   if (option) return option.label;
   if (typeof value === 'boolean') return value ? '是' : '否';
   if (

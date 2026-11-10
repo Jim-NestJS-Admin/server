@@ -7,10 +7,9 @@ import type { GeneratedFile } from './render-server.js';
 /** 前端模板（admin 项目 codegen-templates/，Codex 维护，契约 codegen.md 第 6 节） */
 export interface AdminTemplates {
   page: string;
-  locale: string;
 }
 
-const TEMPLATE_FILES = { page: 'page.vue.tpl', locale: 'locale.ts.tpl' };
+const TEMPLATE_FILES = { page: 'page.vue.tpl' };
 
 /** 从前端项目根目录读模板；文件名固定，不接受浏览器传入的路径 */
 export async function loadAdminTemplates(
@@ -25,7 +24,6 @@ export async function loadAdminTemplates(
     });
   return {
     page: await read(TEMPLATE_FILES.page),
-    locale: await read(TEMPLATE_FILES.locale),
   };
 }
 
@@ -50,7 +48,7 @@ function fill(tpl: string, vars: Record<string, string>, name: string): string {
 }
 
 /**
- * 前端文件：src/views/<module>/<business>/index.vue 和 src/locales/<module>/<business>.ts。
+ * 前端文件：src/views/<module>/<business>/index.vue（标签来自后端 schema，不生成无人引用的 TS 语言包）。
  * 变量按契约第 6 节生成：JSON 变量一律 JSON.stringify；pageKeyExpression 只由校验过的权限前缀转成单引号表达式。
  */
 export function renderAdmin(
@@ -79,11 +77,6 @@ export function renderAdmin(
       path: `src/views/${c.module}/${c.business}/index.vue`,
       content: fill(t.page, vars, TEMPLATE_FILES.page),
     },
-    {
-      project: 'admin',
-      path: `src/locales/${c.module}/${c.business}.ts`,
-      content: fill(t.locale, vars, TEMPLATE_FILES.locale),
-    },
   ];
 }
 
@@ -98,7 +91,6 @@ export function manualSteps(c: CodegenConfig): string[] {
     `后端：运行 pnpm openapi:export 并提交 openapi/admin.json`,
     `前端：运行 pnpm gen:api 重新生成接口代码`,
     `前端：在 src/platform/navigation.ts 的 navigationViews 里登记 ["${key}", () => import("@/views/${c.module}/${c.business}/index.vue")]`,
-    `前端：把语言包 src/locales/${c.module}/${c.business}.ts 接到语言入口`,
     `菜单：按 src/modules/${c.module}/${c.business}.menu.json 初始化菜单和按钮权限（组件键 ${key}），再给角色授权`,
   ];
 }

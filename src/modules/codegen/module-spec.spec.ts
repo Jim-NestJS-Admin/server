@@ -66,6 +66,56 @@ const spec = (): ModuleSpec => ({
 });
 
 describe('ModuleSpec v1', () => {
+  it('日期时间默认值严格校验日历和时分秒，不接受自动滚动到下月', () => {
+    const defaults = (value: string) => ({
+      ...spec(),
+      fields: [
+        {
+          property: 'occurredAt',
+          column: 'occurred_at',
+          label: '时间',
+          type: 'datetime',
+          defaultValue: value,
+        },
+      ],
+    });
+    expect(
+      validateSpec(defaults('2026-02-30 10:00:00')).map((e) => e.path),
+    ).toContain('fields[0].defaultValue');
+    expect(
+      validateSpec(defaults('2026-02-29 10:00:00')).length,
+    ).toBeGreaterThan(0);
+    expect(validateSpec(defaults('2024-02-29 10:00:00'))).toEqual([]);
+    expect(
+      validateSpec(defaults('2026-11-10 24:00:00')).length,
+    ).toBeGreaterThan(0);
+  });
+  it('旧子表的归属外键不进入新字段列表；缺少字典编码的旧字典字段回退为文本', () => {
+    const old = specToConfig(spec());
+    old.template = 'master-detail';
+    old.children = [
+      {
+        table: 'crm_customer_contact',
+        label: '联系人',
+        foreignKey: 'customerId',
+        fields: [
+          {
+            name: 'customerId',
+            column: 'customer_id',
+            label: '客户',
+            type: 'int',
+          },
+          { name: 'kind', column: 'kind', label: '分类', type: 'dictionary' },
+        ],
+      },
+    ];
+    const migrated = migrateLegacyConfig(old);
+    expect(migrated.children![0].fields.map((field) => field.property)).toEqual(
+      ['kind'],
+    );
+    expect(migrated.children![0].fields[0].type).toBe('string');
+    expect(validateSpec(migrated)).toEqual([]);
+  });
   it('严格拒绝未知字段、显示项、错误版本及错误对象结构，并返回路径', () => {
     expect(validateSpec(spec())).toEqual([]);
     expect(validateSpec(null)[0].path).toBe('');
