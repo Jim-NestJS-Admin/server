@@ -1,5 +1,6 @@
 import { plainToInstance, Transform } from 'class-transformer';
 import {
+  Matches,
   IsBoolean,
   IsIn,
   MinLength,
@@ -237,6 +238,11 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsBoolean()
   CODEGEN_ENABLED?: boolean;
+
+  /** 本地开发工具固定使用的租户，不能从工具参数指定。 */
+  @IsOptional()
+  @Matches(/^[1-9]\d{0,19}$/)
+  CODEGEN_TENANT_ID?: string;
 
   /** 代码生成写入的后端项目根目录（服务端写死，浏览器不能传路径） */
   @IsOptional()

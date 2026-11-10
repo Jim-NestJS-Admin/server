@@ -1,5 +1,10 @@
 /** 代码生成配置（契约 docs/contracts/codegen.md 第 2 节） */
 export type FieldType =
+  | 'text'
+  | 'dictionary'
+  | 'reference'
+  | 'image'
+  | 'file'
   | 'string'
   | 'int'
   | 'decimal'
@@ -10,6 +15,11 @@ export type FieldType =
   | 'json';
 
 export const FIELD_TYPES: FieldType[] = [
+  'text',
+  'dictionary',
+  'reference',
+  'image',
+  'file',
   'string',
   'int',
   'decimal',
@@ -28,6 +38,7 @@ export const COMPONENTS = [
   'checkbox',
   'switch',
   'date',
+  'datetime',
   'image',
   'file',
   'rich',
@@ -42,6 +53,10 @@ export interface CodegenField {
   label: string;
   type: FieldType;
   length?: number;
+  precision?: number;
+  scale?: number;
+  defaultValue?: string | number | boolean | null;
+  comment?: string;
   nullable?: boolean;
   list?: boolean;
   query?: (typeof QUERY_MODES)[number] | null;
@@ -223,6 +238,7 @@ export function mapColumnType(dataType: string, columnType: string): FieldType {
   )
     return 'int';
   if (['decimal', 'numeric', 'float', 'double'].includes(t)) return 'decimal';
+  if (['text', 'mediumtext', 'longtext', 'tinytext'].includes(t)) return 'text';
   if (t === 'date') return 'date';
   if (['datetime', 'timestamp'].includes(t)) return 'datetime';
   if (t === 'json') return 'json';

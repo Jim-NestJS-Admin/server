@@ -118,6 +118,17 @@ export class AppConfigService {
     };
   }
 
+  get codegen() {
+    return {
+      enabled:
+        this.nodeEnv === NodeEnv.Development &&
+        this.config.get('CODEGEN_ENABLED', { infer: true }) === true,
+      serverRoot: this.config.get('CODEGEN_SERVER_ROOT', { infer: true }) ?? '',
+      adminRoot: this.config.get('CODEGEN_ADMIN_ROOT', { infer: true }) ?? '',
+      tenantId: this.config.get('CODEGEN_TENANT_ID', { infer: true }) ?? '1',
+    };
+  }
+
   /** 正在导出接口文档：不连数据库 */
   get openApiExport(): boolean {
     return this.config.get('OPENAPI_EXPORT', { infer: true }) ?? false;

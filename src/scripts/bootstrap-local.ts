@@ -1,3 +1,4 @@
+import { CodegenModuleSpec1794312000000 } from '../database/migrations/1794312000000-CodegenModuleSpec.js';
 import { SharedDictionaries1794279600000 } from '../database/migrations/1794279600000-SharedDictionaries.js';
 import { PLATFORM_TENANT_ID } from '../core/tenant/tenant.constants.js';
 import 'reflect-metadata';
@@ -89,6 +90,7 @@ async function bootstrapLocal(): Promise<void> {
       SystemFields1793941200000,
       CoreTables1793944800000,
       SharedDictionaries1794279600000,
+      CodegenModuleSpec1794312000000,
     ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,

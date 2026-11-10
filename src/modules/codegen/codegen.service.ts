@@ -1,7 +1,19 @@
+import { CrudRuntime } from '../../core/crud/crud.runtime.js';
+import { readFile } from 'node:fs/promises';
+import {
+  FIELD_CATALOG,
+  readSpec,
+  specToConfig,
+  migrateLegacyConfig,
+  validateSpec,
+  type ModuleSpec,
+} from './module-spec.js';
+import { specSchema } from './spec-schema.js';
+import { migrationSql } from './spec-sql.js';
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { strToU8, zipSync } from 'fflate';
-import { ConfigService } from '@nestjs/config';
+import { AppConfigService } from '../../core/config/app-config.service.js';
 import { DataSource } from 'typeorm';
 import { BusinessException } from '../../core/exceptions/business.exception.js';
 import { ErrorCode } from '../../core/exceptions/error-code.js';
@@ -49,7 +61,8 @@ export class CodegenService {
   constructor(
     private readonly repos: TenantRepositoryFactory,
     private readonly dataSource: DataSource,
-    private readonly config: ConfigService,
+    private readonly config: AppConfigService,
+    private readonly runtime: CrudRuntime,
   ) {}
 
   /** 预览、写入、下载共用同一份文件集合：后端文件 + 前端文件（模板来自前端项目 codegen-templates/） */
@@ -75,8 +88,8 @@ export class CodegenService {
 
   private roots() {
     return {
-      server: this.config.get<string>('CODEGEN_SERVER_ROOT') ?? '',
-      admin: this.config.get<string>('CODEGEN_ADMIN_ROOT') ?? '',
+      server: this.config.codegen.serverRoot,
+      admin: this.config.codegen.adminRoot,
     };
   }
 
@@ -90,11 +103,16 @@ export class CodegenService {
       .andWhere('g.id = :id', { id })
       .getOne();
     if (!row) throw crudErrors.notFound();
-    const config = row.config as CodegenConfig;
-    const stamp = row.createdAt.getTime();
+    return this.buildPlan(readSpec(row.config), row);
+  }
+
+  private async buildPlan(spec: ModuleSpec, row: CodegenEntity | null) {
+    this.assertSpec(spec);
+    const config = specToConfig(spec);
+    const stamp = this.stamp(spec, row);
     const files = await this.render(config, stamp);
     const roots = this.roots();
-    const last = row.fingerprints ?? {};
+    const last = row?.fingerprints ?? {};
     const items = [];
     for (const f of files) {
       let abs: string;
@@ -114,18 +132,38 @@ export class CodegenService {
             : last[key] === now
               ? 'overwrite'
               : 'skip-modified';
-      items.push({ ...f, abs, key, now, next, action });
+      const previous = now === null ? '' : await readFile(abs, 'utf8');
+      items.push({
+        ...f,
+        abs,
+        key,
+        now,
+        next,
+        action,
+        previous,
+        diff:
+          previous === f.content
+            ? ''
+            : `--- ${f.path}（当前）\n+++ ${f.path}（生成）\n${previous
+                .split('\n')
+                .map((line) => '-' + line)
+                .join('\n')}\n${f.content
+                .split('\n')
+                .map((line) => '+' + line)
+                .join('\n')}`,
+      });
     }
     const token = createHash('sha256')
       .update(
         JSON.stringify([
-          row.id,
-          row.version,
+          row?.id ?? null,
+          row?.version ?? null,
+          spec,
           items.map((i) => [i.key, i.now, i.next]),
         ]),
       )
       .digest('base64url');
-    return { row, items, token };
+    return { row, items, token, spec };
   }
 
   /**
@@ -137,8 +175,11 @@ export class CodegenService {
       .andWhere('g.id = :id', { id })
       .getOne();
     if (!row) throw crudErrors.notFound();
-    const config = row.config as CodegenConfig;
-    const files = await this.render(config, row.createdAt.getTime());
+    const config = specToConfig(readSpec(row.config));
+    const files = await this.render(
+      config,
+      this.stamp(readSpec(row.config), row),
+    );
     const entries: Record<string, Uint8Array> = {};
     for (const f of files) {
       const rel = f.path;
@@ -158,15 +199,28 @@ export class CodegenService {
   }
 
   async preview(id: string) {
-    const { row, items, token } = await this.plan(id);
-    const steps = manualSteps(row.config as CodegenConfig);
+    const plan = await this.plan(id);
+    return this.previewResult(plan);
+  }
+
+  private previewResult({
+    items,
+    token,
+    spec,
+  }: Awaited<ReturnType<CodegenService['buildPlan']>>) {
+    const steps = manualSteps(specToConfig(spec));
     return {
       token,
+      fingerprint: token,
+      spec,
+      sql: migrationSql(spec),
       files: items.map((i) => ({
         project: i.project,
         path: i.path,
         action: i.action,
         content: i.content,
+        previous: i.previous,
+        diff: i.diff,
       })),
       note: `写入后还要人工完成：${steps.join('；')}`,
       manualSteps: steps,
@@ -178,7 +232,15 @@ export class CodegenService {
    * 手改过的文件只有在 overwrite 里点名才覆盖。返回每个文件的结果，并记下写入后的指纹。只写文件，不执行任何命令。
    */
   async write(id: string, token: string, overwrite: string[]) {
-    const { row, items, token: current } = await this.plan(id);
+    return this.writePlan(await this.plan(id), token, overwrite);
+  }
+
+  private async writePlan(
+    plan: Awaited<ReturnType<CodegenService['buildPlan']>>,
+    token: string,
+    overwrite: string[],
+  ) {
+    const { row, items, token: current, spec } = plan;
     if (current !== token)
       throw new BusinessException(
         ErrorCode.Conflict,
@@ -188,17 +250,26 @@ export class CodegenService {
     const written: string[] = [];
     const skipped: string[] = [];
     const failed: { path: string; message: string }[] = [];
-    const prints: Record<string, string> = { ...row.fingerprints };
+    const prints: Record<string, string> = {
+      ...row?.fingerprints,
+      $stamp: String(this.stamp(spec, row)),
+    };
     for (const i of items) {
-      if (i.action === 'unchanged') {
-        prints[i.key] = i.next;
-        continue;
-      }
-      if (i.action === 'skip-modified' && !overwrite.includes(i.path)) {
-        skipped.push(i.path);
-        continue;
-      }
       try {
+        // 每个文件落盘前再次检查真实路径和内容，链接被替换也必须报告失败。
+        if (
+          resolveSafe(this.roots()[i.project], i.project, i.path) !== i.abs ||
+          (await currentFingerprint(i.abs)) !== i.now
+        )
+          throw new Error('预览后文件或路径发生变化，请重新预览');
+        if (i.action === 'unchanged') {
+          prints[i.key] = i.next;
+          continue;
+        }
+        if (i.action === 'skip-modified' && !overwrite.includes(i.path)) {
+          skipped.push(i.path);
+          continue;
+        }
         await writeSafe(i.abs, i.content);
         prints[i.key] = i.next;
         written.push(i.path);
@@ -206,12 +277,29 @@ export class CodegenService {
         failed.push({ path: i.path, message: (e as Error).message });
       }
     }
-    await this.repo().update([row.id], { fingerprints: prints });
+    if (!failed.length && !skipped.length)
+      prints['$spec'] = this.specHash(spec);
+    else delete prints['$spec'];
+    if (row)
+      await this.repo().update([row.id], {
+        fingerprints: prints,
+        config: spec,
+        label: spec.title,
+      });
+    else
+      await this.repo().insert({
+        name: `${spec.moduleName}.${spec.businessName}`,
+        label: spec.title,
+        config: spec,
+        fingerprints: prints,
+      });
     return {
+      recovery:
+        '文件不会自动回滚；按 written 检查 Git 差异，保留所需修改，再预览重试 failed/skipped。不会执行迁移或提交。',
       written,
       skipped,
       failed,
-      manualSteps: manualSteps(row.config as CodegenConfig),
+      manualSteps: manualSteps(specToConfig(spec)),
     };
   }
 
@@ -227,6 +315,13 @@ export class CodegenService {
       label: r.label,
       version: r.version,
       updatedAt: r.updatedAt,
+      spec: readSpec(r.config),
+      status:
+        !r.fingerprints || !Object.keys(r.fingerprints).length
+          ? 'notGenerated'
+          : r.fingerprints['$spec'] === this.specHash(readSpec(r.config))
+            ? 'generated'
+            : 'modified',
     }));
   }
 
@@ -239,7 +334,8 @@ export class CodegenService {
     return {
       id: row.id,
       version: row.version,
-      config: row.config as CodegenConfig,
+      config: specToConfig(readSpec(row.config)),
+      spec: readSpec(row.config),
     };
   }
 
@@ -247,17 +343,11 @@ export class CodegenService {
   async save(id: string | null, version: number | null, config: unknown) {
     const errors = validateCodegenConfig(config);
     if (errors.length) throw crudErrors.badRequest('生成配置不合法', errors);
-    const c = config as CodegenConfig;
-    const values = {
-      name: `${c.module}.${c.business}`,
-      label: c.label,
-      config: c,
-    };
-    if (!id) return { id: await this.repo().insert(values) };
-    const cur = await this.info(id);
-    if (cur.version !== version) throw crudErrors.versionConflict();
-    await this.repo().update([id], values);
-    return { id };
+    return this.saveSpec(
+      id,
+      version,
+      migrateLegacyConfig(config as CodegenConfig),
+    );
   }
 
   async remove(id: string) {
@@ -268,22 +358,22 @@ export class CodegenService {
 
   /** 当前数据库里的表（排除已经有生成配置的） */
   async tables() {
-    const rows: { table: string; comment: string }[] =
+    const rows: { table: string; comment: string; fieldCount: number }[] =
       await this.dataSource.query(
-        'SELECT TABLE_NAME AS `table`, TABLE_COMMENT AS comment FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = ? ORDER BY TABLE_NAME',
+        'SELECT TABLE_NAME AS `table`, TABLE_COMMENT AS comment, (SELECT COUNT(*) FROM information_schema.COLUMNS c WHERE c.TABLE_SCHEMA = t.TABLE_SCHEMA AND c.TABLE_NAME = t.TABLE_NAME) AS fieldCount FROM information_schema.TABLES t WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = ? ORDER BY TABLE_NAME',
         ['BASE TABLE'],
       );
     const used = new Set(
       (await this.repo().query('g').getMany()).map(
-        (g) => (g.config as CodegenConfig).table,
+        (g) => readSpec(g.config).tableName,
       ),
     );
-    return rows.filter(
-      (r) => !used.has(r.table) && !r.table.startsWith('sys_'),
-    );
+    return rows
+      .filter((r) => !used.has(r.table) && !r.table.startsWith('sys_'))
+      .map((r) => ({ ...r, fieldCount: Number(r.fieldCount) }));
   }
 
-  private async columns(table: string): Promise<CodegenField[]> {
+  async columns(table: string): Promise<CodegenField[]> {
     if (!/^[a-z][a-z0-9_]{0,62}$/.test(table))
       throw crudErrors.badRequest('表名格式不对');
     const cols: {
@@ -294,24 +384,47 @@ export class CodegenService {
       length: number | null;
       comment: string;
       key: string;
+      precision: number | null;
+      scale: number | null;
+      defaultValue: string | number | null;
     }[] = await this.dataSource.query(
-      'SELECT COLUMN_NAME AS name, DATA_TYPE AS dataType, COLUMN_TYPE AS columnType, IS_NULLABLE AS nullable, CHARACTER_MAXIMUM_LENGTH AS length, COLUMN_COMMENT AS comment, COLUMN_KEY AS `key` FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION',
+      'SELECT COLUMN_NAME AS name, DATA_TYPE AS dataType, COLUMN_TYPE AS columnType, IS_NULLABLE AS nullable, CHARACTER_MAXIMUM_LENGTH AS length, COLUMN_COMMENT AS comment, COLUMN_KEY AS `key`, NUMERIC_PRECISION AS `precision`, NUMERIC_SCALE AS scale, COLUMN_DEFAULT AS defaultValue FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION',
       [table],
     );
     if (!cols.length) throw crudErrors.notFound();
     return cols
       .filter((c) => !BASE_COLUMNS.has(c.name))
       .map((c) => {
-        const type = mapColumnType(c.dataType, c.columnType);
+        const type =
+          c.dataType.toLowerCase() === 'bigint'
+            ? 'reference'
+            : mapColumnType(c.dataType, c.columnType);
         return {
           name: toCamel(c.name),
           column: c.name,
           label: (c.comment || c.name).slice(0, 30),
           type,
-          length:
-            type === 'string' && c.length
-              ? Math.min(Number(c.length), 4000)
-              : undefined,
+          length: type === 'string' && c.length ? Number(c.length) : undefined,
+          ...(type === 'decimal'
+            ? {
+                precision: Number(c.precision ?? 14),
+                scale: Number(c.scale ?? 4),
+              }
+            : {}),
+          ...(c.defaultValue !== null &&
+          c.defaultValue !== undefined &&
+          !['text', 'json'].includes(type) &&
+          !String(c.defaultValue).toUpperCase().includes('CURRENT_TIMESTAMP')
+            ? {
+                defaultValue:
+                  type === 'boolean'
+                    ? String(c.defaultValue).replace(/^'|'$/g, '') === '1'
+                    : type === 'int'
+                      ? Number(c.defaultValue)
+                      : String(c.defaultValue).replace(/^'(.*)'$/, '$1'),
+              }
+            : {}),
+          comment: c.comment,
           nullable: c.nullable === 'YES',
           list: type !== 'json',
           query: null,
@@ -338,7 +451,7 @@ export class CodegenService {
     return {
       module,
       business,
-      label: business,
+      label: (await this.tableTitle(table)) || business,
       permPrefix: `${module}:${business.replace(/_/g, '-')}`,
       table,
       template: 'single',
@@ -351,6 +464,134 @@ export class CodegenService {
       },
       fields,
     };
+  }
+
+  private async tableTitle(table: string): Promise<string> {
+    const rows: { comment: string }[] = await this.dataSource.query(
+      'SELECT TABLE_COMMENT AS comment FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+      [table],
+    );
+    return (rows[0]?.comment ?? '').slice(0, 30);
+  }
+
+  fieldTypes() {
+    return FIELD_CATALOG;
+  }
+
+  private assertSpec(spec: unknown): asserts spec is ModuleSpec {
+    const errors = validateSpec(spec);
+    if (errors.length)
+      throw crudErrors.badRequest(
+        '模块规格不合法',
+        errors.map((e) => ({ field: e.path, messages: [e.message] })),
+      );
+  }
+
+  private stamp(spec: ModuleSpec, row?: CodegenEntity | null) {
+    if (row?.fingerprints?.['$stamp'])
+      return Number(row.fingerprints['$stamp']);
+    if (row) return row.createdAt.getTime();
+    return (
+      1790000000000 +
+      parseInt(
+        fingerprint(`${spec.moduleName}.${spec.businessName}`).slice(0, 9),
+        16,
+      )
+    );
+  }
+
+  private specHash(spec: ModuleSpec) {
+    return fingerprint(JSON.stringify(specToConfig(spec)));
+  }
+
+  private async specPlan(spec: ModuleSpec) {
+    this.assertSpec(spec);
+    const row = await this.repo()
+      .query('g')
+      .andWhere('g.name = :name', {
+        name: `${spec.moduleName}.${spec.businessName}`,
+      })
+      .getOne();
+    return this.buildPlan(spec, row);
+  }
+
+  async saveSpec(id: string | null, version: number | null, spec: ModuleSpec) {
+    this.assertSpec(spec);
+    const values = {
+      name: `${spec.moduleName}.${spec.businessName}`,
+      label: spec.title,
+      config: spec,
+    };
+    if (!id) return { id: await this.repo().insert(values) };
+    return this.dataSource.transaction(async (manager) => {
+      const current = await this.repo()
+        .query('g', manager)
+        .andWhere('g.id = :id', { id })
+        .setLock('pessimistic_write')
+        .getOne();
+      if (!current) throw crudErrors.notFound();
+      if (current.version !== version) throw crudErrors.versionConflict();
+      await this.repo().update([id], values, manager);
+      return { id };
+    });
+  }
+
+  async previewSpec(spec: ModuleSpec) {
+    return this.previewResult(await this.specPlan(spec));
+  }
+  async writeSpec(spec: ModuleSpec, token: string) {
+    return this.writePlan(await this.specPlan(spec), token, []);
+  }
+
+  async schemaSpec(spec: ModuleSpec) {
+    this.assertSpec(spec);
+    const schema = specSchema(spec);
+    const fill = async (fields: ModuleSpec['fields'], prefix = '') => {
+      for (const field of fields)
+        if (field.dictCode)
+          schema.dictionaries[`${prefix}${field.property}`] =
+            await this.dictionaryOptions(field.dictCode);
+    };
+    await fill(spec.fields);
+    for (let i = 0; i < (spec.children?.length ?? 0); i++)
+      await fill(spec.children![i].fields, `${schema.children[i].resource}.`);
+    return schema;
+  }
+
+  async dictionaryOptions(code: string) {
+    return this.runtime.dictionary ? this.runtime.dictionary.options(code) : [];
+  }
+
+  async importSpec(tables: string[]) {
+    if (
+      !Array.isArray(tables) ||
+      tables.length < 1 ||
+      tables.length > 6 ||
+      new Set(tables).size !== tables.length
+    )
+      throw crudErrors.badRequest('请选择 1 到 6 张不同的表');
+    const configs = await Promise.all(
+      tables.map((table) => this.importTable(table)),
+    );
+    const spec = migrateLegacyConfig(configs[0]);
+    if (configs.length > 1) {
+      spec.template = 'masterDetail';
+      const parentKey = toCamel(`${configs[0].business}_id`);
+      spec.children = configs.slice(1).map((c) => {
+        const foreignKey = c.fields.some((f) => f.name === parentKey)
+          ? parentKey
+          : toCamel(`${configs[0].table}_id`);
+        return {
+          tableName: c.table,
+          foreignKey,
+          title: c.label,
+          fields: migrateLegacyConfig(c).fields.filter(
+            (f) => f.property !== foreignKey,
+          ),
+        };
+      });
+    }
+    return { spec, errors: validateSpec(spec) };
   }
 
   /** 表结构和配置的差异：新增的列、配置里有但表里没有的列、类型变了的列 */

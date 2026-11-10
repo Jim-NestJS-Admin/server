@@ -1,4 +1,5 @@
 import type { CodegenConfig, CodegenField } from './codegen.types.js';
+import { createHash } from 'node:crypto';
 
 export interface GeneratedFile {
   project: 'server' | 'admin';
@@ -16,7 +17,27 @@ const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 const childBusiness = (c: CodegenConfig, table: string) =>
   table.startsWith(`${c.module}_`) ? table.slice(c.module.length + 1) : table;
 /** 文字一律按 JSON 字符串转义写进代码，不会拼成可执行的内容 */
-const lit = (s: string) => JSON.stringify(s);
+const lit = (s: unknown) => JSON.stringify(s);
+export const uniqueIndexName = (table: string, column: string) => {
+  const name = `uk_${table}_${column}`;
+  return name.length <= 64
+    ? name
+    : `${name.slice(0, 55)}_${createHash('sha256').update(name).digest('hex').slice(0, 8)}`;
+};
+export const defaultComponent = (f: CodegenField) =>
+  f.dict || f.type === 'dictionary'
+    ? 'select'
+    : f.type === 'text'
+      ? 'textarea'
+      : ['int', 'decimal', 'money'].includes(f.type)
+        ? 'number'
+        : f.type === 'boolean'
+          ? 'switch'
+          : f.type === 'date'
+            ? 'date'
+            : f.type === 'datetime'
+              ? 'datetime'
+              : 'input';
 
 function column(
   f: CodegenField,
@@ -33,10 +54,27 @@ function column(
       col: `{ type: 'bigint', unsigned: true, nullable: true }`,
       validators: ['@IsOptional()', '@Matches(/^[1-9]\\d{0,19}$/)'],
     };
-  const nullable = f.nullable ? ', nullable: true' : '';
+  const nullable =
+    (f.nullable ? ', nullable: true' : '') +
+    (Object.hasOwn(f, 'defaultValue')
+      ? `, default: ${lit(f.defaultValue)}`
+      : '') +
+    (f.comment !== undefined ? `, comment: ${lit(f.comment)}` : '');
   const v: string[] = [];
   if (!f.required) v.push('@IsOptional()');
   switch (f.type) {
+    case 'reference':
+      return {
+        ts: 'string',
+        col: `{ type: 'bigint', unsigned: true${nullable} }`,
+        validators: [...v, '@Matches(/^[1-9]\\d{0,19}$/)'],
+      };
+    case 'text':
+      return {
+        ts: 'string',
+        col: `{ type: 'text'${nullable} }`,
+        validators: [...v, '@IsString()', '@MaxLength(65535)'],
+      };
     case 'int':
       return {
         ts: 'number',
@@ -47,10 +85,10 @@ function column(
     case 'money':
       return {
         ts: 'string',
-        col: `{ type: 'decimal', precision: 14, scale: ${f.type === 'money' ? 2 : 4}${nullable} }`,
+        col: `{ type: 'decimal', precision: ${f.precision ?? 14}, scale: ${f.scale ?? (f.type === 'money' ? 2 : 4)}${nullable} }`,
         validators: [
           ...v,
-          `@Matches(/^-?\\d{1,10}(\\.\\d{1,${f.type === 'money' ? 2 : 4}})?$/)`,
+          `@Matches(/^-?${(f.precision ?? 14) - (f.scale ?? (f.type === 'money' ? 2 : 4)) === 0 ? '0' : `\\d{1,${(f.precision ?? 14) - (f.scale ?? (f.type === 'money' ? 2 : 4))}}`}${(f.scale ?? (f.type === 'money' ? 2 : 4)) === 0 ? '' : `(\\.\\d{1,${f.scale ?? (f.type === 'money' ? 2 : 4)}})?`}$/)`,
         ],
       };
     case 'date':
@@ -78,7 +116,8 @@ function column(
         validators: [...v, '@Allow()'],
       };
     default: {
-      const len = f.length ?? 255;
+      const len =
+        f.length ?? (f.type === 'image' || f.type === 'file' ? 2048 : 255);
       return {
         ts: 'string',
         col: `{ type: 'varchar', length: ${len}${nullable} }`,
@@ -107,7 +146,10 @@ function entity(
       else if (f.type !== 'json') crud.push('list: { sortable: true }');
       if (f.form === false) crud.push('form: false');
       else if (isParent) crud.push("form: { component: 'tree-select' }");
-      else if (f.required) crud.push('form: { required: true }');
+      else
+        crud.push(
+          `form: { component: ${lit(defaultComponent(f))}, required: ${!!f.required} }`,
+        );
       if (f.nullable || isParent) crud.push('nullable: true');
 
       const perm = f.fieldPerm?.default
@@ -120,7 +162,7 @@ function entity(
   const idx = uniques
     .map(
       (f) =>
-        `@Index(${lit(`uk_${c.table}_${f.column}`)}, ['tenantId', ${lit(f.name)}, 'activeGuard'], { unique: true })\n`,
+        `@Index(${lit(uniqueIndexName(c.table, f.column))}, ['tenantId', ${lit(f.name)}, 'activeGuard'], { unique: true })\n`,
     )
     .join('');
   const used = new Set([
@@ -221,6 +263,19 @@ export class ${name}Module {}
 `;
 }
 
+export const sqlDefault = (value: unknown) =>
+  value === null
+    ? 'NULL'
+    : typeof value === 'boolean'
+      ? value
+        ? '1'
+        : '0'
+      : typeof value === 'number'
+        ? String(value)
+        : `'${String(value as string)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "''")}'`;
+
 function migration(
   c: Pick<CodegenConfig, 'module' | 'business' | 'table' | 'fields'>,
   stamp: number,
@@ -231,22 +286,26 @@ function migration(
   const parentCol = c.fields.find((f) => f.name === treeParent)?.column;
   const col = (f: CodegenField) => {
     if (f.name === treeParent)
-      return `          { name: ${lit(f.column)}, type: 'bigint', unsigned: true, isNullable: true, comment: ${lit(f.label)} },`;
+      return `          { name: ${lit(f.column)}, type: 'bigint', unsigned: true, isNullable: true, comment: ${lit(f.comment ?? f.label)}${Object.hasOwn(f, 'defaultValue') ? `, default: ${lit(sqlDefault(f.defaultValue))}` : ''} },`;
     const t =
-      f.type === 'int'
-        ? "type: 'int'"
-        : f.type === 'decimal' || f.type === 'money'
-          ? `type: 'decimal', precision: 14, scale: ${f.type === 'money' ? 2 : 4}`
-          : f.type === 'date'
-            ? "type: 'date'"
-            : f.type === 'datetime'
-              ? "type: 'datetime', precision: 3"
-              : f.type === 'boolean'
-                ? "type: 'boolean'"
-                : f.type === 'json'
-                  ? "type: 'json'"
-                  : `type: 'varchar', length: '${f.length ?? 255}'`;
-    return `          { name: ${lit(f.column)}, ${t}, isNullable: ${f.nullable ? 'true' : 'false'}, comment: ${lit(f.label)} },`;
+      f.type === 'reference'
+        ? "type: 'bigint', unsigned: true"
+        : f.type === 'text'
+          ? "type: 'text'"
+          : f.type === 'int'
+            ? "type: 'int'"
+            : f.type === 'decimal' || f.type === 'money'
+              ? `type: 'decimal', precision: ${f.precision ?? 14}, scale: ${f.scale ?? (f.type === 'money' ? 2 : 4)}`
+              : f.type === 'date'
+                ? "type: 'date'"
+                : f.type === 'datetime'
+                  ? "type: 'datetime', precision: 3"
+                  : f.type === 'boolean'
+                    ? "type: 'boolean'"
+                    : f.type === 'json'
+                      ? "type: 'json'"
+                      : `type: 'varchar', length: '${f.length ?? (f.type === 'image' || f.type === 'file' ? 2048 : 255)}'`;
+    return `          { name: ${lit(f.column)}, ${t}, isNullable: ${f.nullable ? 'true' : 'false'}, comment: ${lit(f.comment ?? f.label)}${Object.hasOwn(f, 'defaultValue') ? `, default: ${lit(sqlDefault(f.defaultValue))}` : ''} },`;
   };
   return `// 由代码生成器生成（${c.module}.${c.business}）。只生成，不会自动执行：确认后用迁移命令执行
 import { Table, type MigrationInterface, type QueryRunner } from 'typeorm';
@@ -277,7 +336,7 @@ ${c.fields
   .filter((f) => f.unique)
   .map(
     (f) =>
-      `          { name: ${lit(`uk_${c.table}_${f.column}`)}, columnNames: ['tenant_id', ${lit(f.column)}, 'active_guard'], isUnique: true },`,
+      `          { name: ${lit(uniqueIndexName(c.table, f.column))}, columnNames: ['tenant_id', ${lit(f.column)}, 'active_guard'], isUnique: true },`,
   )
   .join('\n')}
         ],

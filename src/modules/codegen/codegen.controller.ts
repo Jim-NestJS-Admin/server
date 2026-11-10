@@ -1,3 +1,20 @@
+import { CrudSchema } from '../../core/crud/crud-schema.js';
+import { validateSpec } from './module-spec.js';
+import {
+  ApiCodegenArray,
+  SpecBody,
+  SaveSpecBody,
+  WriteSpecBody,
+  ImportSpecBody,
+  SpecValidationResult,
+  SpecImportResult,
+  SpecPreviewResult,
+  SpecWriteResult,
+  SpecSaveResult,
+  SpecRecord,
+  SpecTable,
+  SpecFieldType,
+} from './codegen.dto.js';
 import { Body, HttpCode, Post, StreamableFile } from '@nestjs/common';
 import { RawResponse } from '../../core/decorators/raw-response.decorator.js';
 import {
@@ -80,11 +97,100 @@ class SaveBody {
 export class CodegenController {
   constructor(private readonly codegen: CodegenService) {}
 
+  @Post('field-types')
+  @HttpCode(200)
+  @Perms('dev:codegen:save')
+  @ApiOperation({
+    operationId: 'devCodegenFieldTypes',
+    summary: '支持的字段类型与默认设置',
+  })
+  @ApiCodegenArray(SpecFieldType)
+  @ApiErrors(401, 403)
+  fieldTypes() {
+    return this.codegen.fieldTypes();
+  }
+
+  @Post('validate-spec')
+  @HttpCode(200)
+  @Perms('dev:codegen:save')
+  @ApiOperation({
+    operationId: 'devCodegenValidateSpec',
+    summary: '逐字段校验模块规格',
+  })
+  @ApiResult(SpecValidationResult)
+  @ApiErrors(400, 401, 403)
+  validateSpec(@Body() b: SpecBody) {
+    const errors = validateSpec(b.spec);
+    return { valid: !errors.length, errors };
+  }
+
+  @Post('import-spec')
+  @HttpCode(200)
+  @Perms('dev:codegen:save')
+  @ApiOperation({
+    operationId: 'devCodegenImportSpec',
+    summary: '从一张或多张表推断规格草稿',
+  })
+  @ApiResult(SpecImportResult)
+  @ApiErrors(400, 401, 403, 404)
+  importSpec(@Body() b: ImportSpecBody) {
+    return this.codegen.importSpec(b.tables);
+  }
+
+  @Post('save-spec')
+  @HttpCode(200)
+  @Perms('dev:codegen:save')
+  @ApiOperation({ operationId: 'devCodegenSaveSpec', summary: '保存规格草稿' })
+  @ApiResult(SpecSaveResult)
+  @ApiErrors(400, 401, 403, 404, 409)
+  saveSpec(@Body() b: SaveSpecBody) {
+    return this.codegen.saveSpec(b.id ?? null, b.version ?? null, b.spec);
+  }
+
+  @Post('preview-spec')
+  @HttpCode(200)
+  @Perms('dev:codegen:save')
+  @ApiOperation({
+    operationId: 'devCodegenPreviewSpec',
+    summary: '预览规格的 SQL、文件、差异和指纹',
+  })
+  @ApiResult(SpecPreviewResult)
+  @ApiErrors(400, 401, 403)
+  previewSpec(@Body() b: SpecBody) {
+    return this.codegen.previewSpec(b.spec);
+  }
+
+  @Post('write-spec')
+  @HttpCode(200)
+  @Perms('dev:codegen:write', { risk: 'high' })
+  @ApiOperation({
+    operationId: 'devCodegenWriteSpec',
+    summary: '核对预览指纹后写入规格代码',
+  })
+  @ApiResult(SpecWriteResult)
+  @ApiErrors(400, 401, 403, 409)
+  writeSpec(@Body() b: WriteSpecBody) {
+    return this.codegen.writeSpec(b.spec, b.fingerprint);
+  }
+
+  @Post('schema-spec')
+  @HttpCode(200)
+  @Perms('dev:codegen:save')
+  @ApiOperation({
+    operationId: 'devCodegenSchemaSpec',
+    summary: '按规格计算正式 CRUD 页面描述',
+  })
+  @ApiResult(CrudSchema)
+  @ApiErrors(400, 401, 403)
+  schemaSpec(@Body() b: SpecBody) {
+    return this.codegen.schemaSpec(b.spec);
+  }
+
   @Post('list')
   @HttpCode(200)
   @Perms('dev:codegen:list')
   @ApiOperation({ operationId: 'devCodegenList', summary: '生成配置列表' })
-  @ApiResult()
+  @ApiCodegenArray(SpecRecord)
   @ApiErrors(401, 403)
   list() {
     return this.codegen.list();
@@ -133,7 +239,7 @@ export class CodegenController {
     operationId: 'devCodegenTables',
     summary: '数据库里还没导入的表',
   })
-  @ApiResult()
+  @ApiCodegenArray(SpecTable)
   @ApiErrors(401, 403)
   tables() {
     return this.codegen.tables();
