@@ -170,7 +170,7 @@ export class CodegenController {
   @ApiResult(SpecWriteResult)
   @ApiErrors(400, 401, 403, 409)
   writeSpec(@Body() b: WriteSpecBody) {
-    return this.codegen.writeSpec(b.spec, b.fingerprint);
+    return this.codegen.writeSpec(b.spec, b.fingerprint, b.overwrite ?? []);
   }
 
   @Post('schema-spec')

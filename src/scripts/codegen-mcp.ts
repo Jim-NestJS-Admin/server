@@ -13,11 +13,21 @@ import { openLocalCodegen } from './codegen-runtime.js';
 export async function callCodegenTool(
   tools: LocalCodegenTools,
   name: LocalTool,
-  args: { spec?: unknown; table?: string; fingerprint?: string },
+  args: {
+    spec?: unknown;
+    table?: string;
+    fingerprint?: string;
+    overwrite?: string[];
+  },
 ) {
   const result = await tools.call(
     name,
-    args as { spec?: ModuleSpec; table?: string; fingerprint?: string },
+    args as {
+      spec?: ModuleSpec;
+      table?: string;
+      fingerprint?: string;
+      overwrite?: string[];
+    },
   );
   const failed =
     result &&
@@ -48,6 +58,7 @@ export function createCodegenMcp(tools: LocalCodegenTools) {
               .object({
                 spec: z.record(z.string(), z.unknown()),
                 fingerprint: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+                overwrite: z.array(z.string()).max(50).optional(),
               })
               .strict()
           : ['validate_spec', 'preview_spec'].includes(name)

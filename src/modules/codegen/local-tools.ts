@@ -31,7 +31,12 @@ export class LocalCodegenTools {
   ) {}
   async call(
     tool: LocalTool,
-    args: { spec?: ModuleSpec; table?: string; fingerprint?: string } = {},
+    args: {
+      spec?: ModuleSpec;
+      table?: string;
+      fingerprint?: string;
+      overwrite?: string[];
+    } = {},
   ) {
     if (
       !this.config.codegen.enabled ||
@@ -70,7 +75,11 @@ export class LocalCodegenTools {
               !/^[A-Za-z0-9_-]{43}$/.test(args.fingerprint)
             )
               throw new Error('写入必须携带预览返回的指纹');
-            return this.service.writeSpec(args.spec!, args.fingerprint);
+            return this.service.writeSpec(
+              args.spec!,
+              args.fingerprint,
+              args.overwrite ?? [],
+            );
           }
           case 'run_checks': {
             const results = [];

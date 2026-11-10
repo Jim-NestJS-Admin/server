@@ -9,7 +9,7 @@ import {
 } from './module-spec.js';
 import { renderServer } from './render-server.js';
 import { specSchema } from './spec-schema.js';
-import { migrationSql } from './spec-sql.js';
+import { tableDefinition } from './table-definition.js';
 import { loadGenerated } from '../../../test/support/generated-code.js';
 import { CRUD_RESOURCE } from '../../core/crud/base.controller.js';
 import { buildCrudSchema } from '../../core/crud/crud-schema.js';
@@ -202,10 +202,18 @@ describe('ModuleSpec v1', () => {
     );
     expect(
       files.find((f) => f.path.includes('migrations/'))!.content,
-    ).toContain('default: "1"');
-    expect(migrationSql(s)[0]).toContain("COMMENT '客户''); DROP TABLE x; --'");
-    expect(migrationSql(s)[0]).toContain(
-      "decimal(12,2) NOT NULL DEFAULT '0.00'",
-    );
+    ).toContain('"default": "1"');
+    const definition = tableDefinition(specToConfig(s));
+    expect(
+      definition.columns!.find((column) => column.name === 'name')!.comment,
+    ).toBe(s.fields[0].comment);
+    expect(
+      definition.columns!.find((column) => column.name === 'budget'),
+    ).toMatchObject({
+      type: 'decimal',
+      precision: 12,
+      scale: 2,
+      default: "'0.00'",
+    });
   });
 });

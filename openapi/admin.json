@@ -2003,6 +2003,9 @@
           "diff": {
             "type": "string"
           },
+          "key": {
+            "type": "string"
+          },
           "path": {
             "type": "string"
           },
@@ -2018,6 +2021,7 @@
           }
         },
         "required": [
+          "key",
           "project",
           "path",
           "action",
@@ -2109,6 +2113,9 @@
       },
       "SpecRecord": {
         "properties": {
+          "error": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -2125,7 +2132,8 @@
             "enum": [
               "notGenerated",
               "generated",
-              "modified"
+              "modified",
+              "invalid"
             ],
             "type": "string"
           },
@@ -2142,7 +2150,6 @@
           "label",
           "version",
           "updatedAt",
-          "spec",
           "status"
         ],
         "type": "object"
@@ -7291,6 +7298,14 @@
           "fingerprint": {
             "description": "preview-spec 返回的 fingerprint",
             "type": "string"
+          },
+          "overwrite": {
+            "description": "显式确认覆盖的文件key（project:path）或预览路径；其他手改文件继续跳过",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "type": "array"
           },
           "spec": {
             "$ref": "#/components/schemas/ModuleSpec"

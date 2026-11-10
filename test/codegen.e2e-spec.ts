@@ -117,6 +117,211 @@ describe('T28 规格到代码完整链路', () => {
     ).toMatchObject({ databaseType: 'decimal', scale: 2 });
   });
 
+  it('损坏的旧配置只影响自身，可正常列出、导入其他表并删除坏记录', async () => {
+    const context = app.get(RequestContext);
+    const invalid = await context.run({ tenantId: '1' }, () =>
+      app
+        .get(TenantRepositoryFactory)
+        .for(CodegenEntity)
+        .insert({
+          name: 'invalid.record',
+          label: '坏配置',
+          config: { obsolete: true },
+        }),
+    );
+    await post('save-spec', { spec: newSpec('validrecord') }).expect(200);
+    const list = (await post('list', {}).expect(200)).body.data;
+    expect(list).toHaveLength(2);
+    expect(list.find((r: { id: string }) => r.id === invalid)).toMatchObject({
+      status: 'invalid',
+      error: expect.any(String),
+    });
+    expect(
+      list.find((r: { name: string }) => r.name === 'cgprobe.validrecord'),
+    ).toMatchObject({ status: 'notGenerated', spec: { version: 1 } });
+    await post('tables', {}).expect(200);
+    await post('info', { id: invalid }).expect(400);
+    await post('delete', { id: invalid }).expect(200);
+    expect((await post('list', {}).expect(200)).body.data).toHaveLength(1);
+  });
+
+  it('显式覆盖只允许预览中的文件；CLI/MCP 共用覆盖确认和指纹保护', async () => {
+    const spec = newSpec('overwrite');
+    const first = (await post('preview-spec', { spec }).expect(200)).body.data;
+    const file = first.files.find((f: { path: string }) =>
+      f.path.endsWith('.entity.ts'),
+    );
+    const path = join(serverRoot, file.path);
+    await mkdir(join(path, '..'), { recursive: true });
+    await writeFile(path, '// 人工修改');
+    let preview = (await post('preview-spec', { spec }).expect(200)).body.data;
+    expect(
+      preview.files.find((f: { key: string }) => f.key === file.key).diff,
+    ).toContain('@@');
+    await post('write-spec', {
+      spec,
+      fingerprint: preview.fingerprint,
+      overwrite: ['server:src/core/forbidden.ts'],
+    }).expect(400);
+    const result = (
+      await post('write-spec', {
+        spec,
+        fingerprint: preview.fingerprint,
+        overwrite: [file.key],
+      }).expect(200)
+    ).body.data;
+    expect(result.skipped).toEqual([]);
+    expect(result.failed).toEqual([]);
+    expect(await readFile(path, 'utf8')).toBe(file.content);
+    await writeFile(path, '// 新的人工修改');
+    preview = (await post('preview-spec', { spec }).expect(200)).body.data;
+    const config = app.get(AppConfigService);
+    const spy = vi
+      .spyOn(config, 'codegen', 'get')
+      .mockReturnValue({ enabled: true, serverRoot, adminRoot, tenantId: '1' });
+    try {
+      const tools = new LocalCodegenTools(
+        app.get(CodegenService),
+        config,
+        app.get(RequestContext),
+        app.get(SystemDictionaryService),
+      );
+      const specFile = join(root, 'overwrite-spec.json');
+      await writeFile(specFile, JSON.stringify(spec));
+      const written = (await runCodegen(
+        [
+          specFile,
+          '--write',
+          '--confirm',
+          preview.fingerprint,
+          '--overwrite',
+          file.key,
+        ],
+        tools,
+      )) as { failed: unknown[]; skipped: string[] };
+      expect(written.failed).toEqual([]);
+      expect(written.skipped).toEqual([]);
+      await writeFile(path, '// MCP人工修改');
+      preview = (await post('preview-spec', { spec }).expect(200)).body.data;
+      const mcp = await callCodegenTool(tools, 'write_spec', {
+        spec,
+        fingerprint: preview.fingerprint,
+        overwrite: [file.key],
+      });
+      expect(mcp.isError).toBeUndefined();
+      expect(await readFile(path, 'utf8')).toBe(file.content);
+      await expect(
+        runCodegen([specFile, '--check', '--overwrite', file.key], tools),
+      ).rejects.toThrow('用法');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('已有表只生成增量 ALTER，保留原数据，回退不删原表；结构变化令旧指纹失效', async () => {
+    const hasTenantColumn = async () => {
+      const runner = ds.createQueryRunner();
+      try {
+        return await runner.hasColumn('cgimport_customer', 'tenant_id');
+      } finally {
+        await runner.release();
+      }
+    };
+    await ds.query('DROP TABLE IF EXISTS cgimport_customer');
+    await ds.query(
+      "CREATE TABLE cgimport_customer (id bigint unsigned PRIMARY KEY AUTO_INCREMENT, code varchar(40) NOT NULL UNIQUE COMMENT '编码')",
+    );
+    await ds.query(
+      "INSERT INTO cgimport_customer (code) VALUES ('existing-customer')",
+    );
+    const spec = (
+      await post('import-spec', { tables: ['cgimport_customer'] }).expect(200)
+    ).body.data.spec as ModuleSpec;
+    spec.fields[0].defaultValue = 'new-customer';
+    spec.fields[0].comment = "编码'); DROP TABLE cgimport_customer; --";
+    spec.fields.push({
+      property: 'note',
+      column: 'note',
+      label: '备注',
+      type: 'string',
+      length: 30,
+      nullable: true,
+      defaultValue: null,
+    });
+    let preview = (await post('preview-spec', { spec }).expect(200)).body.data;
+    expect(preview.sql.join('\n')).toContain('ALTER TABLE');
+    expect(preview.sql.join('\n')).not.toContain('CREATE TABLE');
+    expect(await hasTenantColumn()).toBe(false);
+    const invalid = structuredClone(spec);
+    invalid.fields[0].length = 41;
+    await post('preview-spec', { spec: invalid }).expect(400);
+    await ds.query('ALTER TABLE cgimport_customer ADD extra varchar(20) NULL');
+    await post('write-spec', { spec, fingerprint: preview.fingerprint }).expect(
+      409,
+    );
+    preview = (await post('preview-spec', { spec }).expect(200)).body.data;
+    const result = (
+      await post('write-spec', {
+        spec,
+        fingerprint: preview.fingerprint,
+      }).expect(200)
+    ).body.data;
+    expect(result.failed).toEqual([]);
+    expect(await hasTenantColumn()).toBe(false);
+    const migrationFiles = await Promise.all(
+      preview.files
+        .filter((f: { path: string }) => f.path.includes('/migrations/'))
+        .map(async (f: { path: string }) => ({
+          project: 'server' as const,
+          path: f.path,
+          content: await readFile(join(serverRoot, f.path), 'utf8'),
+        })),
+    );
+    expect(migrationFiles).toHaveLength(1);
+    expect(migrationFiles[0].path).toContain('-UpdateCgimportCustomer-');
+    expect(migrationFiles[0].content).not.toContain('dropTable');
+    const loaded = loadGenerated(migrationFiles);
+    const Migration = Object.values(
+      [...loaded.values()][0],
+    )[0] as new () => MigrationInterface;
+    const runner = ds.createQueryRunner();
+    await runner.connect();
+    try {
+      await new Migration().up(runner);
+      expect(await runner.hasColumn('cgimport_customer', 'tenant_id')).toBe(
+        true,
+      );
+      expect(
+        (await ds.query('SELECT code, extra FROM cgimport_customer'))[0],
+      ).toEqual({ code: 'existing-customer', extra: null });
+      await ds.query('INSERT INTO cgimport_customer () VALUES ()');
+      expect(
+        (
+          await ds.query(
+            "SELECT COUNT(*) AS n FROM cgimport_customer WHERE code='new-customer'",
+          )
+        )[0].n,
+      ).toBe('1');
+      const settled = (await post('preview-spec', { spec }).expect(200)).body
+        .data;
+      expect(
+        settled.files.some((f: { path: string }) =>
+          f.path.includes('/migrations/'),
+        ),
+      ).toBe(false);
+      await new Migration().down(runner);
+      expect(await runner.hasTable('cgimport_customer')).toBe(true);
+      expect(await runner.hasColumn('cgimport_customer', 'tenant_id')).toBe(
+        false,
+      );
+      expect(
+        (await ds.query('SELECT code FROM cgimport_customer'))[0].code,
+      ).toBe('existing-customer');
+    } finally {
+      await runner.release();
+    }
+  });
+
   it('旧配置迁移可重复执行；旧接口能读取和保存规格，新配置仍按租户隔离', async () => {
     const spec = newSpec('legacy');
     const legacy = specToConfig(spec);
@@ -304,6 +509,8 @@ describe('T28 规格到代码完整链路', () => {
     spec.permissionPrefix = 'cgprobe:customer';
     spec.tableName = 'cgprobe_customer';
     spec.children![0].tableName = 'cgprobe_customer_contact';
+    await ds.query('DROP TABLE IF EXISTS cgprobe_customer_contact');
+    await ds.query('DROP TABLE IF EXISTS cgprobe_customer');
     const preview = (await post('preview-spec', { spec }).expect(200)).body
       .data;
     expect(preview.sql).toHaveLength(2);

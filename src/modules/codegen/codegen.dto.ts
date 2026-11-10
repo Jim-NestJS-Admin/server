@@ -8,6 +8,7 @@ import {
 } from '@nestjs/swagger';
 import {
   IsArray,
+  IsString,
   IsInt,
   IsObject,
   IsOptional,
@@ -31,6 +32,18 @@ export class WriteSpecBody extends SpecBody {
   @ApiProperty({ description: 'preview-spec 返回的 fingerprint' })
   @Matches(/^[A-Za-z0-9_-]{43}$/)
   fingerprint!: string;
+  @ApiPropertyOptional({
+    type: [String],
+    maxItems: 50,
+    description:
+      '显式确认覆盖的文件key（project:path）或预览路径；其他手改文件继续跳过',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsString({ each: true })
+  overwrite?: string[];
 }
 export class ImportSpecBody {
   @ApiProperty({ type: [String], minItems: 1, maxItems: 6 })
@@ -50,6 +63,7 @@ export class SpecImportResult {
   @ApiProperty({ type: [SpecError] }) errors!: SpecError[];
 }
 export class SpecFile {
+  @ApiProperty() key!: string;
   @ApiProperty({ enum: ['server', 'admin'] }) project!: string;
   @ApiProperty() path!: string;
   @ApiProperty({ enum: ['create', 'overwrite', 'unchanged', 'skip-modified'] })
@@ -87,8 +101,9 @@ export class SpecRecord {
   @ApiProperty() label!: string;
   @ApiProperty() version!: number;
   @ApiProperty() updatedAt!: string;
-  @ApiProperty({ type: ModuleSpec }) spec!: ModuleSpec;
-  @ApiProperty({ enum: ['notGenerated', 'generated', 'modified'] })
+  @ApiPropertyOptional({ type: ModuleSpec }) spec?: ModuleSpec;
+  @ApiPropertyOptional() error?: string;
+  @ApiProperty({ enum: ['notGenerated', 'generated', 'modified', 'invalid'] })
   status!: string;
 }
 export class SpecTable {

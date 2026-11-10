@@ -1,3 +1,4 @@
+import { textDiff } from './text-diff.js';
 import { CrudRuntime } from '../../core/crud/crud.runtime.js';
 import { readFile } from 'node:fs/promises';
 import {
@@ -9,7 +10,7 @@ import {
   type ModuleSpec,
 } from './module-spec.js';
 import { specSchema } from './spec-schema.js';
-import { migrationSql } from './spec-sql.js';
+import { planMigrations } from './migration-plan.js';
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { strToU8, zipSync } from 'fflate';
@@ -17,7 +18,7 @@ import { AppConfigService } from '../../core/config/app-config.service.js';
 import { DataSource } from 'typeorm';
 import { BusinessException } from '../../core/exceptions/business.exception.js';
 import { ErrorCode } from '../../core/exceptions/error-code.js';
-import { renderServer, type GeneratedFile } from './render-server.js';
+import { renderServer, pascal } from './render-server.js';
 import {
   loadAdminTemplates,
   manualSteps,
@@ -66,22 +67,30 @@ export class CodegenService {
   ) {}
 
   /** 预览、写入、下载共用同一份文件集合：后端文件 + 前端文件（模板来自前端项目 codegen-templates/） */
-  private async render(
-    config: CodegenConfig,
-    stamp: number,
-  ): Promise<GeneratedFile[]> {
+  private async render(config: CodegenConfig, stamp: number) {
     let templates;
     try {
       templates = await loadAdminTemplates(this.roots().admin);
     } catch (e) {
+      if (e instanceof BusinessException) throw e;
       throw crudErrors.badRequest((e as Error).message);
     }
     try {
-      return [
+      const migrations = await planMigrations(this.dataSource, config, stamp);
+      const files = [
         ...renderServer(config, stamp),
         ...renderAdmin(config, templates),
       ];
+      migrations.forEach((plan, index) => {
+        if (!plan.existing) return;
+        const path = `src/database/migrations/${stamp + index}-Create${pascal(plan.table)}.ts`;
+        const at = files.findIndex((file) => file.path === path);
+        if (at >= 0) files.splice(at, 1);
+        if (plan.file) files.push(plan.file);
+      });
+      return { files, migrations };
     } catch (e) {
+      if (e instanceof BusinessException) throw e;
       throw crudErrors.badRequest((e as Error).message);
     }
   }
@@ -103,14 +112,14 @@ export class CodegenService {
       .andWhere('g.id = :id', { id })
       .getOne();
     if (!row) throw crudErrors.notFound();
-    return this.buildPlan(readSpec(row.config), row);
+    return this.buildPlan(this.storedSpec(row.config), row);
   }
 
   private async buildPlan(spec: ModuleSpec, row: CodegenEntity | null) {
     this.assertSpec(spec);
     const config = specToConfig(spec);
     const stamp = this.stamp(spec, row);
-    const files = await this.render(config, stamp);
+    const { files, migrations } = await this.render(config, stamp);
     const roots = this.roots();
     const last = row?.fingerprints ?? {};
     const items = [];
@@ -141,16 +150,7 @@ export class CodegenService {
         next,
         action,
         previous,
-        diff:
-          previous === f.content
-            ? ''
-            : `--- ${f.path}（当前）\n+++ ${f.path}（生成）\n${previous
-                .split('\n')
-                .map((line) => '-' + line)
-                .join('\n')}\n${f.content
-                .split('\n')
-                .map((line) => '+' + line)
-                .join('\n')}`,
+        diff: textDiff(f.path, previous, f.content),
       });
     }
     const token = createHash('sha256')
@@ -159,11 +159,18 @@ export class CodegenService {
           row?.id ?? null,
           row?.version ?? null,
           spec,
+          migrations.map((plan) => [plan.table, plan.snapshot]),
           items.map((i) => [i.key, i.now, i.next]),
         ]),
       )
       .digest('base64url');
-    return { row, items, token, spec };
+    return {
+      row,
+      items,
+      token,
+      spec,
+      sql: migrations.map((plan) => plan.sql.join('\n')),
+    };
   }
 
   /**
@@ -175,10 +182,10 @@ export class CodegenService {
       .andWhere('g.id = :id', { id })
       .getOne();
     if (!row) throw crudErrors.notFound();
-    const config = specToConfig(readSpec(row.config));
-    const files = await this.render(
+    const config = specToConfig(this.storedSpec(row.config));
+    const { files } = await this.render(
       config,
-      this.stamp(readSpec(row.config), row),
+      this.stamp(this.storedSpec(row.config), row),
     );
     const entries: Record<string, Uint8Array> = {};
     for (const f of files) {
@@ -207,16 +214,18 @@ export class CodegenService {
     items,
     token,
     spec,
+    sql,
   }: Awaited<ReturnType<CodegenService['buildPlan']>>) {
     const steps = manualSteps(specToConfig(spec));
     return {
       token,
       fingerprint: token,
       spec,
-      sql: migrationSql(spec),
+      sql,
       files: items.map((i) => ({
         project: i.project,
         path: i.path,
+        key: i.key,
         action: i.action,
         content: i.content,
         previous: i.previous,
@@ -247,6 +256,16 @@ export class CodegenService {
         '预览之后文件或配置有变化，请重新预览',
         409,
       );
+    if (
+      !Array.isArray(overwrite) ||
+      overwrite.length > 50 ||
+      overwrite.some((key) => typeof key !== 'string') ||
+      new Set(overwrite).size !== overwrite.length ||
+      overwrite.some(
+        (key) => !items.some((item) => item.key === key || item.path === key),
+      )
+    )
+      throw crudErrors.badRequest('覆盖列表含有预览之外的文件');
     const written: string[] = [];
     const skipped: string[] = [];
     const failed: { path: string; message: string }[] = [];
@@ -266,7 +285,11 @@ export class CodegenService {
           prints[i.key] = i.next;
           continue;
         }
-        if (i.action === 'skip-modified' && !overwrite.includes(i.path)) {
+        if (
+          i.action === 'skip-modified' &&
+          !overwrite.includes(i.key) &&
+          !overwrite.includes(i.path)
+        ) {
           skipped.push(i.path);
           continue;
         }
@@ -309,20 +332,35 @@ export class CodegenService {
 
   async list() {
     const rows = await this.repo().query('g').orderBy('g.id', 'DESC').getMany();
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      label: r.label,
-      version: r.version,
-      updatedAt: r.updatedAt,
-      spec: readSpec(r.config),
-      status:
-        !r.fingerprints || !Object.keys(r.fingerprints).length
-          ? 'notGenerated'
-          : r.fingerprints['$spec'] === this.specHash(readSpec(r.config))
-            ? 'generated'
-            : 'modified',
-    }));
+    return rows.map((r) => {
+      const record = {
+        id: r.id,
+        name: r.name,
+        label: r.label,
+        version: r.version,
+        updatedAt: r.updatedAt,
+      };
+      try {
+        const spec = readSpec(r.config);
+        this.assertSpec(spec);
+        return {
+          ...record,
+          spec,
+          status:
+            !r.fingerprints || !Object.keys(r.fingerprints).length
+              ? 'notGenerated'
+              : r.fingerprints['$spec'] === this.specHash(spec)
+                ? 'generated'
+                : 'modified',
+        };
+      } catch {
+        return {
+          ...record,
+          status: 'invalid',
+          error: '配置无法解析，请修复或删除此记录；其他记录不受影响',
+        };
+      }
+    });
   }
 
   async info(id: string) {
@@ -334,8 +372,8 @@ export class CodegenService {
     return {
       id: row.id,
       version: row.version,
-      config: specToConfig(readSpec(row.config)),
-      spec: readSpec(row.config),
+      config: specToConfig(this.storedSpec(row.config)),
+      spec: this.storedSpec(row.config),
     };
   }
 
@@ -351,7 +389,11 @@ export class CodegenService {
   }
 
   async remove(id: string) {
-    await this.info(id);
+    const row = await this.repo()
+      .query('g')
+      .andWhere('g.id = :id', { id })
+      .getOne();
+    if (!row) throw crudErrors.notFound();
     await this.repo().remove([id]);
     return null;
   }
@@ -364,9 +406,17 @@ export class CodegenService {
         ['BASE TABLE'],
       );
     const used = new Set(
-      (await this.repo().query('g').getMany()).map(
-        (g) => readSpec(g.config).tableName,
-      ),
+      (await this.repo().query('g').getMany()).flatMap((g) => {
+        try {
+          const spec = this.storedSpec(g.config);
+          return [
+            spec.tableName,
+            ...(spec.children ?? []).map((child) => child.tableName),
+          ];
+        } catch {
+          return [];
+        }
+      }),
     );
     return rows
       .filter((r) => !used.has(r.table) && !r.table.startsWith('sys_'))
@@ -478,6 +528,17 @@ export class CodegenService {
     return FIELD_CATALOG;
   }
 
+  private storedSpec(raw: unknown) {
+    try {
+      const spec = readSpec(raw);
+      this.assertSpec(spec);
+      return spec;
+    } catch (error) {
+      if (error instanceof BusinessException) throw error;
+      throw crudErrors.badRequest('此生成记录配置无法解析，请修复或删除此记录');
+    }
+  }
+
   private assertSpec(spec: unknown): asserts spec is ModuleSpec {
     const errors = validateSpec(spec);
     if (errors.length)
@@ -539,8 +600,8 @@ export class CodegenService {
   async previewSpec(spec: ModuleSpec) {
     return this.previewResult(await this.specPlan(spec));
   }
-  async writeSpec(spec: ModuleSpec, token: string) {
-    return this.writePlan(await this.specPlan(spec), token, []);
+  async writeSpec(spec: ModuleSpec, token: string, overwrite: string[] = []) {
+    return this.writePlan(await this.specPlan(spec), token, overwrite);
   }
 
   async schemaSpec(spec: ModuleSpec) {

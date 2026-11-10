@@ -7,29 +7,34 @@ import { openLocalCodegen } from './codegen-runtime.js';
 /** 可注入同一工具入口，便于验证 CLI 与 MCP 的规格结果一致。 */
 export async function runCodegen(args: string[], tools: LocalCodegenTools) {
   const [file, ...flags] = args;
-  const modes = flags.filter((a) =>
-    ['--check', '--preview', '--write'].includes(a),
-  );
-  if (
-    !file ||
-    modes.length !== 1 ||
-    flags.some(
-      (a, i) =>
-        !['--check', '--preview', '--write', '--json', '--confirm'].includes(
-          a,
-        ) && flags[i - 1] !== '--confirm',
-    )
-  )
-    throw new Error(
-      '用法：pnpm codegen <spec.json> --check | --preview | --write --confirm <指纹> [--json]',
+  let mode: string | undefined, fingerprint: string | undefined;
+  const overwrite: string[] = [];
+  const usage = () =>
+    new Error(
+      '用法：pnpm codegen <spec.json> --check | --preview | --write --confirm <指纹> [--overwrite <project:path>] [--json]',
     );
+  if (!file || file.startsWith('--')) throw usage();
+  for (let i = 0; i < flags.length; i++) {
+    const flag = flags[i];
+    if (['--check', '--preview', '--write'].includes(flag)) {
+      if (mode) throw usage();
+      mode = flag;
+    } else if (flag === '--confirm' || flag === '--overwrite') {
+      const value = flags[++i];
+      if (!value || value.startsWith('--')) throw usage();
+      if (flag === '--confirm') {
+        if (fingerprint) throw usage();
+        fingerprint = value;
+      } else overwrite.push(value);
+    } else if (flag !== '--json') throw usage();
+  }
+  if (!mode || (mode !== '--write' && (fingerprint || overwrite.length)))
+    throw usage();
   const spec = JSON.parse(await readFile(file, 'utf8')) as ModuleSpec;
-  if (modes[0] === '--check') return tools.call('validate_spec', { spec });
-  if (modes[0] === '--preview') return tools.call('preview_spec', { spec });
-  const at = flags.indexOf('--confirm');
-  if (at < 0 || !flags[at + 1])
-    throw new Error('写入必须用 --confirm 携带预览指纹');
-  return tools.call('write_spec', { spec, fingerprint: flags[at + 1] });
+  if (mode === '--check') return tools.call('validate_spec', { spec });
+  if (mode === '--preview') return tools.call('preview_spec', { spec });
+  if (!fingerprint) throw new Error('写入必须用 --confirm 携带预览指纹');
+  return tools.call('write_spec', { spec, fingerprint, overwrite });
 }
 
 if (
