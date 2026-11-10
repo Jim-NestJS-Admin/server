@@ -1,7 +1,13 @@
 import { Injectable, Module, type INestApplication } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Column, Entity, DataSource } from 'typeorm';
-import { IsOptional, IsString } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsBoolean,
+  IsInt,
+  IsDateString,
+} from 'class-validator';
 import request from 'supertest';
 
 import type { App } from 'supertest/types.js';
@@ -26,6 +32,21 @@ import { SharedDictionaries1794279600000 } from '../src/database/migrations/1794
 
 @Entity('test_dictionary_probe')
 class DictionaryProbe extends BaseEntity {
+  @CrudField({ label: '启用' })
+  @IsOptional()
+  @IsBoolean()
+  @Column({ type: 'boolean', nullable: true })
+  enabled: boolean | null;
+  @CrudField({ label: '数量' })
+  @IsOptional()
+  @IsInt()
+  @Column({ type: 'int', nullable: true })
+  quantity: number | null;
+  @CrudField({ label: '日期' })
+  @IsOptional()
+  @IsDateString()
+  @Column({ type: 'date', nullable: true })
+  day: string | null;
   @CrudField({
     label: '状态',
     dictCode: 'sys.test_status',
@@ -388,6 +409,55 @@ describe('T26/T27共享字典与导出', () => {
           .n,
       ),
     ).toBe(0);
+  });
+
+  it('两种格式导出字典名称、本地时间和布尔文案，Excel 数字保持数值', async () => {
+    const dictionary = await type();
+    await item(dictionary.id, '1', '启用显示名');
+    const added = (
+      await post('test/dictionary-probe/add', {
+        data: { status: '1', enabled: true, quantity: 12, day: '2026-11-09' },
+      }).expect(200)
+    ).body.data;
+    await ds.query(
+      'UPDATE test_dictionary_probe SET created_at = ? WHERE id = ?',
+      ['2026-11-09 11:33:41.566', added.id],
+    );
+    const columns = ['status', 'enabled', 'quantity', 'day', 'createdAt'];
+    const csv = await post('test/dictionary-probe/export', {
+      columns,
+      timeZone: 'Asia/Shanghai',
+    })
+      .buffer(true)
+      .parse(binary)
+      .expect(200);
+    expect((csv.body as Buffer).toString('utf8')).toContain(
+      '启用显示名,是,12,2026-11-09,2026-11-09 19:33:41',
+    );
+    const response = await post('test/dictionary-probe/export', {
+      format: 'xlsx',
+      columns,
+      timeZone: 'Asia/Shanghai',
+    })
+      .buffer(true)
+      .parse(binary)
+      .expect(200);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(
+      response.body as Parameters<typeof workbook.xlsx.load>[0],
+    );
+    expect(workbook.worksheets[0].getRow(2).values).toEqual([
+      undefined,
+      '启用显示名',
+      '是',
+      12,
+      '2026-11-09',
+      '2026-11-09 19:33:41',
+    ]);
+    await post('test/dictionary-probe/export', {
+      columns,
+      timeZone: 'invalid/zone',
+    }).expect(400);
   });
 
   it('Excel与CSV共享可见列顺序和逐行脱敏，公式只写为文字，格式入参受校验', async () => {

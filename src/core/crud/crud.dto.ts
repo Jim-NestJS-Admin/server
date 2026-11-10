@@ -229,6 +229,16 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
   ]);
 
   const ExportBody = named(class extends PageBody {}, `${n}ExportBody`);
+  prop(ExportBody, 'timeZone', String, [
+    ApiPropertyOptional({
+      description: '浏览器 IANA 时区；省略时使用服务器本地时区',
+      example: 'Asia/Shanghai',
+      maxLength: 100,
+    }),
+    IsOptional(),
+    IsString(),
+    MaxLength(100),
+  ]);
   prop(ExportBody, 'format', String, [
     ApiPropertyOptional({ enum: ['csv', 'xlsx'], default: 'csv' }),
     IsOptional(),
