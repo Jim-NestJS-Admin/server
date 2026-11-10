@@ -90,6 +90,8 @@ export class ProfileUser {
 }
 
 export class ProfileResult {
+  @ApiProperty({ description: '当前组织下有效的超级管理员身份' })
+  superAdmin!: boolean;
   @ApiProperty({ type: ProfileUser }) user!: ProfileUser;
   @ApiProperty({ type: OrgOption, nullable: true })
   currentOrg!: OrgOption | null;

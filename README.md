@@ -86,3 +86,13 @@ pnpm start:dev                                         # 开发模式，改代�
 文件模块现在显式注册到AppModule，使用真实session鉴权、数据库目录和私有本地存储deploy/data/files（必须作为持久卷挂载，不能作为静态站点目录）。默认10MiB，PNG/JPEG/WebP/PDF按实际内容识别；现有S3/OSS适配器保留为可替换装配口，没有硬编码云凭据。目录与下载复用core数据范围，上传记录当前组织。file_asset、兼容org_id迁移已登记到本地迁移入口；初始文件迁移先确保TypeORM生成列元数据表存在，支持它早于system初始迁移执行。
 
 节点类型/lint/构建及OpenAPI导出通过；未运行测试、未执行迁移。T25幂等与限流尚未合入此分支，文件二进制存储与数据库事务的失败补偿、multipart幂等内容摘要需要在安全集成批次核对。此处不宣称T09整体运行验收完成。
+
+
+## T26 字典与 T27 导出
+
+- `sys_dict_type.builtin` 区分平台共用系统字典和租户业务字典。系统编码保留 `sys.` 前缀，当前只有当前有效超级管理员可维护显示名、排序、启用和新增项，禁止改编码/值、删除或更改内置属性；阶段2通过 `PermissionService.isSuperAdmin` 和 `SystemDictionaryService.assertSystemManager` 收紧为平台超管。普通用户只能维护本租户业务字典，通过 `/admin/system/dict-type/data?code=...` 只读引用共享启用选项。
+- `@CrudField({ dictCode: 'sys.common_status' })` 在页面描述中解析启用项，主表和主子表保存均校验启用值，明细错误保留 `resource`、`id/clientId`。数据范围和菜单类型继续使用静态代码枚举。Redis键带请求租户和字典类型版本，字典项变更在同一事务递增类型版本，使各租户旧缓存立即失效，旧键5分钟过期。
+- `/admin/session/profile` 顶层返回 `superAdmin: boolean`，前端展示使用该字段，服务端仍独立检查写权限。
+- CRUD `/export` 增加可选 `format: 'csv' | 'xlsx'`（默认csv）、`columns: string[]`（当前可见列顺序）。未传列时读取当前生效显示配置。两种格式共用数据范围、查询和逐行隐藏/脱敏；CSV带UTF-8 BOM，Excel通过新增依赖 `exceljs` 流式写入，每批500行、最多10000行，数值保留数值类型，文本防公式注入。响应通过Content-Type和Content-Disposition识别格式和中文文件名。
+- 新迁移 `SharedDictionaries1794279600000` 增加builtin/rank，把默认租户的基础字典迁到平台并加sys.前缀，保留编号和项目关联；新库seed直接在平台初始化。历史业务字典已占用sys.前缀时升级会停止，须先改业务编码；回退遇到新增系统字典或业务编码冲突也会停止，避免覆盖数据。
+- 本机升级需先核对 `.env` 指向 `jim_admin_local`，执行 `pnpm migration:local` 后再重启；此命令只迁移，不重置账号。迁移和重启不由接口导出、代码生成或Git提交自动执行。

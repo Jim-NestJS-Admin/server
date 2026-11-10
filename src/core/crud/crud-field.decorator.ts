@@ -29,6 +29,8 @@ export interface CrudFieldOptions {
   edit?: 'both' | 'add' | 'none';
   /** 固定字典（如状态）；数据库字典在 T08 接入 */
   dict?: DictItem[];
+  /** 动态字典编码；与静态dict互斥。 */
+  dictCode?: string;
   /** 可以为空（只影响接口文档） */
   nullable?: boolean;
 }
@@ -50,6 +52,11 @@ const CRUD_FIELDS = Symbol('crud:fields');
  *   username: string;
  */
 export function CrudField(options: CrudFieldOptions): PropertyDecorator {
+  if (
+    options.dictCode !== undefined &&
+    (options.dict || !/^[a-z][a-z0-9_.-]{1,63}$/.test(options.dictCode))
+  )
+    throw new Error('dictCode编码无效或与静态dict冲突');
   return (target, propertyKey) => {
     const property = String(propertyKey);
     const ctor = target.constructor;

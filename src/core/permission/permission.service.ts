@@ -95,6 +95,16 @@ export class PermissionService {
     private readonly fieldSource: FieldPermSource,
   ) {}
 
+  /** 当前有效组织内的超级管理员身份，由统一权限来源判断，业务模块不自行查角色。 */
+  async isSuperAdmin(): Promise<boolean> {
+    const granted = this.authz.get();
+    if (granted) return granted.roles.some((role) => role.superAdmin);
+    const { tenantId, userId, orgId } = this.context.current();
+    if (!userId) return false;
+    const { authz } = await this.load(tenantId, userId, orgId);
+    return authz.orgValid && authz.roles.some((role) => role.all);
+  }
+
   /** 租户的字段权限配置（按授权版本缓存），只留本次有效角色的 */
   private async fieldRules(
     tenantId: string,

@@ -8,7 +8,11 @@ import {
 import { ModuleRef } from '@nestjs/core';
 import type { EntityMetadata } from 'typeorm';
 import type { BaseEntity } from './base.entity.js';
-import { BaseService, type PageQuery } from './base.service.js';
+import {
+  BaseService,
+  type PageQuery,
+  type ExportQuery,
+} from './base.service.js';
 import { buildCrudSchema } from './crud-schema.js';
 import { SYSTEM_FIELDS } from './base.entity.js';
 import { fieldVerdict } from '../field-perm/field-policy.js';
@@ -120,6 +124,7 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
       authz: this.crudRuntime.authz,
       idempotency: this.crudRuntime.idempotency,
       display: () => this.crudRuntime.display,
+      dictionary: () => this.crudRuntime.dictionary,
     });
     this.crudRuntime.register(meta);
     this.service = service;
@@ -173,12 +178,36 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
    * 前端据此决定列和表单项是否出现、是否只读；逐行的真实状态以数据为准（契约 field-perm.md）。
    */
   /** 导出 CSV（T18）：和列表同样的查询条件和数据范围，逐行按字段权限隐藏 / 打码，单元格防公式注入 */
-  async export(body: PageQuery) {
-    const csv = await this.service.exportCsv(body);
-    return new StreamableFile(Buffer.from(csv, 'utf8'), {
-      type: 'text/csv; charset=utf-8',
-      disposition: `attachment; filename="${this.service.meta.permPrefix.replace(/:/g, '-')}.csv"`,
-    });
+  async export(body: ExportQuery) {
+    if (body.columns === undefined) {
+      const schema = await this.schema();
+      const view = schema.view as ReturnType<typeof mergeView> | undefined;
+      body = {
+        ...body,
+        columns: (view?.list.columns ?? schema.columns)
+          .filter((column) => !column.hidden)
+          .map((column) => column.field),
+      };
+    }
+    const format = body.format ?? 'csv';
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+    const filename = encodeURIComponent(
+      `${this.service.meta.label}_${stamp.slice(0, 8)}_${stamp.slice(8)}.${format}`,
+    );
+    const data =
+      format === 'xlsx'
+        ? await this.service.exportXlsx(body)
+        : Buffer.from(await this.service.exportCsv(body), 'utf8');
+    const options = {
+      type:
+        format === 'xlsx'
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : 'text/csv; charset=utf-8',
+      disposition: `attachment; filename="export.${format}"; filename*=UTF-8''${filename}`,
+    };
+    return Buffer.isBuffer(data)
+      ? new StreamableFile(data, options)
+      : new StreamableFile(data, options);
   }
 
   async schema() {
@@ -205,6 +234,15 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
         ]),
     );
     const schema = Object.assign(buildCrudSchema(meta), { fieldPerms });
+    for (const field of meta.fields)
+      if (field.dictCode)
+        schema.dictionaries[field.property] =
+          (await this.crudRuntime.dictionary?.options(field.dictCode)) ?? [];
+    for (const child of meta.children)
+      for (const field of child.fields)
+        if (field.dictCode)
+          schema.dictionaries[`${child.resource}.${field.property}`] =
+            (await this.crudRuntime.dictionary?.options(field.dictCode)) ?? [];
     if (!this.pageViews) return schema;
     // 生效的显示配置：代码默认 → 管理员 → 用户列设置，最后按字段权限裁剪（契约 page-config.md）
     const { admin, user, canWrite } = await this.pageViews.load(meta);

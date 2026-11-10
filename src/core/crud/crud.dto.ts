@@ -55,6 +55,7 @@ function prop(
 /** 一个资源的全部请求和响应 DTO，接口文档和参数校验都用它们 */
 export interface CrudDtos {
   PageBody: Type;
+  ExportBody: Type;
   InfoBody: Type;
   AddBody: Type;
   UpdateBody: Type;
@@ -227,6 +228,24 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
     IsObject(),
   ]);
 
+  const ExportBody = named(class extends PageBody {}, `${n}ExportBody`);
+  prop(ExportBody, 'format', String, [
+    ApiPropertyOptional({ enum: ['csv', 'xlsx'], default: 'csv' }),
+    IsOptional(),
+    IsIn(['csv', 'xlsx']),
+  ]);
+  prop(ExportBody, 'columns', Array, [
+    ApiPropertyOptional({
+      type: [String],
+      description: '当前可见列，按传入顺序导出；仍按服务端字段权限裁剪',
+      maxItems: 200,
+    }),
+    IsOptional(),
+    IsArray(),
+    ArrayMaxSize(200),
+    IsString({ each: true }),
+  ]);
+
   const InfoBody = named(class {}, `${n}InfoBody`);
   prop(InfoBody, 'id', String, [
     ApiProperty({ type: String, example: '1' }),
@@ -395,6 +414,7 @@ export function buildCrudDtos(meta: CrudResourceMeta): CrudDtos {
 
   return {
     PageBody,
+    ExportBody,
     InfoBody,
     AddBody,
     UpdateBody,

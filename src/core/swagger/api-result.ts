@@ -89,14 +89,19 @@ export function ApiErrors(
  * 前端生成的客户端据此按二进制（blob）接收。
  */
 export function ApiBinaryResult(
-  mime: string,
+  mime: string | string[],
   description = '文件内容',
 ): MethodDecorator {
   // 不用 ApiProduces：它会把错误响应也标成这个类型，错误响应仍是 JSON
   return applyDecorators(
     ApiOkResponse({
       description,
-      content: { [mime]: { schema: { type: 'string', format: 'binary' } } },
+      content: Object.fromEntries(
+        (Array.isArray(mime) ? mime : [mime]).map((type) => [
+          type,
+          { schema: { type: 'string', format: 'binary' } },
+        ]),
+      ),
     }),
   );
 }

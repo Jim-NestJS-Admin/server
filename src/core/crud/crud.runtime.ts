@@ -1,3 +1,4 @@
+import type { CrudDictionarySource } from './crud-dictionary.js';
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AuthzContext } from '../permission/authz-context.js';
@@ -25,6 +26,8 @@ export class CrudRuntime {
     /** 幂等记录账本：写事务提交前带上幂等记录（T25） */
     readonly idempotency: IdempotencyLedger,
   ) {}
+
+  dictionary?: CrudDictionarySource;
 
   private displaySource?: CrudDisplaySource;
 

@@ -35,7 +35,11 @@ class DictionaryOptions {
   entity: SystemDictType,
   service: SystemDictTypeService,
   api: ['export', 'page', 'info', 'add', 'update', 'delete'],
-  pageQuery: { keyWords: ['code', 'name'], fieldEq: ['enabled'] },
+  pageQuery: {
+    keyWords: ['code', 'name'],
+    fieldEq: ['enabled', 'builtin'],
+    defaultSort: [{ field: 'rank', order: 'asc' }],
+  },
 })
 export class SystemDictTypeController extends BaseController<SystemDictType> {
   constructor(private readonly dictionaries: SystemDictTypeService) {

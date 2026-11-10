@@ -17,7 +17,23 @@ import { ID_PATTERN } from '../../../core/crud/crud.dto.js';
 @Entity('sys_dict_type')
 @Index(['tenantId', 'code', 'activeGuard'], { unique: true })
 export class SystemDictType extends BaseEntity {
-  @CrudField({ label: '字典标识', edit: 'add', form: { required: true } })
+  @CrudField({ label: '内置', form: { component: 'switch' } })
+  @IsOptional()
+  @IsBoolean()
+  @Column({ type: 'boolean', default: false })
+  builtin: boolean;
+  @CrudField({
+    label: '排序',
+    list: { sortable: true },
+    form: { component: 'number' },
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000000)
+  @Column({ type: 'int', default: 0 })
+  rank: number;
+  @CrudField({ label: '字典标识', form: { required: true } })
   @Matches(/^[a-z][a-z0-9_.-]{1,63}$/)
   @Column({ type: 'varchar', length: 64 })
   code: string;
@@ -38,7 +54,7 @@ export class SystemDictItem extends BaseEntity {
   @Matches(ID_PATTERN)
   @Column({ type: 'bigint', unsigned: true })
   typeId: string;
-  @CrudField({ label: '字典值', edit: 'add', form: { required: true } })
+  @CrudField({ label: '字典值', form: { required: true } })
   @IsString()
   @Length(1, 100)
   @Column({ type: 'varchar', length: 100 })

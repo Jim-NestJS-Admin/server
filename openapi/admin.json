@@ -1478,11 +1478,16 @@
             },
             "type": "array"
           },
+          "superAdmin": {
+            "description": "当前组织下有效的超级管理员身份",
+            "type": "boolean"
+          },
           "user": {
             "$ref": "#/components/schemas/ProfileUser"
           }
         },
         "required": [
+          "superAdmin",
           "user",
           "currentOrg",
           "orgs",
@@ -1772,6 +1777,66 @@
         ],
         "type": "object"
       },
+      "SystemDictItemExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemDictItemPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：label、value",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/SystemDictItemPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
       "SystemDictItemInfoBody": {
         "properties": {
           "id": {
@@ -2020,6 +2085,10 @@
           "rank": {
             "description": "排序",
             "type": "number"
+          },
+          "value": {
+            "description": "字典值",
+            "type": "string"
           }
         },
         "type": "object"
@@ -2037,6 +2106,10 @@
       },
       "SystemDictTypeAddData": {
         "properties": {
+          "builtin": {
+            "description": "内置",
+            "type": "boolean"
+          },
           "code": {
             "description": "字典标识",
             "type": "string"
@@ -2048,6 +2121,10 @@
           "name": {
             "description": "字典名称",
             "type": "string"
+          },
+          "rank": {
+            "description": "排序",
+            "type": "number"
           }
         },
         "required": [
@@ -2082,6 +2159,66 @@
         "required": [
           "count"
         ],
+        "type": "object"
+      },
+      "SystemDictTypeExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemDictTypePageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：code、name",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/SystemDictTypePageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
         "type": "object"
       },
       "SystemDictTypeInfoBody": {
@@ -2142,6 +2279,10 @@
       },
       "SystemDictTypePageEq": {
         "properties": {
+          "builtin": {
+            "description": "内置",
+            "type": "boolean"
+          },
           "enabled": {
             "description": "启用",
             "type": "boolean"
@@ -2182,7 +2323,8 @@
             "enum": [
               "id",
               "createdAt",
-              "updatedAt"
+              "updatedAt",
+              "rank"
             ],
             "type": "string"
           },
@@ -2221,6 +2363,10 @@
             "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
             "type": "object"
           },
+          "builtin": {
+            "description": "内置",
+            "type": "boolean"
+          },
           "code": {
             "description": "字典标识",
             "type": "string"
@@ -2252,6 +2398,10 @@
             "description": "所属组织（新增时取当前组织，数据权限按它过滤）",
             "nullable": true,
             "type": "string"
+          },
+          "rank": {
+            "description": "排序",
+            "type": "number"
           },
           "updatedAt": {
             "description": "修改时间",
@@ -2308,6 +2458,14 @@
       },
       "SystemDictTypeUpdateData": {
         "properties": {
+          "builtin": {
+            "description": "内置",
+            "type": "boolean"
+          },
+          "code": {
+            "description": "字典标识",
+            "type": "string"
+          },
           "enabled": {
             "description": "启用",
             "type": "boolean"
@@ -2315,6 +2473,10 @@
           "name": {
             "description": "字典名称",
             "type": "string"
+          },
+          "rank": {
+            "description": "排序",
+            "type": "number"
           }
         },
         "type": "object"
@@ -2726,6 +2888,66 @@
         },
         "type": "object"
       },
+      "SystemLoginLogExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemLoginLogPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：username",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/SystemLoginLogPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
       "SystemLoginLogInfoBody": {
         "properties": {
           "id": {
@@ -3024,6 +3246,66 @@
         "required": [
           "count"
         ],
+        "type": "object"
+      },
+      "SystemMenuExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemMenuPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：title、path",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/SystemMenuPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
         "type": "object"
       },
       "SystemMenuInfoBody": {
@@ -3376,6 +3658,66 @@
         ],
         "type": "object"
       },
+      "SystemOperationLogExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemOperationLogPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：action、resource",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/SystemOperationLogPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
       "SystemOperationLogInfoBody": {
         "properties": {
           "id": {
@@ -3653,6 +3995,66 @@
         "required": [
           "count"
         ],
+        "type": "object"
+      },
+      "SystemOrgExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemOrgPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：name",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/SystemOrgPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
         "type": "object"
       },
       "SystemOrgInfoBody": {
@@ -3985,6 +4387,66 @@
         ],
         "type": "object"
       },
+      "SystemParameterExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemParameterPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：key",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/SystemParameterPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
       "SystemParameterInfoBody": {
         "properties": {
           "id": {
@@ -4302,6 +4764,66 @@
         "required": [
           "count"
         ],
+        "type": "object"
+      },
+      "SystemRoleExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemRolePageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：code、name",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/SystemRolePageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
         "type": "object"
       },
       "SystemRoleFieldAddBody": {
@@ -5007,6 +5529,66 @@
         ],
         "type": "object"
       },
+      "SystemUserExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemUserPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：username、nickname",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/SystemUserPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
       "SystemUserInfoBody": {
         "properties": {
           "id": {
@@ -5188,6 +5770,66 @@
         "required": [
           "count"
         ],
+        "type": "object"
+      },
+      "SystemUserRoleExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemUserRolePageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "这个资源没有配置搜索字段，传了也不生效",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/SystemUserRolePageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
         "type": "object"
       },
       "SystemUserRoleInfoBody": {
@@ -5583,6 +6225,66 @@
         "required": [
           "count"
         ],
+        "type": "object"
+      },
+      "SystemUserSupervisorExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SystemUserSupervisorPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "这个资源没有配置搜索字段，传了也不生效",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/SystemUserSupervisorPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
         "type": "object"
       },
       "SystemUserSupervisorInfoBody": {
@@ -8104,7 +8806,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemDictItemPageBody"
+                "$ref": "#/components/schemas/SystemDictItemExportBody"
               }
             }
           },
@@ -8113,6 +8815,12 @@
         "responses": {
           "200": {
             "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
               "text/csv": {
                 "schema": {
                   "format": "binary",
@@ -8120,7 +8828,7 @@
                 }
               }
             },
-            "description": "CSV 文件（UTF-8 带 BOM）"
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
           },
           "400": {
             "content": {
@@ -8143,7 +8851,7 @@
             "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
           }
         },
-        "summary": "导出字典项（CSV，按列表的查询条件，最多 1 万行）",
+        "summary": "导出字典项（Excel / CSV，按列表的查询条件，最多 1 万行）",
         "tags": [
           "system/dict-item 字典项"
         ],
@@ -8628,7 +9336,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemDictTypePageBody"
+                "$ref": "#/components/schemas/SystemDictTypeExportBody"
               }
             }
           },
@@ -8637,6 +9345,12 @@
         "responses": {
           "200": {
             "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
               "text/csv": {
                 "schema": {
                   "format": "binary",
@@ -8644,7 +9358,7 @@
                 }
               }
             },
-            "description": "CSV 文件（UTF-8 带 BOM）"
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
           },
           "400": {
             "content": {
@@ -8667,7 +9381,7 @@
             "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
           }
         },
-        "summary": "导出字典类型（CSV，按列表的查询条件，最多 1 万行）",
+        "summary": "导出字典类型（Excel / CSV，按列表的查询条件，最多 1 万行）",
         "tags": [
           "system/dict-type 字典类型"
         ],
@@ -9608,7 +10322,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemLoginLogPageBody"
+                "$ref": "#/components/schemas/SystemLoginLogExportBody"
               }
             }
           },
@@ -9617,6 +10331,12 @@
         "responses": {
           "200": {
             "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
               "text/csv": {
                 "schema": {
                   "format": "binary",
@@ -9624,7 +10344,7 @@
                 }
               }
             },
-            "description": "CSV 文件（UTF-8 带 BOM）"
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
           },
           "400": {
             "content": {
@@ -9647,7 +10367,7 @@
             "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
           }
         },
-        "summary": "导出登录日志（CSV，按列表的查询条件，最多 1 万行）",
+        "summary": "导出登录日志（Excel / CSV，按列表的查询条件，最多 1 万行）",
         "tags": [
           "system/login-log 登录日志"
         ],
@@ -9995,7 +10715,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemMenuPageBody"
+                "$ref": "#/components/schemas/SystemMenuExportBody"
               }
             }
           },
@@ -10004,6 +10724,12 @@
         "responses": {
           "200": {
             "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
               "text/csv": {
                 "schema": {
                   "format": "binary",
@@ -10011,7 +10737,7 @@
                 }
               }
             },
-            "description": "CSV 文件（UTF-8 带 BOM）"
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
           },
           "400": {
             "content": {
@@ -10034,7 +10760,7 @@
             "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
           }
         },
-        "summary": "导出菜单（CSV，按列表的查询条件，最多 1 万行）",
+        "summary": "导出菜单（Excel / CSV，按列表的查询条件，最多 1 万行）",
         "tags": [
           "system/menu 菜单"
         ],
@@ -10382,7 +11108,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemOperationLogPageBody"
+                "$ref": "#/components/schemas/SystemOperationLogExportBody"
               }
             }
           },
@@ -10391,6 +11117,12 @@
         "responses": {
           "200": {
             "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
               "text/csv": {
                 "schema": {
                   "format": "binary",
@@ -10398,7 +11130,7 @@
                 }
               }
             },
-            "description": "CSV 文件（UTF-8 带 BOM）"
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
           },
           "400": {
             "content": {
@@ -10421,7 +11153,7 @@
             "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
           }
         },
-        "summary": "导出操作日志（CSV，按列表的查询条件，最多 1 万行）",
+        "summary": "导出操作日志（Excel / CSV，按列表的查询条件，最多 1 万行）",
         "tags": [
           "system/operation-log 操作日志"
         ],
@@ -10769,7 +11501,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemOrgPageBody"
+                "$ref": "#/components/schemas/SystemOrgExportBody"
               }
             }
           },
@@ -10778,6 +11510,12 @@
         "responses": {
           "200": {
             "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
               "text/csv": {
                 "schema": {
                   "format": "binary",
@@ -10785,7 +11523,7 @@
                 }
               }
             },
-            "description": "CSV 文件（UTF-8 带 BOM）"
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
           },
           "400": {
             "content": {
@@ -10808,7 +11546,7 @@
             "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
           }
         },
-        "summary": "导出组织（CSV，按列表的查询条件，最多 1 万行）",
+        "summary": "导出组织（Excel / CSV，按列表的查询条件，最多 1 万行）",
         "tags": [
           "system/org 组织"
         ],
@@ -11881,7 +12619,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemParameterPageBody"
+                "$ref": "#/components/schemas/SystemParameterExportBody"
               }
             }
           },
@@ -11890,6 +12628,12 @@
         "responses": {
           "200": {
             "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
               "text/csv": {
                 "schema": {
                   "format": "binary",
@@ -11897,7 +12641,7 @@
                 }
               }
             },
-            "description": "CSV 文件（UTF-8 带 BOM）"
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
           },
           "400": {
             "content": {
@@ -11920,7 +12664,7 @@
             "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
           }
         },
-        "summary": "导出系统参数（CSV，按列表的查询条件，最多 1 万行）",
+        "summary": "导出系统参数（Excel / CSV，按列表的查询条件，最多 1 万行）",
         "tags": [
           "system/parameter 系统参数"
         ],
@@ -12987,7 +13731,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemRolePageBody"
+                "$ref": "#/components/schemas/SystemRoleExportBody"
               }
             }
           },
@@ -12996,6 +13740,12 @@
         "responses": {
           "200": {
             "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
               "text/csv": {
                 "schema": {
                   "format": "binary",
@@ -13003,7 +13753,7 @@
                 }
               }
             },
-            "description": "CSV 文件（UTF-8 带 BOM）"
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
           },
           "400": {
             "content": {
@@ -13026,7 +13776,7 @@
             "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
           }
         },
-        "summary": "导出角色（CSV，按列表的查询条件，最多 1 万行）",
+        "summary": "导出角色（Excel / CSV，按列表的查询条件，最多 1 万行）",
         "tags": [
           "system/role 角色"
         ],
@@ -13460,7 +14210,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemUserRolePageBody"
+                "$ref": "#/components/schemas/SystemUserRoleExportBody"
               }
             }
           },
@@ -13469,6 +14219,12 @@
         "responses": {
           "200": {
             "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
               "text/csv": {
                 "schema": {
                   "format": "binary",
@@ -13476,7 +14232,7 @@
                 }
               }
             },
-            "description": "CSV 文件（UTF-8 带 BOM）"
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
           },
           "400": {
             "content": {
@@ -13499,7 +14255,7 @@
             "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
           }
         },
-        "summary": "导出用户组织角色分配（CSV，按列表的查询条件，最多 1 万行）",
+        "summary": "导出用户组织角色分配（Excel / CSV，按列表的查询条件，最多 1 万行）",
         "tags": [
           "system/user-role 用户组织角色分配"
         ],
@@ -13933,7 +14689,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemUserSupervisorPageBody"
+                "$ref": "#/components/schemas/SystemUserSupervisorExportBody"
               }
             }
           },
@@ -13942,6 +14698,12 @@
         "responses": {
           "200": {
             "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
               "text/csv": {
                 "schema": {
                   "format": "binary",
@@ -13949,7 +14711,7 @@
                 }
               }
             },
-            "description": "CSV 文件（UTF-8 带 BOM）"
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
           },
           "400": {
             "content": {
@@ -13972,7 +14734,7 @@
             "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
           }
         },
-        "summary": "导出用户多上级（CSV，按列表的查询条件，最多 1 万行）",
+        "summary": "导出用户多上级（Excel / CSV，按列表的查询条件，最多 1 万行）",
         "tags": [
           "system/user-supervisor 用户多上级"
         ],
@@ -14498,7 +15260,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SystemUserPageBody"
+                "$ref": "#/components/schemas/SystemUserExportBody"
               }
             }
           },
@@ -14507,6 +15269,12 @@
         "responses": {
           "200": {
             "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
               "text/csv": {
                 "schema": {
                   "format": "binary",
@@ -14514,7 +15282,7 @@
                 }
               }
             },
-            "description": "CSV 文件（UTF-8 带 BOM）"
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
           },
           "400": {
             "content": {
@@ -14537,7 +15305,7 @@
             "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
           }
         },
-        "summary": "导出用户（CSV，按列表的查询条件，最多 1 万行）",
+        "summary": "导出用户（Excel / CSV，按列表的查询条件，最多 1 万行）",
         "tags": [
           "system/user 用户"
         ],

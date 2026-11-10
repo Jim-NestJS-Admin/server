@@ -1,3 +1,5 @@
+import { SharedDictionaries1794279600000 } from '../database/migrations/1794279600000-SharedDictionaries.js';
+import { PLATFORM_TENANT_ID } from '../core/tenant/tenant.constants.js';
 import 'reflect-metadata';
 import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
@@ -86,6 +88,7 @@ async function bootstrapLocal(): Promise<void> {
       SystemLogs1793937600000,
       SystemFields1793941200000,
       CoreTables1793944800000,
+      SharedDictionaries1794279600000,
     ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,
@@ -123,7 +126,9 @@ async function bootstrapLocal(): Promise<void> {
       source.transaction(async (manager) => {
         const menus = await seedMenus(manager, repos, codes, generated);
         if (menuOnly) return { menus, dicts: 0, admin: '跳过' };
-        const dicts = await seedDicts(manager, repos);
+        const dicts = await context.run({ tenantId: PLATFORM_TENANT_ID }, () =>
+          seedDicts(manager, repos),
+        );
         const admin = await seedAdmin(manager, repos, username, passwordHash);
         return { menus, dicts, admin };
       }),
@@ -295,7 +300,7 @@ async function seedDicts(
 ): Promise<number> {
   const seeds: { code: string; name: string; items: [string, string][] }[] = [
     {
-      code: 'common_status',
+      code: 'sys.common_status',
       name: '通用状态',
       items: [
         ['1', '启用'],
@@ -303,7 +308,7 @@ async function seedDicts(
       ],
     },
     {
-      code: 'yes_no',
+      code: 'sys.yes_no',
       name: '是否',
       items: [
         ['1', '是'],
@@ -321,7 +326,10 @@ async function seedDicts(
     if (hit) continue;
     const typeId = await repos
       .for(SystemDictType)
-      .insert({ code: d.code, name: d.name, enabled: true }, manager);
+      .insert(
+        { code: d.code, name: d.name, enabled: true, builtin: true, rank: 0 },
+        manager,
+      );
     let rank = 0;
     for (const [value, label] of d.items) {
       rank += 10;

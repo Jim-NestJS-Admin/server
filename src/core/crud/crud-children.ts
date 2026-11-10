@@ -1,3 +1,4 @@
+import { validateDictionaryValues } from './crud-dictionary.js';
 import { randomUUID } from 'node:crypto';
 import type { Type } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
@@ -409,6 +410,23 @@ export async function saveChildren(
               messages: [`同一张单据里${labels}不能重复`],
             });
     }
+    for (const added of plan.added) {
+      await validateDictionaryValues(
+        tx.dictionary,
+        child.fields,
+        added.values,
+        tx.manager,
+        { resource, clientId: added.clientId },
+      );
+    }
+    for (const updated of plan.updated)
+      await validateDictionaryValues(
+        tx.dictionary,
+        child.fields,
+        updated.values,
+        tx.manager,
+        { resource, id: updated.id },
+      );
     work.push({ plan, current });
   }
   if (errors.length)

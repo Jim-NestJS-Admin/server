@@ -1,3 +1,10 @@
+import {
+  validateDictionaryValues,
+  type CrudDictionarySource,
+} from './crud-dictionary.js';
+import ExcelJS from 'exceljs';
+import { PassThrough } from 'node:stream';
+import { buildCrudSchema } from './crud-schema.js';
 import { randomUUID } from 'node:crypto';
 import { Brackets, type DataSource, type EntityManager } from 'typeorm';
 import {
@@ -49,6 +56,11 @@ export interface PageQuery {
   where?: unknown;
 }
 
+export interface ExportQuery extends PageQuery {
+  format?: 'csv' | 'xlsx';
+  columns?: string[];
+}
+
 /** 接口响应里的一行：去掉租户、删除标记这类内部字段 */
 export type CrudRow<T> = Omit<T, (typeof INTERNAL_FIELDS)[number]>;
 
@@ -67,6 +79,7 @@ export interface CrudBinding<T extends BaseEntity> {
   idempotency: IdempotencyLedger;
   /** 列表显示名来源（系统模块注册；没有时只返回编号） */
   display: () => CrudDisplaySource | undefined;
+  dictionary?: () => CrudDictionarySource | undefined;
 }
 
 const ALIAS = 'e';
@@ -139,29 +152,127 @@ export class BaseService<T extends BaseEntity> {
   /** 导出（T18）：最多这么多行，超过时只导出前面的 */
   static readonly EXPORT_MAX_ROWS = 10000;
 
-  /** 导出 CSV：列是可读的业务字段，值已按字段权限处理（隐藏留空、脱敏是打码值），单元格防公式注入 */
-  async exportCsv(query: PageQuery): Promise<string> {
-    const { list } = await this.page(query, BaseService.EXPORT_MAX_ROWS);
-    const cols = this.meta.readable.filter((f) => f !== 'version');
-    const label = (f: string) =>
-      this.meta.fields.find((x) => x.property === f)?.label ?? f;
-    const cell = (v: unknown) => {
-      const s = escapeSpreadsheetCell(
-        v === null || v === undefined
-          ? ''
-          : v instanceof Date
-            ? v.toISOString()
-            : typeof v === 'object'
-              ? JSON.stringify(v)
-              : String(v as string),
-      ) as string;
-      return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  /** 两种格式共用列白名单、查询、逐行字段裁剪；不把隐藏字段重新读回原值。 */
+  protected exportColumns(requested?: string[]): string[] {
+    const ctx = this.crud.context.current();
+    const authz = this.crud.authz.get();
+    const allowed = this.meta.readable.filter(
+      (f) =>
+        FIELD_PERM_EXEMPT.has(f) ||
+        ctx.endpoint === 'system' ||
+        (authz &&
+          fieldVerdict(
+            authz,
+            ctx.userId,
+            this.meta.permPrefix,
+            this.meta.entity,
+            f,
+            this.meta.dataScope,
+            null,
+          ).state !== 'hidden'),
+    );
+    const defaults = buildCrudSchema(this.meta)
+      .columns.filter((c) => !c.hidden)
+      .map((c) => c.field);
+    const columns = [...new Set(requested ?? defaults)];
+    if (columns.some((f) => !this.meta.readable.includes(f)))
+      throw crudErrors.badRequest('导出列不允许');
+    const selected = columns.filter((f) => allowed.includes(f));
+    if (!selected.length) throw crudErrors.badRequest('没有可导出的列');
+    return selected;
+  }
+
+  private async *exportRows(query: PageQuery) {
+    const size = 500;
+    for (let page = 1, count = 0; count < BaseService.EXPORT_MAX_ROWS; page++) {
+      const result = await this.page({ ...query, page }, size);
+      for (const row of result.list) {
+        if (count++ >= BaseService.EXPORT_MAX_ROWS) return;
+        yield row as Record<string, unknown>;
+      }
+      if (result.list.length < size || count >= result.total) return;
+    }
+  }
+
+  private exportCell(value: unknown): string {
+    return escapeSpreadsheetCell(
+      value == null
+        ? ''
+        : value instanceof Date
+          ? value.toISOString()
+          : typeof value === 'object'
+            ? JSON.stringify(value)
+            : String(value as string | number | boolean | bigint),
+    ) as string;
+  }
+
+  async exportCsv(query: ExportQuery): Promise<string> {
+    const columns = this.exportColumns(query.columns);
+    const cell = (value: unknown) => {
+      const text = this.exportCell(value);
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
     };
-    const lines = [cols.map((c) => cell(label(c))).join(',')];
-    for (const row of list as Record<string, unknown>[])
-      lines.push(cols.map((c) => cell(row[c])).join(','));
-    // 带 BOM，Excel 打开中文不乱码
+    const lines = [
+      columns
+        .map((f) =>
+          cell(
+            buildCrudSchema(this.meta).columns.find((x) => x.field === f)
+              ?.label ?? f,
+          ),
+        )
+        .join(','),
+    ];
+    for await (const row of this.exportRows(query))
+      lines.push(columns.map((f) => cell(row[f])).join(','));
     return '\uFEFF' + lines.join('\r\n');
+  }
+
+  private xlsxCell(value: unknown): string | number | boolean {
+    return typeof value === 'number' || typeof value === 'boolean'
+      ? value
+      : this.exportCell(value);
+  }
+
+  async exportXlsx(query: ExportQuery): Promise<PassThrough> {
+    const columns = this.exportColumns(query.columns);
+    const rows = this.exportRows(query);
+    // 首批先完成查询/权限检查，错误仍能以统一JSON响应，避免发出成功下载头之后才发现入参错误。
+    const first = await rows.next();
+    const output = new PassThrough();
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: output,
+      useSharedStrings: false,
+      useStyles: false,
+    });
+    const sheet = workbook.addWorksheet('数据');
+    sheet
+      .addRow(
+        columns.map(
+          (f) =>
+            buildCrudSchema(this.meta).columns.find((x) => x.field === f)
+              ?.label ?? f,
+        ),
+      )
+      .commit();
+    void (async () => {
+      try {
+        if (!first.done)
+          sheet
+            .addRow(columns.map((f) => this.xlsxCell(first.value[f])))
+            .commit();
+        for await (const row of rows) {
+          if (output.destroyed) return;
+          sheet.addRow(columns.map((f) => this.xlsxCell(row[f]))).commit();
+        }
+        sheet.commit();
+        await workbook.commit();
+      } catch (error) {
+        output.destroy(error instanceof Error ? error : new Error('导出失败'));
+      } finally {
+        await rows.return(undefined);
+      }
+    })();
+    return output;
   }
 
   async page(
@@ -169,7 +280,7 @@ export class BaseService<T extends BaseEntity> {
     exportLimit?: number,
   ): Promise<PageResult<CrudRow<T>>> {
     const meta = this.meta;
-    const page = exportLimit ? 1 : (query.page ?? 1);
+    const page = query.page ?? 1;
     const size = exportLimit ?? query.size ?? 20;
     if (!exportLimit && size > meta.maxSize)
       throw crudErrors.badRequest(`每页最多 ${meta.maxSize} 条`, [
@@ -302,6 +413,12 @@ export class BaseService<T extends BaseEntity> {
       });
       this.assertNullable(values);
       await this.beforeAdd(values, tx);
+      await validateDictionaryValues(
+        this.crud.dictionary?.(),
+        this.meta.fields,
+        values as Record<string, unknown>,
+        tx.manager,
+      );
       await this.checkTreeParent(tx, null, values);
       const id = await this.insertRow(tx, values);
       // 没提交的子表也要按「空」检查行数下限
@@ -351,6 +468,12 @@ export class BaseService<T extends BaseEntity> {
       this.dropNotEditable(changes, existing as unknown as RowOwner);
       this.assertNullable(changes);
       await this.beforeUpdate(changes, existing, tx);
+      await validateDictionaryValues(
+        this.crud.dictionary?.(),
+        this.meta.fields,
+        changes as Record<string, unknown>,
+        tx.manager,
+      );
       await this.checkTreeParent(tx, id, changes);
       const clean = this.stripSystem(changes);
 
@@ -731,7 +854,12 @@ export class BaseService<T extends BaseEntity> {
       );
     try {
       return await this.crud.idempotency.transaction((manager) =>
-        fn({ manager, ctx, meta: meta as CrudResourceMeta }),
+        fn({
+          manager,
+          ctx,
+          meta: meta as CrudResourceMeta,
+          dictionary: this.crud.dictionary?.(),
+        }),
       );
     } catch (err) {
       throw translateDbError(err, meta as CrudResourceMeta, dataSource);

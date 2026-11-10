@@ -308,7 +308,7 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
         label: label(p),
         ...(list?.width ? { width: list.width } : {}),
         sortable: meta.sortable.includes(p),
-        ...(f?.dict ? { dict: p } : {}),
+        ...(f?.dict || f?.dictCode ? { dict: p } : {}),
         type: columnType(meta.entity, p),
         ...(meta.tree?.parentField === p ? { hidden: true } : {}),
       };
@@ -333,13 +333,13 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
           cfg.component ??
           (meta.tree?.parentField === f.property
             ? 'tree-select'
-            : f.dict
+            : f.dict || f.dictCode
               ? 'select'
               : 'input'),
         required: Boolean(cfg.required),
         ...(cfg.placeholder ? { placeholder: cfg.placeholder } : {}),
         edit: f.edit ?? 'both',
-        ...(f.dict ? { dict: f.property } : {}),
+        ...(f.dict || f.dictCode ? { dict: f.property } : {}),
       };
     });
 
@@ -401,7 +401,7 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
             label: f?.label ?? BASE_LABELS[p] ?? p,
             ...(list?.width ? { width: list.width } : {}),
             sortable: false,
-            ...(f?.dict ? { dict: `${c.resource}.${p}` } : {}),
+            ...(f?.dict || f?.dictCode ? { dict: `${c.resource}.${p}` } : {}),
             type: columnType(c.entity, p),
             ...(SYSTEM_COLUMN_ORDER.includes(p) ? { hidden: true } : {}),
           };
@@ -413,11 +413,14 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
           return {
             field: f.property,
             label: f.label,
-            component: cfg.component ?? (f.dict ? 'select' : 'input'),
+            component:
+              cfg.component ?? (f.dict || f.dictCode ? 'select' : 'input'),
             required: Boolean(cfg.required),
             ...(cfg.placeholder ? { placeholder: cfg.placeholder } : {}),
             edit: f.edit ?? 'both',
-            ...(f.dict ? { dict: `${c.resource}.${f.property}` } : {}),
+            ...(f.dict || f.dictCode
+              ? { dict: `${c.resource}.${f.property}` }
+              : {}),
           };
         }),
       add: { writable: c.addable },

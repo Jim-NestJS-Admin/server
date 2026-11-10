@@ -1,3 +1,4 @@
+import { SystemDictionaryService } from './service/system-dictionary.service.js';
 import { Global, Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -33,6 +34,7 @@ import {
     SystemOperationLogController,
   ],
   providers: [
+    SystemDictionaryService,
     SystemDictTypeService,
     SystemDictItemService,
     SystemParameterService,
@@ -43,6 +45,7 @@ import {
     { provide: APP_INTERCEPTOR, useClass: SystemOperationInterceptor },
   ],
   exports: [
+    SystemDictionaryService,
     SystemAuthEvents,
     SystemCrudAudit,
     SystemOperationRecorder,

@@ -113,11 +113,8 @@ function entity(
       const perm = f.fieldPerm?.default
         ? `  @FieldPerm({ label: ${lit(f.label)}, default: ${lit(f.fieldPerm.default)}${f.fieldPerm.mask ? `, mask: ${lit(f.fieldPerm.mask)}` : ''} })\n`
         : '';
-      // 字典编码写成注释：@CrudField 的 dict 是静态选项，动态字典（T08）接入后再引用
-      const dict = f.dict
-        ? `  // 字典：${f.dict.replace(/[^a-z0-9_]/g, '')}\n`
-        : '';
-      return `${dict}  @CrudField({ ${crud.join(', ')} })\n${perm}${validators.map((x) => `  ${x}\n`).join('')}  @Column(${col.replace('{ ', `{ name: ${lit(f.column)}, `)})\n  ${f.name}: ${ts}${f.nullable || isParent ? ' | null' : ''};`;
+      if (f.dict) crud.push(`dictCode: ${lit(f.dict)}`);
+      return `  @CrudField({ ${crud.join(', ')} })\n${perm}${validators.map((x) => `  ${x}\n`).join('')}  @Column(${col.replace('{ ', `{ name: ${lit(f.column)}, `)})\n  ${f.name}: ${ts}${f.nullable || isParent ? ' | null' : ''};`;
     })
     .join('\n\n');
   const idx = uniques

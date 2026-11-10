@@ -1,4 +1,11 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import {
+  HttpStatus,
+  Injectable,
+  Logger,
+  Inject,
+  Optional,
+} from '@nestjs/common';
+import { PermissionService } from '../permission/permission.service.js';
 import type { Request } from 'express';
 import { AppConfigService } from '../config/app-config.service.js';
 import { BusinessException } from '../exceptions/business.exception.js';
@@ -39,6 +46,9 @@ const credentialsError = () =>
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger('AuthService');
+  @Optional()
+  @Inject(PermissionService)
+  private readonly permissions?: PermissionService;
 
   constructor(
     private readonly config: AppConfigService,
@@ -257,6 +267,7 @@ export class AuthService {
       },
       currentOrg: current ? pick(current) : null,
       orgs: orgs.map(pick),
+      superAdmin: (await this.permissions?.isSuperAdmin()) ?? false,
       locale: p.locale || 'zh-CN',
     };
   }

@@ -155,8 +155,8 @@ export function CrudController<T extends BaseEntity>(
         api: 'export',
         method: 'export',
         http: 'post',
-        summary: `导出${label}（CSV，按列表的查询条件，最多 1 万行）`,
-        body: dtos.PageBody,
+        summary: `导出${label}（Excel / CSV，按列表的查询条件，最多 1 万行）`,
+        body: dtos.ExportBody,
         result: undefined,
         errors: [400, 429],
       },
@@ -214,7 +214,13 @@ export function CrudController<T extends BaseEntity>(
           summary: spec.summary,
         }),
         spec.method === 'export'
-          ? ApiBinaryResult('text/csv', 'CSV 文件（UTF-8 带 BOM）')
+          ? ApiBinaryResult(
+              [
+                'text/csv',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              ],
+              'Excel / CSV 文件（CSV为UTF-8带BOM）',
+            )
           : ApiResult(spec.result),
         ...(spec.errors.length ? [ApiErrors(...spec.errors)] : []),
       ];

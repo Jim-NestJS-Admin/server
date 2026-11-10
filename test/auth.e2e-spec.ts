@@ -217,6 +217,7 @@ describe('后台登录认证（T05）', () => {
         currentOrg: ORG_SG,
         orgs: [ORG_AU, ORG_SG],
         locale: 'zh-CN',
+        superAdmin: false,
       });
     });
 

@@ -22,6 +22,21 @@ const config: CodegenConfig = {
 };
 
 describe('后端代码渲染（T21）', () => {
+  it('动态字典生成实际dictCode引用，sys.前缀不会被去掉', () => {
+    const files = renderServer(
+      {
+        ...config,
+        fields: [{ ...config.fields[0], dict: 'sys.common_status' }],
+      },
+      1,
+    );
+    const entity = files.find((file) =>
+      file.path.endsWith('.entity.ts'),
+    )!.content;
+    expect(entity).toContain('dictCode: "sys.common_status"');
+    expect(entity).not.toContain('// 字典：');
+  });
+
   it('只生成白名单目录里的文件', () => {
     const paths = renderServer(config, 1800000000000).map((f) => f.path);
     expect(paths).toEqual([

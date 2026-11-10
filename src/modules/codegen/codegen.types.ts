@@ -157,8 +157,15 @@ export function validateCodegenConfig(raw: unknown): Err[] {
         !QUERY_MODES.includes(f.query)
       )
         bad(`${p}.query`, '查询方式不在白名单里');
-      if (f?.dict !== undefined && f.dict !== null && !SNAKE.test(f.dict))
-        bad(`${p}.dict`, '字典编码只能小写字母、数字、下划线');
+      if (
+        f?.dict !== undefined &&
+        f.dict !== null &&
+        !/^[a-z][a-z0-9_.-]{1,63}$/.test(f.dict)
+      )
+        bad(
+          `${p}.dict`,
+          '字典编码须小写字母开头，只能包含小写字母、数字、点、横线和下划线',
+        );
     });
   };
   fields(c.fields, 'fields');

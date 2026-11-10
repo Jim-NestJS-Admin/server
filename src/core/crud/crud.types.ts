@@ -188,6 +188,7 @@ export interface CrudContext {
 /** 钩子拿到的事务环境：只能用这里的 manager 读写，保证在同一个事务里 */
 export interface CrudTx {
   manager: EntityManager;
+  dictionary?: import('./crud-dictionary.js').CrudDictionarySource;
   ctx: CrudContext;
   meta: CrudResourceMeta;
 }
