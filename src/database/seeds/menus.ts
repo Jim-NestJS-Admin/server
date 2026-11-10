@@ -11,6 +11,7 @@ export interface PageSeed {
   /** 这些前缀下的其他权限码作为页面上的按钮，如 system:user */
   buttonPrefixes: string[];
   icon?: string;
+  hidden?: boolean;
 }
 
 export interface DirectorySeed {
@@ -29,25 +30,35 @@ const crud = (title: string, key: string, extra: string[] = []): PageSeed => ({
 });
 
 /**
- * 默认菜单（T10）：系统管理、开发工具。组件键和前端 src/platform/navigation.ts 的 navigationViews 一一对应。
+ * 默认菜单（T10）：组织与权限、系统配置、日志审计、开发工具。组件键和前端 src/platform/navigation.ts 的 navigationViews 一一对应。
  * 权限码没有在后端声明的页面（例如没开启代码生成器）初始化时跳过，不写入无效菜单。
  */
 export const DEFAULT_MENUS: DirectorySeed[] = [
   {
-    title: '系统管理',
+    title: '组织与权限',
     path: '/system',
+    icon: 'ri:team-line',
+    pages: [
+      crud('用户管理', 'system/user'),
+      crud('组织管理', 'system/org'),
+      crud('角色管理', 'system/role'),
+      crud('菜单管理', 'system/menu'),
+      { ...crud('角色分配', 'system/user-role'), hidden: true },
+      { ...crud('上级关系', 'system/user-supervisor'), hidden: true },
+      {
+        ...crud('字段权限', 'system/field', ['system:role-field']),
+        hidden: true,
+      },
+    ],
+  },
+  {
+    title: '系统配置',
+    path: '/settings',
     icon: 'ri:settings-3-line',
     pages: [
-      crud('用户', 'system/user'),
-      crud('角色', 'system/role'),
-      crud('组织', 'system/org'),
-      crud('菜单', 'system/menu'),
-      crud('用户角色', 'system/user-role'),
-      crud('上级关系', 'system/user-supervisor'),
-      crud('字典类型', 'system/dict-type'),
-      crud('字典项', 'system/dict-item'),
+      crud('字典管理', 'system/dict-type'),
+      { ...crud('字典项', 'system/dict-item'), hidden: true },
       crud('系统参数', 'system/parameter'),
-      crud('字段权限', 'system/field', ['system:role-field']),
       {
         title: '模块配置',
         path: '/system/page-config',
@@ -55,6 +66,13 @@ export const DEFAULT_MENUS: DirectorySeed[] = [
         permission: 'system:page-config:info',
         buttonPrefixes: ['system:page-config'],
       },
+    ],
+  },
+  {
+    title: '日志审计',
+    path: '/audit',
+    icon: 'ri:file-search-line',
+    pages: [
       crud('操作日志', 'system/operation-log'),
       crud('登录日志', 'system/login-log'),
     ],

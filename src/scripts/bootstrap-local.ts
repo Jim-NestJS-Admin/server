@@ -240,6 +240,7 @@ async function seedMenus(
         icon: p.icon ?? null,
         rank,
         component: p.component,
+        hidden: p.hidden ?? false,
         permission: p.permission,
       });
       const own = [...codes]
