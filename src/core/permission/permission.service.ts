@@ -1,8 +1,10 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { BusinessException } from '../exceptions/business.exception.js';
 import { ErrorCode } from '../exceptions/error-code.js';
 import { RedisService } from '../redis/redis.service.js';
 import { RequestContext } from '../tenant/request-context.js';
+import { PLATFORM_TENANT_ID } from '../tenant/tenant.constants.js';
+import { BuiltinTenantSource, TenantSource } from '../tenant/tenant-source.js';
 import {
   AuthzContext,
   type DataScopeGrant,
@@ -93,7 +95,33 @@ export class PermissionService {
     private readonly context: RequestContext,
     private readonly authz: AuthzContext,
     private readonly fieldSource: FieldPermSource,
-  ) {}
+    // 单独测试权限时可以不装租户模块，按只有平台和默认租户处理
+    @Optional() tenants?: TenantSource,
+  ) {
+    this.tenants = tenants ?? new BuiltinTenantSource();
+  }
+  private readonly tenants: TenantSource;
+
+  /**
+   * 租户套餐范围内的全部权限码（契约 tenant.md 第 5 节）：角色授权只能在这里面选，
+   * 租户超级管理员拥有的也是这些。平台专用的 platform:* 权限码永远不在里面；平台租户返回全部。
+   */
+  async packageCodes(tenantId: string): Promise<string[]> {
+    const menus = await this.source.loadMenus(tenantId);
+    const codes = new Set<string>();
+    if (tenantId === PLATFORM_TENANT_ID) {
+      for (const p of this.registry.all()) codes.add(p.code);
+      for (const m of menus) if (m.permission) codes.add(m.permission);
+      return [...codes].sort();
+    }
+    const allowed = await this.tenants.packageMenuIds(tenantId);
+    const inPackage = allowed ? new Set(allowed) : null;
+    if (!inPackage) for (const p of this.registry.all()) codes.add(p.code);
+    for (const m of menus)
+      if (m.permission && (!inPackage || inPackage.has(m.id)))
+        codes.add(m.permission);
+    return [...codes].filter((c) => !c.startsWith('platform:')).sort();
+  }
 
   /** 当前有效组织内的超级管理员身份，由统一权限来源判断，业务模块不自行查角色。 */
   async isSuperAdmin(): Promise<boolean> {
