@@ -33,7 +33,14 @@ export interface CrudFieldOptions {
   dictCode?: string;
   /** 可以为空（只影响接口文档） */
   nullable?: boolean;
+  /**
+   * 编号字段要显示成用户名或组织名：后端在行的 _display 里给名称，列表、详情、导出都用它
+   * （创建人、修改人、所属组织框架已自动处理，不用写）
+   */
+  display?: DisplayKind;
 }
+/** 编号字段的显示名来源 */
+export type DisplayKind = 'users' | 'orgs';
 
 export interface CrudFieldMeta extends CrudFieldOptions {
   property: string;
