@@ -218,7 +218,55 @@ describe('后台登录认证（T05）', () => {
         orgs: [ORG_AU, ORG_SG],
         locale: 'zh-CN',
         superAdmin: false,
+        tenant: { id: '1', code: 'default', name: '默认租户', platform: false },
       });
+    });
+
+    it('多租户识别（阶段 2）：没绑定域名时登录页要填租户编码，按 X-Tenant-Code 找租户', async () => {
+      expect(
+        (await http().get('/admin/auth/tenant-hint').expect(200)).body.data,
+      ).toEqual({
+        mode: 'code',
+      });
+      const withTenant = async (
+        code: string,
+        tenantId: string,
+        status: number,
+      ) => {
+        const ch = (
+          await http()
+            .get('/admin/auth/captcha')
+            .set('X-Tenant-Code', code)
+            .query({ purpose: 'login', account: 'admin' })
+            .expect(200)
+        ).body.data as { captchaId: string };
+        return http()
+          .post('/admin/auth/login')
+          .set('X-Tenant-Code', code)
+          .send({
+            username: 'admin',
+            password: PASSWORD,
+            captchaId: ch.captchaId,
+            captchaCode: await answerOf(tenantId, ch.captchaId),
+          })
+          .expect(status);
+      };
+      // 编码大小写、空格不敏感；default 就是默认租户
+      const ok = await withTenant(' Default ', '1', 200);
+      expect(ok.body.data.accessToken).toBeTruthy();
+      // 编码不存在 / 格式不对 / 平台里没有这个账号：和密码错误一样的提示，不泄露租户是否存在
+      for (const [code, tenantId] of [
+        ['nobody', '18446744073709551615'],
+        ['../1', '18446744073709551615'],
+        ['platform', '0'],
+      ]) {
+        const res = await withTenant(code, tenantId, 400);
+        expect(res.body).toEqual({
+          code: 4000,
+          data: null,
+          message: '账号或密码错误',
+        });
+      }
     });
 
     it('账号不区分大小写、忽略首尾空格；没有组织的用户当前组织为空', async () => {

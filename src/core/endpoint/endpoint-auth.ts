@@ -8,7 +8,7 @@ import type { Principal } from '../tenant/request-context.js';
  */
 export abstract class AdminAuth {
   abstract authenticate(req: Request): Promise<Principal>;
-  /** 免登录的后台接口（@Anonymous）：只确定租户。阶段 1 固定默认租户，以后按域名解析 */
+  /** 免登录的后台接口（@Anonymous）：只确定租户（域名优先 + 租户编码，契约 tenant.md 第 4 节） */
   abstract resolveTenant(req: Request): Promise<string>;
 }
 
