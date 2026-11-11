@@ -282,6 +282,12 @@ export class CrudSchema {
       '生效的显示配置（代码默认 → 模块配置 → 用户列设置，按字段权限裁剪后），结构见契约 page-config.md 第 2、4 节',
   })
   view?: unknown;
+  @ApiPropertyOptional({
+    type: Object,
+    description:
+      '不含用户列设置的显示配置（代码默认 → 模块配置，按字段权限裁剪后）；结构同 view，前端列设置以它为基准只保存用户改过的部分',
+  })
+  moduleView?: unknown;
 }
 
 export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
