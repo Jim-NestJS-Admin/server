@@ -204,6 +204,8 @@ export class AuthService {
   ): Promise<IssuedTokens> {
     if (!refreshToken) throw unauthorized();
     const tenantId = this.tenantId;
+    // 租户停用 / 过期 / 删除后刷新令牌立即失效：不旋转、不下发新令牌
+    if (!(await this.tenants.byId(tenantId))?.enabled) throw unauthorized();
     const r = await this.sessions.rotate(tenantId, refreshToken);
     if (r.status === 'reuse') {
       await this.emit(() =>

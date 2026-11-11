@@ -258,7 +258,9 @@ export class PermissionService {
         roleId: g.roleId,
         all: g.allPermissions === true,
         perms: [...new Set(g.permissions)].filter(
-          (p) => !inPackage || inPackage.has(p),
+          (p) =>
+            (tenantId === PLATFORM_TENANT_ID || !p.startsWith('platform:')) &&
+            (!inPackage || inPackage.has(p)),
         ),
         scope: await this.scopeOf(g, orgId, tree),
       });
@@ -309,6 +311,9 @@ export class PermissionService {
     if (!userId) throw unauthorized();
     const { authz } = await this.load(tenantId, userId, orgId);
     if (!authz.orgValid) throw unauthorized();
+    // 平台专用权限码永远不给租户，和套餐限不限无关
+    if (tenantId !== PLATFORM_TENANT_ID && code.startsWith('platform:'))
+      throw forbidden();
     // 超级管理员是「套餐内的全部」，不是全部
     const inPackage = !authz.allowed || authz.allowed.includes(code);
     const effective = authz.roles.filter(

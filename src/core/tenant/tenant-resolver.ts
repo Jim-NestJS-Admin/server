@@ -34,7 +34,8 @@ export class TenantResolver {
     const bound = await this.tenants.byDomain(requestHost(req));
     if (bound)
       return code && code !== bound.code ? UNRESOLVED_TENANT_ID : usable(bound);
-    if (!code) return DEFAULT_TENANT_ID;
+    // 不带编码等同默认租户，但默认租户同样要核对可用（停用 / 过期 / 删除后不能再刷新）
+    if (!code) return usable(await this.tenants.byId(DEFAULT_TENANT_ID));
     if (!/^[a-z][a-z0-9-]{1,31}$/.test(code)) return UNRESOLVED_TENANT_ID;
     return usable(await this.tenants.byCode(code));
   }

@@ -41,7 +41,7 @@ const exec = () =>
   ({
     getType: () => 'http',
     getClass: () => LookController,
-    getHandler: () => LookController.prototype.usage,
+    getHandler: () => Reflect.get(LookController.prototype, 'usage') as unknown,
     switchToHttp: () => ({
       getRequest: () => ({ method: 'GET', path: '/admin/platform/look' }),
     }),
