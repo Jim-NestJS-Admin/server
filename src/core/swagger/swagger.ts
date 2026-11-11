@@ -4,6 +4,7 @@ import {
   QueryGroupDto,
 } from '../crud/crud-query.dto.js';
 import type { INestApplication } from '@nestjs/common';
+import { ModulesContainer } from '@nestjs/core';
 import {
   DocumentBuilder,
   SwaggerModule,
@@ -17,7 +18,13 @@ import {
 export function buildOpenApiDocument(
   app: INestApplication,
   version: string,
+  excludedModules: string[] = [],
 ): OpenAPIObject {
+  const modules = [...app.get(ModulesContainer).values()];
+  for (const name of excludedModules) {
+    if (!modules.some((module) => module.metatype.name === name))
+      throw new Error(`要排除的模块不存在：${name}`);
+  }
   const config = new DocumentBuilder()
     .setTitle('jim-nestjs-admin 接口')
     .setDescription(
@@ -28,6 +35,14 @@ export function buildOpenApiDocument(
     .build();
   // 只通过 $ref 引用的模型（高级查询递归分组、字段权限状态）要显式登记
   return SwaggerModule.createDocument(app, config, {
+    ...(excludedModules.length
+      ? {
+          include: modules
+            .filter((module) => !excludedModules.includes(module.metatype.name))
+            .map((module) => module.metatype),
+          deepScanRoutes: false,
+        }
+      : {}),
     extraModels: [QueryConditionDto, QueryGroupDto, FieldPermStateDto],
   });
 }

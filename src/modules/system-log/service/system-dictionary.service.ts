@@ -30,6 +30,22 @@ export class SystemDictionaryService
   tenant() {
     return this.context.current().tenantId;
   }
+  /** 开发生成器只读目录；业务字典限定当前租户，系统字典经共享上下文读取。 */
+  async catalog() {
+    const load = async (builtin: boolean) =>
+      (
+        await this.repos
+          .for(SystemDictType)
+          .query('t')
+          .where('t.builtin = :builtin AND t.enabled = :enabled', {
+            builtin,
+            enabled: true,
+          })
+          .orderBy('t.code', 'ASC')
+          .getMany()
+      ).map((t) => ({ code: t.code, label: t.name, builtin: t.builtin }));
+    return [...(await this.platform(() => load(true))), ...(await load(false))];
+  }
   async assertSystemManager(): Promise<void> {
     // 阶段2在此统一收紧为平台超级管理员；当前按已确认设计允许当前有效超级管理员。
     if (!(await this.permission.isSuperAdmin()))

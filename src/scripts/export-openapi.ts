@@ -1,11 +1,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { parseArgs } from 'node:util';
 import type { INestApplication } from '@nestjs/common';
 
 /** 导出接口文档到 openapi/admin.json（相对 server 项目根目录）。改了接口必须运行并提交 */
 export async function exportOpenApi(
   outFile = resolve(process.cwd(), 'openapi/admin.json'),
+  excludedModules: string[] = [],
 ): Promise<string> {
   // 导出时不需要访问日志，也不连数据库；模块在设置环境变量之后再加载，配置校验才能读到。
   // 数据库配置给占位值，只为通过启动校验，导出过程不会用它们连接。
@@ -30,10 +32,16 @@ export async function exportOpenApi(
   const app: INestApplication = await NestFactory.create(AppModule, {
     logger: false,
   });
-  configureApp(app);
-  await app.init();
-  const json = stableStringify(buildOpenApiDocument(app, APP_VERSION));
-  await app.close();
+  let json: string;
+  try {
+    configureApp(app);
+    await app.init();
+    json = stableStringify(
+      buildOpenApiDocument(app, APP_VERSION, excludedModules),
+    );
+  } finally {
+    await app.close();
+  }
   mkdirSync(dirname(outFile), { recursive: true });
   writeFileSync(outFile, json);
   return outFile;
@@ -43,6 +51,16 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  const file = await exportOpenApi();
+  const { values } = parseArgs({
+    options: {
+      output: { type: 'string' },
+      'exclude-module': { type: 'string', multiple: true },
+    },
+    strict: true,
+  });
+  const file = await exportOpenApi(
+    values.output ? resolve(values.output) : undefined,
+    values['exclude-module'],
+  );
   console.log(`接口文档已导出：${file}`);
 }

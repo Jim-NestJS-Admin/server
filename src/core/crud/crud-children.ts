@@ -1,3 +1,4 @@
+import { decimalRule, validationMessages } from './decimal-input.js';
 import { validateDictionaryValues } from './crud-dictionary.js';
 import { randomUUID } from 'node:crypto';
 import type { Type } from '@nestjs/common';
@@ -45,7 +46,7 @@ function flatten(
   return errors.flatMap((e) => {
     const field = parent ? `${parent}.${e.property}` : e.property;
     const own = e.constraints
-      ? [{ field, messages: Object.values(e.constraints) }]
+      ? [{ field, messages: validationMessages(e) }]
       : [];
     return [...own, ...flatten(e.children ?? [], field)];
   });
@@ -63,6 +64,9 @@ async function validateRow(
     forbidNonWhitelisted: true,
     forbidUnknownValues: true,
   });
+  if (!errors.length)
+    for (const key of Object.keys(row))
+      if (decimalRule(instance, key)) row[key] = (instance as Values)[key];
   return flatten(errors);
 }
 

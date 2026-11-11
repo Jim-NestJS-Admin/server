@@ -134,7 +134,9 @@ describe('后端代码渲染（T21）', () => {
     expect(ctrl).toContain('tree: { parentField: "parentId"');
     expect(ctrl).toContain('"tree"');
     const mig = by('CreateCrmCustomer.ts');
-    expect(mig).toContain('{ columnNames: [\'tenant_id\', "parent_id"] }');
+    expect(mig).toMatch(
+      /"columnNames":\s*\[\s*"tenant_id",\s*"parent_id"\s*\]/,
+    );
     // 树形列表用列表的权限码，不单独生成按钮
     const menu = JSON.parse(by('.menu.json'));
     expect(

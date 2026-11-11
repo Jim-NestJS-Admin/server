@@ -1,3 +1,4 @@
+export { DecimalInput } from './decimal-input.js';
 // 通用 CRUD 对外入口：业务模块只从这里引用
 export { BaseEntity, DEFAULT_TENANT_ID } from './base.entity.js';
 export { BaseController } from './base.controller.js';

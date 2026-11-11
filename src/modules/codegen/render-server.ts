@@ -1,4 +1,7 @@
 import type { CodegenConfig, CodegenField } from './codegen.types.js';
+import { tableDefinition } from './table-definition.js';
+import { uniqueIndexName } from './sql-values.js';
+export { sqlDefault, uniqueIndexName } from './sql-values.js';
 
 export interface GeneratedFile {
   project: 'server' | 'admin';
@@ -16,7 +19,21 @@ const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 const childBusiness = (c: CodegenConfig, table: string) =>
   table.startsWith(`${c.module}_`) ? table.slice(c.module.length + 1) : table;
 /** 文字一律按 JSON 字符串转义写进代码，不会拼成可执行的内容 */
-const lit = (s: string) => JSON.stringify(s);
+const lit = (s: unknown) => JSON.stringify(s);
+export const defaultComponent = (f: CodegenField) =>
+  f.dict || f.type === 'dictionary'
+    ? 'select'
+    : f.type === 'text'
+      ? 'textarea'
+      : ['int', 'decimal', 'money'].includes(f.type)
+        ? 'number'
+        : f.type === 'boolean'
+          ? 'switch'
+          : f.type === 'date'
+            ? 'date'
+            : f.type === 'datetime'
+              ? 'datetime'
+              : 'input';
 
 function column(
   f: CodegenField,
@@ -33,10 +50,27 @@ function column(
       col: `{ type: 'bigint', unsigned: true, nullable: true }`,
       validators: ['@IsOptional()', '@Matches(/^[1-9]\\d{0,19}$/)'],
     };
-  const nullable = f.nullable ? ', nullable: true' : '';
+  const nullable =
+    (f.nullable ? ', nullable: true' : '') +
+    (Object.hasOwn(f, 'defaultValue')
+      ? `, default: ${lit(f.defaultValue)}`
+      : '') +
+    (f.comment !== undefined ? `, comment: ${lit(f.comment)}` : '');
   const v: string[] = [];
   if (!f.required) v.push('@IsOptional()');
   switch (f.type) {
+    case 'reference':
+      return {
+        ts: 'string',
+        col: `{ type: 'bigint', unsigned: true${nullable} }`,
+        validators: [...v, '@Matches(/^[1-9]\\d{0,19}$/)'],
+      };
+    case 'text':
+      return {
+        ts: 'string',
+        col: `{ type: 'text'${nullable} }`,
+        validators: [...v, '@IsString()', '@MaxLength(65535)'],
+      };
     case 'int':
       return {
         ts: 'number',
@@ -47,10 +81,10 @@ function column(
     case 'money':
       return {
         ts: 'string',
-        col: `{ type: 'decimal', precision: 14, scale: ${f.type === 'money' ? 2 : 4}${nullable} }`,
+        col: `{ type: 'decimal', precision: ${f.precision ?? 14}, scale: ${f.scale ?? (f.type === 'money' ? 2 : 4)}${nullable} }`,
         validators: [
           ...v,
-          `@Matches(/^-?\\d{1,10}(\\.\\d{1,${f.type === 'money' ? 2 : 4}})?$/)`,
+          `@DecimalInput({ label: ${lit(f.label)}, precision: ${f.precision ?? 14}, scale: ${f.scale ?? (f.type === 'money' ? 2 : 4)} })`,
         ],
       };
     case 'date':
@@ -78,7 +112,8 @@ function column(
         validators: [...v, '@Allow()'],
       };
     default: {
-      const len = f.length ?? 255;
+      const len =
+        f.length ?? (f.type === 'image' || f.type === 'file' ? 2048 : 255);
       return {
         ts: 'string',
         col: `{ type: 'varchar', length: ${len}${nullable} }`,
@@ -107,7 +142,10 @@ function entity(
       else if (f.type !== 'json') crud.push('list: { sortable: true }');
       if (f.form === false) crud.push('form: false');
       else if (isParent) crud.push("form: { component: 'tree-select' }");
-      else if (f.required) crud.push('form: { required: true }');
+      else
+        crud.push(
+          `form: { component: ${lit(defaultComponent(f))}, required: ${!!f.required} }`,
+        );
       if (f.nullable || isParent) crud.push('nullable: true');
 
       const perm = f.fieldPerm?.default
@@ -120,7 +158,7 @@ function entity(
   const idx = uniques
     .map(
       (f) =>
-        `@Index(${lit(`uk_${c.table}_${f.column}`)}, ['tenantId', ${lit(f.name)}, 'activeGuard'], { unique: true })\n`,
+        `@Index(${lit(uniqueIndexName(c.table, f.column))}, ['tenantId', ${lit(f.name)}, 'activeGuard'], { unique: true })\n`,
     )
     .join('');
   const used = new Set([
@@ -131,11 +169,12 @@ function entity(
   const validators = new Set<string>();
   for (const f of c.fields)
     for (const v of column(f, f.name === treeParent).validators)
-      validators.add(v.replace(/^@(\w+).*/, '$1'));
+      if (!v.startsWith('@DecimalInput'))
+        validators.add(v.replace(/^@(\w+).*/, '$1'));
   return `// 由代码生成器生成（${c.module}.${c.business}），可以继续手改；再次生成时手改过的文件默认不覆盖
 import { ${[...validators].sort().join(', ')} } from 'class-validator';
 import { ${[...used].sort().join(', ')} } from 'typeorm';
-import { BaseEntity, CrudField } from '../../../core/crud/index.js';
+import { BaseEntity, CrudField${c.fields.some((f) => f.type === 'decimal' || f.type === 'money') ? ', DecimalInput' : ''} } from '../../../core/crud/index.js';
 ${c.fields.some((f) => f.fieldPerm?.default) ? "import { FieldPerm } from '../../../core/field-perm/field-perm.decorator.js';\n" : ''}
 @Entity(${lit(c.table)})
 ${idx}export class ${name} extends BaseEntity {
@@ -228,63 +267,17 @@ function migration(
   treeParent?: string,
 ): string {
   const name = `Create${pascal(c.table)}${stamp}`;
-  const parentCol = c.fields.find((f) => f.name === treeParent)?.column;
-  const col = (f: CodegenField) => {
-    if (f.name === treeParent)
-      return `          { name: ${lit(f.column)}, type: 'bigint', unsigned: true, isNullable: true, comment: ${lit(f.label)} },`;
-    const t =
-      f.type === 'int'
-        ? "type: 'int'"
-        : f.type === 'decimal' || f.type === 'money'
-          ? `type: 'decimal', precision: 14, scale: ${f.type === 'money' ? 2 : 4}`
-          : f.type === 'date'
-            ? "type: 'date'"
-            : f.type === 'datetime'
-              ? "type: 'datetime', precision: 3"
-              : f.type === 'boolean'
-                ? "type: 'boolean'"
-                : f.type === 'json'
-                  ? "type: 'json'"
-                  : `type: 'varchar', length: '${f.length ?? 255}'`;
-    return `          { name: ${lit(f.column)}, ${t}, isNullable: ${f.nullable ? 'true' : 'false'}, comment: ${lit(f.label)} },`;
-  };
+  const definition = JSON.stringify(
+    tableDefinition(c, foreignKey, treeParent),
+    null,
+    2,
+  );
   return `// 由代码生成器生成（${c.module}.${c.business}）。只生成，不会自动执行：确认后用迁移命令执行
 import { Table, type MigrationInterface, type QueryRunner } from 'typeorm';
-
 export class ${name} implements MigrationInterface {
   async up(q: QueryRunner): Promise<void> {
-    await q.createTable(
-      new Table({
-        name: ${lit(c.table)},
-        columns: [
-          { name: 'id', type: 'bigint', unsigned: true, isPrimary: true, isGenerated: true, generationStrategy: 'increment' },
-          { name: 'tenant_id', type: 'bigint', unsigned: true, default: "'1'" },
-          { name: 'org_id', type: 'bigint', unsigned: true, isNullable: true },
-          { name: 'created_by', type: 'bigint', unsigned: true, isNullable: true },
-          { name: 'updated_by', type: 'bigint', unsigned: true, isNullable: true },
-          { name: 'created_at', type: 'datetime', precision: 3, default: 'CURRENT_TIMESTAMP(3)' },
-          { name: 'updated_at', type: 'datetime', precision: 3, default: 'CURRENT_TIMESTAMP(3)', onUpdate: 'CURRENT_TIMESTAMP(3)' },
-          { name: 'version', type: 'int', unsigned: true, default: '1' },
-          { name: 'deleted_at', type: 'datetime', precision: 3, isNullable: true },
-          { name: 'active_guard', type: 'tinyint', isNullable: true, asExpression: 'IF(\`deleted_at\` IS NULL, 1, NULL)', generatedType: 'STORED' },
-          { name: 'delete_batch', type: 'char', length: '36', isNullable: true },
-${foreignKey ? `          { name: ${lit(snake(foreignKey))}, type: 'bigint', unsigned: true },\n` : ''}${c.fields.map(col).join('\n')}
-        ],
-        indices: [
-          { columnNames: ['tenant_id'] },
-          { columnNames: ['org_id'] },${foreignKey ? `\n          { columnNames: [${lit(snake(foreignKey))}] },` : ''}${parentCol ? `\n          { columnNames: ['tenant_id', ${lit(parentCol)}] },` : ''}
-${c.fields
-  .filter((f) => f.unique)
-  .map(
-    (f) =>
-      `          { name: ${lit(`uk_${c.table}_${f.column}`)}, columnNames: ['tenant_id', ${lit(f.column)}, 'active_guard'], isUnique: true },`,
-  )
-  .join('\n')}
-        ],
-      }),
-    );
+    await q.createTable(new Table(${definition}));
   }
-
   async down(q: QueryRunner): Promise<void> {
     await q.dropTable(${lit(c.table)});
   }

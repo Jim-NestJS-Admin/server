@@ -2,9 +2,9 @@
   "name": "jim-nestjs-admin-server",
   "version": "0.0.1",
   "description": "jim-nestjs-admin 后端（NestJS）",
-  "author": "Aftershock IT",
+  "author": "Jimmy",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -29,7 +29,9 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "openapi:export": "nest build && node dist/scripts/export-openapi.js",
-    "audit": "pnpm audit --prod --audit-level=high"
+    "audit": "pnpm audit --prod --audit-level=high",
+    "codegen": "node dist/scripts/codegen.js",
+    "codegen:mcp": "node dist/scripts/codegen-mcp.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -57,7 +59,9 @@
     "typeorm": "1.1.2",
     "@aws-sdk/client-s3": "^3.1162.0",
     "ali-oss": "^6.23.0",
-    "file-type": "^22.3.0"
+    "file-type": "^22.3.0",
+    "@modelcontextprotocol/server": "2.4.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",

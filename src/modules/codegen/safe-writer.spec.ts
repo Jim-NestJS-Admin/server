@@ -39,4 +39,27 @@ describe('代码生成安全写盘（T21）', () => {
       UnsafePathError,
     );
   });
+
+  it('项目内目录联接也不能重定向到白名单外或禁止目录', () => {
+    mkdirSync(join(root, '.git'), { recursive: true });
+    symlinkSync(
+      join(root, '.git'),
+      join(root, 'src/modules/internal'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    expect(() =>
+      resolveSafe(root, 'server', 'src/modules/internal/config'),
+    ).toThrow(UnsafePathError);
+  });
+
+  it('拒绝悬空目录联接，不能当成待创建的普通目录', () => {
+    symlinkSync(
+      join(outside, 'missing'),
+      join(root, 'src/modules/dangling'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    expect(() =>
+      resolveSafe(root, 'server', 'src/modules/dangling/a.ts'),
+    ).toThrow(UnsafePathError);
+  });
 });

@@ -1,3 +1,4 @@
+import { CodegenModuleSpec1794312000000 } from '../database/migrations/1794312000000-CodegenModuleSpec.js';
 import { SharedDictionaries1794279600000 } from '../database/migrations/1794279600000-SharedDictionaries.js';
 import { PLATFORM_TENANT_ID } from '../core/tenant/tenant.constants.js';
 import 'reflect-metadata';
@@ -7,6 +8,7 @@ import { DataSource } from 'typeorm';
 import { AppModule } from '../app.module.js';
 import { validateEnv, NodeEnv } from '../core/config/env.validation.js';
 import { SnakeNamingStrategy } from '../core/database/naming.strategy.js';
+import { applyUtcSessions } from '../core/database/utc-session.js';
 import { RequestContext } from '../core/tenant/request-context.js';
 import { TenantRepositoryFactory } from '../core/tenant/tenant-repository.js';
 import { DEFAULT_TENANT_ID } from '../core/tenant/tenant.constants.js';
@@ -80,6 +82,7 @@ async function bootstrapLocal(): Promise<void> {
     username: env.DB_USER,
     password: env.DB_PASSWORD,
     database: env.DB_NAME,
+    timezone: 'Z',
     migrations: [
       CreateFileAsset1793923200000,
       InitialSystem1793926800000,
@@ -89,11 +92,13 @@ async function bootstrapLocal(): Promise<void> {
       SystemFields1793941200000,
       CoreTables1793944800000,
       SharedDictionaries1794279600000,
+      CodegenModuleSpec1794312000000,
     ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,
     logging: false,
   });
+  applyUtcSessions(migration);
   await migration.initialize();
   try {
     await migration.runMigrations();

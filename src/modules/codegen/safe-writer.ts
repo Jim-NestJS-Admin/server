@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { lstatSync, realpathSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 
 /** 每个项目允许写入的子目录（架构「生成器的安全边界 · 只能写进白名单子目录」） */
 const ALLOWED: Record<'server' | 'admin', string[]> = {
@@ -14,6 +14,24 @@ const FORBIDDEN =
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export class UnsafePathError extends Error {}
+
+/** existsSync 会把悬空链接当成不存在，但 writeFile 仍会跟随它，必须使用 lstat。 */
+const existsSync = (path: string) => {
+  try {
+    lstatSync(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
+};
+const realPath = (path: string) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    throw new UnsafePathError('输出路径不存在、链接无效或不可访问');
+  }
+};
 
 export const fingerprint = (content: string) =>
   createHash('sha256').update(content, 'utf8').digest('hex');
@@ -44,26 +62,37 @@ export function resolveSafe(
     throw new UnsafePathError(`不在允许写入的目录里：${rel}`);
   if (FORBIDDEN.test(rel))
     throw new UnsafePathError(`这个文件不允许生成：${rel}`);
-  const realRoot = realpathSync(root);
+  const realRoot = realPath(root);
   const target = join(realRoot, ...parts);
   let probe = dirname(target);
   while (!existsSync(probe)) probe = dirname(probe);
-  const realProbe = realpathSync(probe);
+  const realProbe = realPath(probe);
   if (realProbe !== realRoot && !realProbe.startsWith(realRoot + sep))
     throw new UnsafePathError(`路径通过链接跳出了项目目录：${rel}`);
   if (existsSync(target)) {
-    const realTarget = realpathSync(target);
+    const realTarget = realPath(target);
     if (!realTarget.startsWith(realRoot + sep))
       throw new UnsafePathError(`文件是指向项目外的链接：${rel}`);
   }
+  // 项目内链接也不能把白名单路径重定向到 .git、配置或其他禁止目录。
+  const realTarget = existsSync(target)
+    ? realPath(target)
+    : join(realProbe, relative(probe, target));
+  const realRelative = relative(realRoot, realTarget).split(sep).join('/');
+  if (
+    !ALLOWED[project].some((prefix) => realRelative.startsWith(prefix)) ||
+    FORBIDDEN.test(realRelative)
+  )
+    throw new UnsafePathError(`真实路径不在允许写入的目录里：${rel}`);
   return target;
 }
 
 export async function currentFingerprint(abs: string): Promise<string | null> {
   try {
     return fingerprint(await readFile(abs, 'utf8'));
-  } catch {
-    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
   }
 }
 

@@ -1,3 +1,4 @@
+import { exportValue } from './export-value.js';
 import {
   validateDictionaryValues,
   type CrudDictionarySource,
@@ -58,6 +59,7 @@ export interface PageQuery {
 
 export interface ExportQuery extends PageQuery {
   format?: 'csv' | 'xlsx';
+  timeZone?: string;
   columns?: string[];
 }
 
@@ -194,6 +196,32 @@ export class BaseService<T extends BaseEntity> {
     }
   }
 
+  private async exportFormatter(query: ExportQuery) {
+    try {
+      new Intl.DateTimeFormat('zh-CN', { timeZone: query.timeZone });
+    } catch {
+      throw crudErrors.badRequest('时区不合法');
+    }
+    const schema = buildCrudSchema(this.meta);
+    for (const field of this.meta.fields) {
+      if (field.dictCode)
+        schema.dictionaries[field.property] =
+          (await this.crud.dictionary?.()?.options(field.dictCode)) ?? [];
+    }
+    return (row: Record<string, unknown>, field: string) =>
+      exportValue(
+        row,
+        schema.columns.find((c) => c.field === field) ?? {
+          field,
+          label: field,
+          sortable: false,
+          type: 'text',
+        },
+        schema.dictionaries[field],
+        query.timeZone,
+      );
+  }
+
   private exportCell(value: unknown): string {
     return escapeSpreadsheetCell(
       value == null
@@ -208,6 +236,7 @@ export class BaseService<T extends BaseEntity> {
 
   async exportCsv(query: ExportQuery): Promise<string> {
     const columns = this.exportColumns(query.columns);
+    const display = await this.exportFormatter(query);
     const cell = (value: unknown) => {
       const text = this.exportCell(value);
       return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -223,7 +252,7 @@ export class BaseService<T extends BaseEntity> {
         .join(','),
     ];
     for await (const row of this.exportRows(query))
-      lines.push(columns.map((f) => cell(row[f])).join(','));
+      lines.push(columns.map((f) => cell(display(row, f))).join(','));
     return '\uFEFF' + lines.join('\r\n');
   }
 
@@ -235,6 +264,7 @@ export class BaseService<T extends BaseEntity> {
 
   async exportXlsx(query: ExportQuery): Promise<PassThrough> {
     const columns = this.exportColumns(query.columns);
+    const display = await this.exportFormatter(query);
     const rows = this.exportRows(query);
     // 首批先完成查询/权限检查，错误仍能以统一JSON响应，避免发出成功下载头之后才发现入参错误。
     const first = await rows.next();
@@ -258,11 +288,13 @@ export class BaseService<T extends BaseEntity> {
       try {
         if (!first.done)
           sheet
-            .addRow(columns.map((f) => this.xlsxCell(first.value[f])))
+            .addRow(columns.map((f) => this.xlsxCell(display(first.value, f))))
             .commit();
         for await (const row of rows) {
           if (output.destroyed) return;
-          sheet.addRow(columns.map((f) => this.xlsxCell(row[f]))).commit();
+          sheet
+            .addRow(columns.map((f) => this.xlsxCell(display(row, f))))
+            .commit();
         }
         sheet.commit();
         await workbook.commit();

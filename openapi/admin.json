@@ -1238,6 +1238,22 @@
         ],
         "type": "object"
       },
+      "ImportSpecBody": {
+        "properties": {
+          "tables": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "tables"
+        ],
+        "type": "object"
+      },
       "LoginDto": {
         "properties": {
           "captchaCode": {
@@ -1369,6 +1385,68 @@
           "menus",
           "permissions",
           "authVersion"
+        ],
+        "type": "object"
+      },
+      "ModuleSpec": {
+        "properties": {
+          "businessName": {
+            "type": "string"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/SpecChild"
+            },
+            "type": "array"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/SpecField"
+            },
+            "type": "array"
+          },
+          "moduleName": {
+            "type": "string"
+          },
+          "options": {
+            "$ref": "#/components/schemas/SpecOptions"
+          },
+          "permissionPrefix": {
+            "type": "string"
+          },
+          "tableName": {
+            "type": "string"
+          },
+          "template": {
+            "enum": [
+              "single",
+              "tree",
+              "masterDetail"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "tree": {
+            "$ref": "#/components/schemas/SpecTree"
+          },
+          "version": {
+            "enum": [
+              1
+            ],
+            "type": "number"
+          }
+        },
+        "required": [
+          "version",
+          "moduleName",
+          "businessName",
+          "title",
+          "permissionPrefix",
+          "tableName",
+          "template",
+          "fields"
         ],
         "type": "object"
       },
@@ -1696,6 +1774,506 @@
         ],
         "type": "object"
       },
+      "SaveSpecBody": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/ModuleSpec"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "spec"
+        ],
+        "type": "object"
+      },
+      "SpecBody": {
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/ModuleSpec"
+          }
+        },
+        "required": [
+          "spec"
+        ],
+        "type": "object"
+      },
+      "SpecChild": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/SpecField"
+            },
+            "type": "array"
+          },
+          "foreignKey": {
+            "description": "由框架维护的外键属性，不得同时出现在 fields 中",
+            "type": "string"
+          },
+          "tableName": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tableName",
+          "foreignKey",
+          "title",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "SpecError": {
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "message"
+        ],
+        "type": "object"
+      },
+      "SpecField": {
+        "properties": {
+          "column": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "defaultValue": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "dictCode": {
+            "type": "string"
+          },
+          "fieldPerm": {
+            "$ref": "#/components/schemas/SpecFieldPerm"
+          },
+          "label": {
+            "type": "string"
+          },
+          "length": {
+            "type": "number"
+          },
+          "nullable": {
+            "type": "boolean"
+          },
+          "precision": {
+            "type": "number"
+          },
+          "property": {
+            "type": "string"
+          },
+          "scale": {
+            "type": "number"
+          },
+          "type": {
+            "enum": [
+              "string",
+              "text",
+              "int",
+              "decimal",
+              "money",
+              "date",
+              "datetime",
+              "boolean",
+              "json",
+              "dictionary",
+              "reference",
+              "image",
+              "file"
+            ],
+            "type": "string"
+          },
+          "unique": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "property",
+          "column",
+          "label",
+          "type"
+        ],
+        "type": "object"
+      },
+      "SpecFieldPerm": {
+        "properties": {
+          "default": {
+            "enum": [
+              "editable",
+              "readonly",
+              "masked",
+              "hidden"
+            ],
+            "type": "string"
+          },
+          "mask": {
+            "enum": [
+              "phone",
+              "email",
+              "idcard",
+              "last4",
+              "all"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "default"
+        ],
+        "type": "object"
+      },
+      "SpecFieldType": {
+        "properties": {
+          "component": {
+            "type": "string"
+          },
+          "databaseType": {
+            "type": "string"
+          },
+          "defaultLength": {
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "precision": {
+            "type": "number"
+          },
+          "scale": {
+            "type": "number"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "label",
+          "databaseType",
+          "component",
+          "options"
+        ],
+        "type": "object"
+      },
+      "SpecFile": {
+        "properties": {
+          "action": {
+            "enum": [
+              "create",
+              "overwrite",
+              "unchanged",
+              "skip-modified"
+            ],
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "diff": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "previous": {
+            "type": "string"
+          },
+          "project": {
+            "enum": [
+              "server",
+              "admin"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "project",
+          "path",
+          "action",
+          "content",
+          "previous",
+          "diff"
+        ],
+        "type": "object"
+      },
+      "SpecImportResult": {
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/SpecError"
+            },
+            "type": "array"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/ModuleSpec"
+          }
+        },
+        "required": [
+          "spec",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "SpecOptions": {
+        "properties": {
+          "deleteMode": {
+            "enum": [
+              "soft",
+              "hard"
+            ],
+            "type": "string"
+          },
+          "exportEnabled": {
+            "type": "boolean"
+          },
+          "scopeEnabled": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "SpecPreviewResult": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/SpecFile"
+            },
+            "type": "array"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "manualSteps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "note": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/ModuleSpec"
+          },
+          "sql": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "fingerprint",
+          "spec",
+          "sql",
+          "files",
+          "note",
+          "manualSteps"
+        ],
+        "type": "object"
+      },
+      "SpecRecord": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/ModuleSpec"
+          },
+          "status": {
+            "enum": [
+              "notGenerated",
+              "generated",
+              "modified",
+              "invalid"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "label",
+          "version",
+          "updatedAt",
+          "status"
+        ],
+        "type": "object"
+      },
+      "SpecSaveResult": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "SpecTable": {
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "fieldCount": {
+            "type": "number"
+          },
+          "table": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "table",
+          "comment",
+          "fieldCount"
+        ],
+        "type": "object"
+      },
+      "SpecTree": {
+        "properties": {
+          "nameField": {
+            "type": "string"
+          },
+          "parentField": {
+            "type": "string"
+          },
+          "sortField": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parentField",
+          "nameField"
+        ],
+        "type": "object"
+      },
+      "SpecValidationResult": {
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/SpecError"
+            },
+            "type": "array"
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "valid",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "SpecWriteFailure": {
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "message"
+        ],
+        "type": "object"
+      },
+      "SpecWriteResult": {
+        "properties": {
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/SpecWriteFailure"
+            },
+            "type": "array"
+          },
+          "manualSteps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "recovery": {
+            "type": "string"
+          },
+          "skipped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "written": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "written",
+          "skipped",
+          "failed",
+          "manualSteps",
+          "recovery"
+        ],
+        "type": "object"
+      },
       "SwitchOrgDto": {
         "properties": {
           "orgId": {
@@ -1825,6 +2403,12 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
           },
           "where": {
             "allOf": [
@@ -2209,6 +2793,12 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
           },
           "where": {
             "allOf": [
@@ -2937,6 +3527,12 @@
             "maxItems": 5,
             "type": "array"
           },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
+          },
           "where": {
             "allOf": [
               {
@@ -3296,6 +3892,12 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
           },
           "where": {
             "allOf": [
@@ -3707,6 +4309,12 @@
             "maxItems": 5,
             "type": "array"
           },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
+          },
           "where": {
             "allOf": [
               {
@@ -4045,6 +4653,12 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
           },
           "where": {
             "allOf": [
@@ -4436,6 +5050,12 @@
             "maxItems": 5,
             "type": "array"
           },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
+          },
           "where": {
             "allOf": [
               {
@@ -4814,6 +5434,12 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
           },
           "where": {
             "allOf": [
@@ -5578,6 +6204,12 @@
             "maxItems": 5,
             "type": "array"
           },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
+          },
           "where": {
             "allOf": [
               {
@@ -5820,6 +6452,12 @@
             },
             "maxItems": 5,
             "type": "array"
+          },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
           },
           "where": {
             "allOf": [
@@ -6276,6 +6914,12 @@
             "maxItems": 5,
             "type": "array"
           },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
+          },
           "where": {
             "allOf": [
               {
@@ -6646,6 +7290,30 @@
         "required": [
           "id",
           "token"
+        ],
+        "type": "object"
+      },
+      "WriteSpecBody": {
+        "properties": {
+          "fingerprint": {
+            "description": "preview-spec 返回的 fingerprint",
+            "type": "string"
+          },
+          "overwrite": {
+            "description": "显式确认覆盖的文件key（project:path）或预览路径；其他手改文件继续跳过",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/ModuleSpec"
+          }
+        },
+        "required": [
+          "spec",
+          "fingerprint"
         ],
         "type": "object"
       }
@@ -7114,6 +7782,79 @@
         }
       }
     },
+    "/admin/dev/codegen/field-types": {
+      "post": {
+        "operationId": "devCodegenFieldTypes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "items": {
+                        "$ref": "#/components/schemas/SpecFieldType"
+                      },
+                      "type": "array"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "支持的字段类型与默认设置",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/dev/codegen/import": {
       "post": {
         "operationId": "devCodegenImport",
@@ -7187,6 +7928,107 @@
           }
         ],
         "summary": "按表结构生成初始配置（不保存）",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/import-spec": {
+      "post": {
+        "operationId": "devCodegenImportSpec",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportSpecBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SpecImportResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "从一张或多张表推断规格草稿",
         "tags": [
           "dev 代码生成"
         ],
@@ -7295,11 +8137,12 @@
                       "type": "integer"
                     },
                     "data": {
-                      "nullable": true,
-                      "type": "object"
+                      "items": {
+                        "$ref": "#/components/schemas/SpecRecord"
+                      },
+                      "type": "array"
                     },
                     "message": {
-                      "example": "ok",
                       "type": "string"
                     }
                   },
@@ -7432,6 +8275,97 @@
         }
       }
     },
+    "/admin/dev/codegen/preview-spec": {
+      "post": {
+        "operationId": "devCodegenPreviewSpec",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SpecPreviewResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "预览规格的 SQL、文件、差异和指纹",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/dev/codegen/save": {
       "post": {
         "operationId": "devCodegenSave",
@@ -7515,6 +8449,208 @@
           }
         ],
         "summary": "保存生成配置（新建或修改）",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/save-spec": {
+      "post": {
+        "operationId": "devCodegenSaveSpec",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSpecBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SpecSaveResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "保存规格草稿",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/schema-spec": {
+      "post": {
+        "operationId": "devCodegenSchemaSpec",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CrudSchema"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "按规格计算正式 CRUD 页面描述",
         "tags": [
           "dev 代码生成"
         ],
@@ -7623,11 +8759,12 @@
                       "type": "integer"
                     },
                     "data": {
-                      "nullable": true,
-                      "type": "object"
+                      "items": {
+                        "$ref": "#/components/schemas/SpecTable"
+                      },
+                      "type": "array"
                     },
                     "message": {
-                      "example": "ok",
                       "type": "string"
                     }
                   },
@@ -7669,6 +8806,97 @@
           }
         ],
         "summary": "数据库里还没导入的表",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:save",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/dev/codegen/validate-spec": {
+      "post": {
+        "operationId": "devCodegenValidateSpec",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SpecValidationResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "逐字段校验模块规格",
         "tags": [
           "dev 代码生成"
         ],
@@ -7761,6 +8989,107 @@
           }
         ],
         "summary": "确认写入本机项目（只写文件，不执行命令）",
+        "tags": [
+          "dev 代码生成"
+        ],
+        "x-permission": {
+          "code": "dev:codegen:write",
+          "risk": "high"
+        }
+      }
+    },
+    "/admin/dev/codegen/write-spec": {
+      "post": {
+        "operationId": "devCodegenWriteSpec",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteSpecBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SpecWriteResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4001：没有登录、访问令牌无效或会话已失效"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "核对预览指纹后写入规格代码",
         "tags": [
           "dev 代码生成"
         ],
