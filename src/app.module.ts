@@ -4,6 +4,7 @@ import { FileModule } from './modules/file/file.module.js';
 import { LocalBlobStore } from './modules/file/storage/local.store.js';
 import { AuthModule } from './core/auth/auth.module.js';
 import { CoreModule } from './core/core.module.js';
+import { TenantCoreModule } from './core/tenant/tenant-core.module.js';
 import { PreferenceModule } from './core/preference/preference.controller.js';
 import { PageConfigModule } from './core/page-config/page-config.module.js';
 import { ConditionalModule } from '@nestjs/config';
@@ -21,6 +22,8 @@ import {
 @Module({
   imports: [
     CoreModule,
+    // 多租户（阶段 2）：租户模块（T31）接入后改为 forRoot({ source, imports })
+    TenantCoreModule.forRoot(),
     FileModule.register({
       store: new LocalBlobStore(resolve(process.cwd(), 'deploy/data/files')),
       policy: {
