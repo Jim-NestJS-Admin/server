@@ -17,6 +17,9 @@ stopwords = [
   "change-me",
   "openapi-export-placeholder-secret",
   "e2e-jwt-secret",
+  # 早期提交里 vitest.config.e2e.ts 的人机验证测试密钥（已删除，历史中仍在）
+  "e2e-altcha-hmac-secret",
+  "e2e-altcha-key-secret",
   "ci-password",
   "ci-root",
 ]

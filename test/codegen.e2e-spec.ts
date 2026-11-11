@@ -61,6 +61,10 @@ const newSpec = (businessName: string): ModuleSpec => ({
   ],
 });
 
+// 前端的格式配置和页面模板复制一份放在 test/fixtures/admin/，CI 只检出本仓库，不依赖旁边的 admin 项目。
+// 前端改了 .prettierrc.js 或 codegen-templates/page.vue.tpl 后，记得同步这里的副本。
+const adminFixtureRoot = join(process.cwd(), 'test/fixtures/admin');
+
 describe('T28 规格到代码完整链路', () => {
   let app: INestApplication,
     ds: DataSource,
@@ -87,12 +91,12 @@ describe('T28 规格到代码完整链路', () => {
     );
     await writeFile(
       join(adminRoot, '.prettierrc.js'),
-      await readFile(join(process.cwd(), '../admin/.prettierrc.js')),
+      await readFile(join(adminFixtureRoot, '.prettierrc.js')),
     );
     for (const file of ['page.vue.tpl'])
       await writeFile(
         join(adminRoot, 'codegen-templates', file),
-        await readFile(join(process.cwd(), '../admin/codegen-templates', file)),
+        await readFile(join(adminFixtureRoot, 'codegen-templates', file)),
       );
     const module = await createTestModule({
       imports: [GeneratorTestModule],
