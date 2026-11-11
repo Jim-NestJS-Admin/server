@@ -391,7 +391,12 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
       max: c.max,
       unique: c.unique,
       ...(c.sortField ? { sortField: c.sortField } : {}),
-      columns: c.readable
+      columns: [
+        ...businessOrder(meta, c.readable),
+        ...SYSTEM_COLUMN_ORDER.filter((property) =>
+          c.readable.includes(property),
+        ),
+      ]
         .filter((p) => cf(p)?.list !== false)
         .map((p) => {
           const f = cf(p);

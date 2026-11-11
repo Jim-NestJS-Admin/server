@@ -807,16 +807,16 @@ describe('主子表聚合保存（验收点②）', () => {
         'remark',
       ]);
       expect(items.columns.map((c: { field: string }) => c.field)).toEqual([
-        'id',
-        'orgId',
-        'createdBy',
-        'updatedBy',
-        'createdAt',
-        'updatedAt',
         'productCode',
         'qty',
         'sort',
         'remark',
+        'createdBy',
+        'createdAt',
+        'updatedBy',
+        'updatedAt',
+        'orgId',
+        'id',
       ]);
       expect(notes).toMatchObject({
         resource: 'notes',

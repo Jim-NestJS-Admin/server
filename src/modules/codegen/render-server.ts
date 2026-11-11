@@ -84,7 +84,7 @@ function column(
         col: `{ type: 'decimal', precision: ${f.precision ?? 14}, scale: ${f.scale ?? (f.type === 'money' ? 2 : 4)}${nullable} }`,
         validators: [
           ...v,
-          `@Matches(/^-?${(f.precision ?? 14) - (f.scale ?? (f.type === 'money' ? 2 : 4)) === 0 ? '0' : `\\d{1,${(f.precision ?? 14) - (f.scale ?? (f.type === 'money' ? 2 : 4))}}`}${(f.scale ?? (f.type === 'money' ? 2 : 4)) === 0 ? '' : `(\\.\\d{1,${f.scale ?? (f.type === 'money' ? 2 : 4)}})?`}$/)`,
+          `@DecimalInput({ label: ${lit(f.label)}, precision: ${f.precision ?? 14}, scale: ${f.scale ?? (f.type === 'money' ? 2 : 4)} })`,
         ],
       };
     case 'date':
@@ -169,11 +169,12 @@ function entity(
   const validators = new Set<string>();
   for (const f of c.fields)
     for (const v of column(f, f.name === treeParent).validators)
-      validators.add(v.replace(/^@(\w+).*/, '$1'));
+      if (!v.startsWith('@DecimalInput'))
+        validators.add(v.replace(/^@(\w+).*/, '$1'));
   return `// 由代码生成器生成（${c.module}.${c.business}），可以继续手改；再次生成时手改过的文件默认不覆盖
 import { ${[...validators].sort().join(', ')} } from 'class-validator';
 import { ${[...used].sort().join(', ')} } from 'typeorm';
-import { BaseEntity, CrudField } from '../../../core/crud/index.js';
+import { BaseEntity, CrudField${c.fields.some((f) => f.type === 'decimal' || f.type === 'money') ? ', DecimalInput' : ''} } from '../../../core/crud/index.js';
 ${c.fields.some((f) => f.fieldPerm?.default) ? "import { FieldPerm } from '../../../core/field-perm/field-perm.decorator.js';\n" : ''}
 @Entity(${lit(c.table)})
 ${idx}export class ${name} extends BaseEntity {

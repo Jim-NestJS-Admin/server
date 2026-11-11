@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type ts from 'typescript';
 import { crudResourceName } from '../../core/crud/crud-meta.js';
 import type { CodegenConfig } from './codegen.types.js';
 import type { GeneratedFile } from './render-server.js';
@@ -81,16 +82,119 @@ export function renderAdmin(
 }
 
 /** 生成后必须人工完成的步骤：生成器不自动注册、不执行命令，也不假装页面已经上线 */
-export function manualSteps(c: CodegenConfig): string[] {
+export function manualSteps(
+  c: CodegenConfig,
+  state?: {
+    files: string[];
+    moduleRegistered: boolean;
+    viewRegistered: boolean;
+  },
+): string[] {
   const name = `${c.business.replace(/_(.)/g, (_m, x: string) => x.toUpperCase())}`;
   const mod = `${name.charAt(0).toUpperCase()}${name.slice(1)}Module`;
   const key = adminComponentKey(c);
   return [
-    `后端：在 src/app.module.ts 的 imports 里加上 ${mod}（src/modules/${c.module}/${c.business}.module.ts）`,
-    `后端：确认后执行迁移（src/database/migrations 里本次生成的文件，并登记到迁移列表），生成器不会自动执行`,
+    ...(!state?.moduleRegistered
+      ? [
+          `后端：在 src/app.module.ts 的 imports 里加上 ${mod}（src/modules/${c.module}/${c.business}.module.ts）`,
+        ]
+      : []),
+    ...(!state ||
+    state.files.some((file) => file.startsWith('src/database/migrations/'))
+      ? [
+          `后端：确认后执行迁移（src/database/migrations 里本次生成的文件，并登记到迁移列表），生成器不会自动执行`,
+        ]
+      : []),
     `后端：运行 pnpm openapi:export 并提交 openapi/admin.json`,
     `前端：运行 pnpm gen:api 重新生成接口代码`,
-    `前端：在 src/platform/navigation.ts 的 navigationViews 里登记 ["${key}", () => import("@/views/${c.module}/${c.business}/index.vue")]`,
-    `菜单：按 src/modules/${c.module}/${c.business}.menu.json 初始化菜单和按钮权限（组件键 ${key}），再给角色授权`,
+    ...(!state?.viewRegistered
+      ? [
+          `前端：在 src/platform/navigation.ts 的 navigationViews 里登记 ["${key}", () => import("@/views/${c.module}/${c.business}/index.vue")]`,
+        ]
+      : []),
+    ...(!state || state.files.some((file) => file.endsWith('.menu.json'))
+      ? [
+          `菜单：按 src/modules/${c.module}/${c.business}.menu.json 初始化菜单和按钮权限（组件键 ${key}），再给角色授权`,
+        ]
+      : []),
+    `后端：重新构建并重启服务后联调`,
   ];
+}
+
+/** 从语法树读取登记情况，注释里的示例不会被当成已经登记。 */
+export async function contextualSteps(
+  c: CodegenConfig,
+  roots: Record<'server' | 'admin', string>,
+  files: string[],
+): Promise<string[]> {
+  const { default: ts } = await import('typescript');
+  const read = async (path: string) =>
+    readFile(path, 'utf8').catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return '';
+      throw error;
+    });
+  const [app, navigation] = await Promise.all([
+    read(join(roots.server, 'src/app.module.ts')),
+    read(join(roots.admin, 'src/platform/navigation.ts')),
+  ]);
+  const mod =
+    c.business.replace(/(^|_)([a-z0-9])/g, (_m, _prefix, letter: string) =>
+      letter.toUpperCase(),
+    ) + 'Module';
+  let moduleRegistered = false,
+    viewRegistered = false;
+  const walk = (node: ts.Node, visit: (node: ts.Node) => void) => {
+    visit(node);
+    node.forEachChild((child) => walk(child, visit));
+  };
+  walk(
+    ts.createSourceFile('app.ts', app, ts.ScriptTarget.Latest, true),
+    (node) => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'Module'
+      ) {
+        const arg = node.arguments[0];
+        if (arg && ts.isObjectLiteralExpression(arg))
+          for (const property of arg.properties) {
+            if (
+              ts.isPropertyAssignment(property) &&
+              property.name.getText() === 'imports' &&
+              ts.isArrayLiteralExpression(property.initializer)
+            )
+              moduleRegistered ||= property.initializer.elements.some(
+                (item) => ts.isIdentifier(item) && item.text === mod,
+              );
+          }
+      }
+    },
+  );
+  walk(
+    ts.createSourceFile(
+      'navigation.ts',
+      navigation,
+      ts.ScriptTarget.Latest,
+      true,
+    ),
+    (node) => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === 'navigationViews' &&
+        node.initializer
+      ) {
+        walk(node.initializer, (item) => {
+          if (
+            ts.isArrayLiteralExpression(item) &&
+            item.elements.length === 2 &&
+            ts.isStringLiteral(item.elements[0]) &&
+            item.elements[0].text === adminComponentKey(c)
+          )
+            viewRegistered = true;
+        });
+      }
+    },
+  );
+  return manualSteps(c, { files, moduleRegistered, viewRegistered });
 }

@@ -8,6 +8,7 @@ import { DataSource } from 'typeorm';
 import { AppModule } from '../app.module.js';
 import { validateEnv, NodeEnv } from '../core/config/env.validation.js';
 import { SnakeNamingStrategy } from '../core/database/naming.strategy.js';
+import { applyUtcSessions } from '../core/database/utc-session.js';
 import { RequestContext } from '../core/tenant/request-context.js';
 import { TenantRepositoryFactory } from '../core/tenant/tenant-repository.js';
 import { DEFAULT_TENANT_ID } from '../core/tenant/tenant.constants.js';
@@ -81,6 +82,7 @@ async function bootstrapLocal(): Promise<void> {
     username: env.DB_USER,
     password: env.DB_PASSWORD,
     database: env.DB_NAME,
+    timezone: 'Z',
     migrations: [
       CreateFileAsset1793923200000,
       InitialSystem1793926800000,
@@ -96,6 +98,7 @@ async function bootstrapLocal(): Promise<void> {
     synchronize: false,
     logging: false,
   });
+  applyUtcSessions(migration);
   await migration.initialize();
   try {
     await migration.runMigrations();

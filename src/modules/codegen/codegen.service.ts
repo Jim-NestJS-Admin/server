@@ -23,7 +23,7 @@ import { ErrorCode } from '../../core/exceptions/error-code.js';
 import { renderServer, pascal } from './render-server.js';
 import {
   loadAdminTemplates,
-  manualSteps,
+  contextualSteps,
   renderAdmin,
 } from './render-admin.js';
 import {
@@ -172,6 +172,13 @@ export class CodegenService {
       token,
       spec,
       sql: migrations.map((plan) => plan.sql.join('\n')),
+      steps: await contextualSteps(
+        config,
+        roots,
+        items
+          .filter((item) => item.action !== 'unchanged')
+          .map((item) => item.path),
+      ),
     };
   }
 
@@ -217,8 +224,8 @@ export class CodegenService {
     token,
     spec,
     sql,
+    steps,
   }: Awaited<ReturnType<CodegenService['buildPlan']>>) {
-    const steps = manualSteps(specToConfig(spec));
     return {
       token,
       fingerprint: token,
@@ -324,7 +331,11 @@ export class CodegenService {
       written,
       skipped,
       failed,
-      manualSteps: manualSteps(specToConfig(spec)),
+      manualSteps: await contextualSteps(
+        specToConfig(spec),
+        this.roots(),
+        written,
+      ),
     };
   }
 

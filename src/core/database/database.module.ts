@@ -1,3 +1,4 @@
+import { applyUtcSessions } from './utc-session.js';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppConfigService } from '../config/app-config.service.js';
@@ -44,6 +45,7 @@ export class DatabaseModule {
     config: AppConfigService,
   ) {
     applyQueryTimeout(dataSource, config.db.queryTimeoutMs);
+    applyUtcSessions(dataSource);
     health.register('database', async () => {
       await dataSource.query('SELECT 1');
     });

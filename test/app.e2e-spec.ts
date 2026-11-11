@@ -14,6 +14,8 @@ import {
 } from '@nestjs/common';
 import { IsInt, IsString, MaxLength, Min } from 'class-validator';
 import { ClsService } from 'nestjs-cls';
+import { DataSource } from 'typeorm';
+import { buildOpenApiDocument } from '../src/core/swagger/swagger.js';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
@@ -88,6 +90,44 @@ describe('server 骨架（T02）', () => {
   });
   afterAll(async () => {
     await app.close();
+  });
+
+  it('连接池的多个连接在业务查询前设为 UTC，数据库默认时间与实际时刻一致', async () => {
+    const runners = Array.from({ length: 3 }, () =>
+      app.get(DataSource).createQueryRunner(),
+    );
+    try {
+      await Promise.all(runners.map((runner) => runner.connect()));
+      for (const runner of runners) {
+        const [row] = await runner.query(
+          'SELECT @@session.time_zone zone, CURRENT_TIMESTAMP(3) stamp',
+        );
+        expect(row.zone).toBe('+00:00');
+        expect(
+          Math.abs(Date.now() - (row.stamp as Date).getTime()),
+        ).toBeLessThan(5000);
+      }
+    } finally {
+      await Promise.all(runners.map((runner) => runner.release()));
+    }
+  });
+
+  it('可单独排除模块的接口和模型，未知模块名拒绝导出', () => {
+    const document = buildOpenApiDocument(app, 'test', ['SystemLogModule']);
+    expect(
+      Object.keys(document.paths).some((path) =>
+        path.startsWith('/admin/system/operation-log/'),
+      ),
+    ).toBe(false);
+    expect(Object.keys(document.paths)).toContain('/admin/system/user/page');
+    expect(() => buildOpenApiDocument(app, 'test', ['MissingModule'])).toThrow(
+      '要排除的模块不存在',
+    );
+    const schemas = document.components?.schemas ?? {};
+    const refs = JSON.stringify(document).matchAll(
+      /"\$ref":"#\/components\/schemas\/([^"/]+)"/g,
+    );
+    for (const match of refs) expect(schemas).toHaveProperty(match[1]);
   });
 
   describe('统一响应', () => {

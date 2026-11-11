@@ -1,3 +1,4 @@
+import { validationMessages } from './crud/decimal-input.js';
 import {
   HttpStatus,
   ValidationPipe,
@@ -15,7 +16,7 @@ function flatten(errors: ValidationError[], parent = ''): FieldError[] {
   return errors.flatMap((e) => {
     const field = parent ? `${parent}.${e.property}` : e.property;
     const own = e.constraints
-      ? [{ field, messages: Object.values(e.constraints) }]
+      ? [{ field, messages: validationMessages(e) }]
       : [];
     return [...own, ...flatten(e.children ?? [], field)];
   });

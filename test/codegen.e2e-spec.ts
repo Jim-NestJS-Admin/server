@@ -629,6 +629,24 @@ describe('T28 规格到代码完整链路', () => {
     spec.tableName = 'cgprobe_customer';
     spec.options = { ...spec.options, scopeEnabled: true };
     spec.children![0].tableName = 'cgprobe_customer_contact';
+    spec.fields.push({
+      property: 'credit',
+      column: 'credit',
+      label: '信用额度',
+      type: 'money',
+      precision: 14,
+      scale: 2,
+      nullable: true,
+    });
+    spec.children![0].fields.push({
+      property: 'amount',
+      column: 'amount',
+      label: '联系人额度',
+      type: 'money',
+      precision: 14,
+      scale: 2,
+      nullable: true,
+    });
     await ds.query('DROP TABLE IF EXISTS cgprobe_customer_contact');
     await ds.query('DROP TABLE IF EXISTS cgprobe_customer');
     const preview = (await post('preview-spec', { spec }).expect(200)).body
@@ -738,24 +756,53 @@ describe('T28 规格到代码完整链路', () => {
       expect(actual.children).toEqual(schema.children);
       const added = (
         await api('add', {
-          data: { name: '客户甲', enabled: true },
+          data: { name: '客户甲', enabled: true, credit: 50000 },
           children: {
             customerContact: {
-              added: [{ clientId: 'c1', phone: '13812345678' }],
+              added: [{ clientId: 'c1', phone: '13812345678', amount: 12.34 }],
             },
           },
         }).expect(200)
       ).body.data;
       const info = (await api('info', { id: added.id }).expect(200)).body.data;
       expect(info.children.customerContact[0].phone).toBe('13812345678');
-      await api('update', {
+      expect(info.credit).toBe('50000.00');
+      expect(info.children.customerContact[0].amount).toBe('12.34');
+      const invalidCredit = await api('update', {
         id: info.id,
         version: info.version,
-        data: { name: '客户乙' },
+        data: { credit: '1.001' },
+      }).expect(400);
+      expect(JSON.stringify(invalidCredit.body)).toContain(
+        '信用额度最多 12 位整数、2 位小数',
+      );
+      const invalidChild = await api('update', {
+        id: info.id,
+        version: info.version,
+        data: {},
         children: {
           customerContact: {
             updated: [
-              { id: info.children.customerContact[0].id, phone: '13912345678' },
+              { id: info.children.customerContact[0].id, amount: '1.001' },
+            ],
+          },
+        },
+      }).expect(400);
+      expect(JSON.stringify(invalidChild.body)).toContain(
+        '联系人额度最多 12 位整数、2 位小数',
+      );
+      await api('update', {
+        id: info.id,
+        version: info.version,
+        data: { name: '客户乙', credit: '60000.01' },
+        children: {
+          customerContact: {
+            updated: [
+              {
+                id: info.children.customerContact[0].id,
+                phone: '13912345678',
+                amount: 15.5,
+              },
             ],
           },
         },
@@ -763,6 +810,8 @@ describe('T28 规格到代码完整链路', () => {
       const updated = (await api('info', { id: info.id }).expect(200)).body
         .data;
       expect(updated.name).toBe('客户乙');
+      expect(updated.credit).toBe('60000.01');
+      expect(updated.children.customerContact[0].amount).toBe('15.50');
       expect(updated.children.customerContact[0].phone).toBe('13912345678');
       const page = (await api('page', {}).expect(200)).body.data;
       expect(page.total).toBe(1);
