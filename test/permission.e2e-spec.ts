@@ -5,6 +5,10 @@ import {
   type INestApplication,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import {
+  TenantSource,
+  BuiltinTenantSource,
+} from '../src/core/tenant/tenant-source.js';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { IsString, Length } from 'class-validator';
 import type { Redis } from 'ioredis';
@@ -207,6 +211,8 @@ describe('权限（T06）', () => {
     })
       .overrideProvider(AdminAuth)
       .useClass(TestAdminAuth)
+      .overrideProvider(TenantSource)
+      .useClass(BuiltinTenantSource)
       .overrideProvider(PermissionSource)
       .useClass(FakePermissionSource)
       .compile();

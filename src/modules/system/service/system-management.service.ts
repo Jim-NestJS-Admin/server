@@ -1,4 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { TenantQuotaService } from '../../tenant/service/tenant-quota.service.js';
+import { TenantDirectorySource } from '../../tenant/service/tenant-directory.source.js';
 import type { Type } from '@nestjs/common';
 import type { BaseEntity } from '../../../core/crud/base.entity.js';
 import { BaseService, type CrudRow } from '../../../core/crud/base.service.js';
@@ -66,6 +68,9 @@ export abstract class SystemCrudService<
 
 @Injectable()
 export class SystemUserService extends BaseService<SystemUser> {
+  @Optional()
+  @Inject(TenantQuotaService)
+  private readonly quota?: TenantQuotaService;
   async selfAccount(): Promise<{
     id: string;
     username: string;
@@ -116,6 +121,7 @@ export class SystemUserService extends BaseService<SystemUser> {
     this.password(input.password, username);
     const passwordHash = await PasswordHasher.hash(input.password);
     return this.transaction(async (tx) => {
+      await this.quota?.assertCanAddUser(tx.ctx.tenantId, tx.manager);
       await this.defaultOrg(input.defaultOrgId, tx);
       const id = await this.insertRow(tx, {
         username,
@@ -223,9 +229,15 @@ export class SystemRoleService extends SystemCrudService<SystemRole> {
   ): Promise<void> {
     if (data.permissions) {
       const current = new Set((await this.permissions.permissions()).codes);
+      const packageCodes = new Set(
+        await this.permissions.packageCodes(tx.ctx.tenantId),
+      );
       if (
         data.permissions.some(
-          (code) => !this.registry.get(code) || !current.has(code),
+          (code) =>
+            !this.registry.get(code) ||
+            !current.has(code) ||
+            !packageCodes.has(code),
         )
       )
         throw crudErrors.badRequest('权限码不存在或超出当前可授予范围');
@@ -403,6 +415,19 @@ export class SystemUserRoleService extends SystemCrudService<SystemUserRole> {
 
 @Injectable()
 export class SystemMenuService extends SystemCrudService<SystemMenu> {
+  @Inject(TenantDirectorySource)
+  private readonly directory!: TenantDirectorySource;
+  protected override async transaction<R>(
+    fn: (tx: CrudTx) => Promise<R>,
+  ): Promise<R> {
+    const result = await super.transaction(fn);
+    await Promise.all(
+      (await this.directory.activeTenantIds()).map((id) =>
+        this.permissions.bumpVersion(id),
+      ),
+    );
+    return result;
+  }
   @Inject(PermissionRegistry) private readonly registry: PermissionRegistry;
   private async validateMenu(
     data: Partial<SystemMenu>,
@@ -415,6 +440,14 @@ export class SystemMenuService extends SystemCrudService<SystemMenu> {
       .setLock('pessimistic_write')
       .getMany();
     const map = new Map(rows.map((row) => [row.id, row]));
+    data.scope ??= 'tenant';
+    if (
+      (data.component === 'system/menu' ||
+        data.permission?.startsWith('system:menu:') ||
+        data.permission?.startsWith('platform:')) &&
+      data.scope !== 'platform'
+    )
+      throw crudErrors.badRequest('平台接口菜单必须使用平台范围');
     if (data.permission && !this.registry.get(data.permission))
       throw crudErrors.badRequest('菜单权限码未由后端声明');
     if (data.type === 'page' && (!data.component || !data.path))
@@ -435,6 +468,14 @@ export class SystemMenuService extends SystemCrudService<SystemMenu> {
     let current = data.parentId ? map.get(data.parentId) : undefined;
     if (data.parentId && (!current || current.type === 'button'))
       throw crudErrors.badRequest('上级菜单不存在或为按钮');
+    if (current && current.scope !== data.scope)
+      throw crudErrors.badRequest('菜单范围必须与上级一致');
+    if (
+      rows.some((row) => row.parentId === data.id && row.scope !== data.scope)
+    )
+      throw crudErrors.badRequest(
+        '菜单范围必须与现有下级一致，请先调整下级归属',
+      );
     while (current) {
       if (seen.has(current.id))
         throw crudErrors.badRequest('菜单不能挂到自身或下级');

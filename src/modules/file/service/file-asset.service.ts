@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, Optional } from '@nestjs/common';
+import { TenantQuotaService } from '../../tenant/service/tenant-quota.service.js';
 import { BaseService } from '../../../core/crud/index.js';
 import { BusinessException } from '../../../core/exceptions/business.exception.js';
 import { ErrorCode } from '../../../core/exceptions/error-code.js';
@@ -13,6 +14,9 @@ export class FileAssetService
   extends BaseService<FileAssetEntity>
   implements FileCatalog
 {
+  @Optional()
+  @Inject(TenantQuotaService)
+  private readonly quota?: TenantQuotaService;
   async ready(): Promise<void> {
     const ds = this.crud.dataSource;
     this.crud.context.current();
@@ -56,6 +60,11 @@ export class FileAssetService
     let receipt: { id: string; name: string; mime: string; bytes: number };
     try {
       receipt = await this.transaction(async (tx) => {
+        await this.quota?.assertStorage(
+          tx.ctx.tenantId,
+          file.bytes,
+          tx.manager,
+        );
         const id = await this.insertRow(tx, values);
         // 账本在这个事务中记录公开回执，崩溃重放不返回内部key/hash或单独的id。
         const result = {

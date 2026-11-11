@@ -22,6 +22,13 @@ const PLATFORM: TenantInfo = Object.freeze({
 /** 只读平台租户目录。无缓存，每次读取当前停用/到期/套餐状态，不保留过期的授权信息。 */
 @Injectable()
 export class TenantDirectorySource extends TenantSource {
+  async activeTenantIds(): Promise<string[]> {
+    return this.catalog(async () =>
+      (
+        await this.repos.for(SystemTenant).query('t').select(['t.id']).getMany()
+      ).map((row) => row.id),
+    );
+  }
   constructor(
     private readonly repos: TenantRepositoryFactory,
     private readonly context: RequestContext,

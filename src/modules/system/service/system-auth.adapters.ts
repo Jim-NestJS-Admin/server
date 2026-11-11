@@ -74,6 +74,7 @@ export class SystemPermissionSource extends PermissionSource {
       permission: menu.permission,
       keepAlive: menu.keepAlive,
       hidden: menu.hidden,
+      scope: menu.scope,
     }));
   }
 }

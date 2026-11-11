@@ -115,24 +115,27 @@ export class TenantPackage extends BaseEntity {
   @Column({ type: 'varchar', length: 100 })
   name!: string;
   @CrudField({ label: '启用', form: { component: 'switch' } })
+  @IsOptional()
   @IsBoolean()
   @Column({ type: 'boolean', default: true })
-  enabled = true;
+  enabled!: boolean;
   @ApiProperty({ type: [String] })
   @CrudField({ label: '可用菜单', list: false })
+  @IsOptional()
   @IsArray()
   @ArrayMaxSize(1000)
   @ArrayUnique()
   @Matches(/^[1-9]\d{0,19}$/, { each: true, message: '菜单编号格式不正确' })
   @Column({ type: 'json' })
-  menuIds: string[] = [];
+  menuIds!: string[];
   @ApiProperty({ type: TenantQuotas })
   @CrudField({ label: '配额', list: false })
+  @IsOptional()
   @IsObject()
   @ValidateNested()
   @Type(() => TenantQuotas)
   @Column({ type: 'json' })
-  quotas: TenantQuotas = new TenantQuotas();
+  quotas!: TenantQuotas;
   @CrudField({ label: '备注', nullable: true })
   @IsOptional()
   @IsString()
@@ -174,16 +177,18 @@ export class SystemTenant extends BaseEntity {
         : value,
     { toClassOnly: true },
   )
+  @IsOptional()
   @IsArray()
   @ArrayMaxSize(100)
   @ArrayUnique()
   @TenantDomains()
   @Column({ type: 'json' })
-  domains: string[] = [];
+  domains!: string[];
   @CrudField({ label: '启用', form: { component: 'switch' } })
+  @IsOptional()
   @IsBoolean()
   @Column({ type: 'boolean', default: true })
-  enabled = true;
+  enabled!: boolean;
   @ApiProperty({ type: String, format: 'date-time', nullable: true })
   @CrudField({
     label: '到期时间',

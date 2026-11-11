@@ -4,6 +4,10 @@ import type { Redis } from 'ioredis';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
+import {
+  TenantSource,
+  BuiltinTenantSource,
+} from '../src/core/tenant/tenant-source.js';
 import { configureApp } from '../src/app.setup.js';
 import {
   AuthUserStore,
@@ -140,6 +144,9 @@ describe('后台登录认证（T05）', () => {
   beforeAll(async () => {
     hash = await PasswordHasher.hash(PASSWORD);
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      // 此套件的用户来自FakeUserStore，租户目录也固定为内置来源；真实目录由tenant-*套件覆盖。
+      .overrideProvider(TenantSource)
+      .useClass(BuiltinTenantSource)
       .overrideProvider(AuthUserStore)
       .useClass(FakeUserStore)
       .compile();
