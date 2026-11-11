@@ -60,7 +60,7 @@ export class SystemUser extends BaseEntity {
   @Column({ type: 'varchar', length: 16, default: 'zh-CN' })
   locale: string;
   @ApiProperty({ type: String, nullable: true })
-  @CrudField({ label: '默认组织', nullable: true })
+  @CrudField({ label: '默认组织', nullable: true, display: 'orgs' })
   @IsOptional()
   @Matches(ID_PATTERN)
   @Column({ type: 'bigint', unsigned: true, nullable: true })
@@ -162,7 +162,12 @@ export class SystemUserRole extends BaseEntity {
     select: false,
   })
   scopeGuard: string;
-  @CrudField({ label: '用户', edit: 'add', form: { required: true } })
+  @CrudField({
+    label: '用户',
+    edit: 'add',
+    form: { required: true },
+    display: 'users',
+  })
   @Matches(ID_PATTERN)
   @Column({ type: 'bigint', unsigned: true })
   userId: string;
@@ -171,7 +176,7 @@ export class SystemUserRole extends BaseEntity {
   @Column({ type: 'bigint', unsigned: true })
   roleId: string;
   @ApiProperty({ type: String, nullable: true })
-  @CrudField({ label: '作用范围组织', nullable: true })
+  @CrudField({ label: '作用范围组织', nullable: true, display: 'orgs' })
   @IsOptional()
   @Matches(ID_PATTERN)
   @Column({ type: 'bigint', unsigned: true, nullable: true })
@@ -249,11 +254,16 @@ export class SystemMenu extends BaseEntity {
 @Entity('sys_user_supervisor')
 @Index(['tenantId', 'userId', 'supervisorId', 'activeGuard'], { unique: true })
 export class SystemUserSupervisor extends BaseEntity {
-  @CrudField({ label: '用户', edit: 'add', form: { required: true } })
+  @CrudField({
+    label: '用户',
+    edit: 'add',
+    form: { required: true },
+    display: 'users',
+  })
   @Matches(ID_PATTERN)
   @Column({ type: 'bigint', unsigned: true })
   userId: string;
-  @CrudField({ label: '上级用户', form: { required: true } })
+  @CrudField({ label: '上级用户', form: { required: true }, display: 'users' })
   @Matches(ID_PATTERN)
   @Column({ type: 'bigint', unsigned: true })
   supervisorId: string;

@@ -182,10 +182,12 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
     if (body.columns === undefined) {
       const schema = await this.schema();
       const view = schema.view as ReturnType<typeof mergeView> | undefined;
+      // 只导出列表里有的列（list: false 的字段如头像不导出），顺序和显隐跟生效的显示配置
+      const listed = new Set(schema.columns.map((column) => column.field));
       body = {
         ...body,
         columns: (view?.list.columns ?? schema.columns)
-          .filter((column) => !column.hidden)
+          .filter((column) => !column.hidden && listed.has(column.field))
           .map((column) => column.field),
       };
     }
@@ -250,6 +252,8 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
       (fieldPerms[f] as { state: string } | undefined)?.state ?? 'editable';
     return Object.assign(schema, {
       view: mergeView(meta, admin, user, state, canWrite),
+      // 不含用户列设置的模块显示配置：前端「列设置」据此只保存用户改过的部分、恢复默认
+      moduleView: mergeView(meta, admin, null, state, canWrite),
     });
   }
 }

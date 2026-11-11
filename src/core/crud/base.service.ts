@@ -27,7 +27,11 @@ import { escapeSpreadsheetCell } from '../security/sanitize.js';
 import { crudErrors, translateDbError } from './crud.errors.js';
 import type { CrudAudit } from './crud-audit.js';
 import type { IdempotencyLedger } from '../security/idempotency.ledger.js';
-import { attachDisplay, type CrudDisplaySource } from './crud-display.js';
+import {
+  attachDisplay,
+  DISPLAY_FIELDS,
+  type CrudDisplaySource,
+} from './crud-display.js';
 import type { AuthzContext } from '../permission/authz-context.js';
 import {
   childRowsOf,
@@ -395,6 +399,14 @@ export class BaseService<T extends BaseEntity> {
       this.crud.display(),
       this.crud.context.current().tenantId,
       rows as Record<string, unknown>[],
+      {
+        ...DISPLAY_FIELDS,
+        ...Object.fromEntries(
+          this.meta.fields.flatMap((f) =>
+            f.display ? [[f.property, f.display] as const] : [],
+          ),
+        ),
+      },
     );
   }
 
