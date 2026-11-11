@@ -47,11 +47,14 @@ export class SystemDictionaryService
     return [...(await this.platform(() => load(true))), ...(await load(false))];
   }
   async assertSystemManager(): Promise<void> {
-    // 阶段2在此统一收紧为平台超级管理员；当前按已确认设计允许当前有效超级管理员。
-    if (!(await this.permission.isSuperAdmin()))
+    // 阶段 2（契约 tenant.md 第 9 节）：系统字典所有租户共用，只有平台超级管理员能改；租户超管只读
+    if (
+      this.context.current().tenantId !== PLATFORM_TENANT_ID ||
+      !(await this.permission.isSuperAdmin())
+    )
       throw new BusinessException(
         ErrorCode.Forbidden,
-        '只有超级管理员能维护系统字典',
+        '只有平台超级管理员能维护系统字典',
         403,
       );
   }

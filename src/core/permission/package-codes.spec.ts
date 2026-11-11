@@ -55,12 +55,16 @@ const service = (tenants?: TenantSource) =>
     tenants,
   );
 
-describe('套餐范围内的权限码 packageCodes', () => {
-  it('只含套餐里菜单上的权限码，platform:* 永远不在里面', async () => {
+describe('套餐范围内的权限码 packageCodes / 可用菜单 menusFor', () => {
+  it('套餐只管挂在菜单上的码：套餐外菜单上的码去掉，不挂菜单的码保留，platform:* 永远不给', async () => {
     const codes = await service(
       new PackageSource(['1', '3', '4']),
     ).packageCodes('7');
-    expect(codes).toEqual(['system:role:page', 'system:user:page']);
+    expect(codes).toEqual([
+      'session:menu',
+      'system:role:page',
+      'system:user:page',
+    ]);
   });
 
   it('套餐不限时是全部租户权限码，仍不含 platform:*', async () => {
@@ -78,5 +82,23 @@ describe('套餐范围内的权限码 packageCodes', () => {
     expect(await service().packageCodes('1')).not.toContain(
       'platform:tenant:page',
     );
+  });
+
+  it('租户看不到平台专用菜单和套餐外菜单；平台看到全部', async () => {
+    menus[2].scope = 'platform';
+    try {
+      const pkg = service(new PackageSource(['1', '3']));
+      expect((await pkg.menusFor('7')).map((m) => m.id)).toEqual(['1']);
+      expect(await pkg.packageCodes('7')).not.toContain('system:role:page');
+      expect((await pkg.menusFor('0')).map((m) => m.id)).toEqual([
+        '1',
+        '2',
+        '3',
+        '4',
+        '5',
+      ]);
+    } finally {
+      delete menus[2].scope;
+    }
   });
 });

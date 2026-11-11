@@ -2,6 +2,7 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  Optional,
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
@@ -14,6 +15,10 @@ import {
   type EndpointKind,
 } from '../tenant/request-context.js';
 import { PLATFORM_TENANT_ID } from '../tenant/tenant.constants.js';
+import {
+  LoggerPlatformAuditSink,
+  PlatformAuditSink,
+} from '../tenant/platform-context.js';
 import { AdminAuth, AdminAuthorizer } from './endpoint-auth.js';
 import { LOGIN_ONLY_KEY, PERMS_KEY } from '../permission/perms.decorator.js';
 import {
@@ -37,7 +42,12 @@ export class EndpointGuard implements CanActivate {
     private readonly context: RequestContext,
     private readonly adminAuth: AdminAuth,
     private readonly authorizer: AdminAuthorizer,
-  ) {}
+    // 没装租户模块（单独测试）时只写日志
+    @Optional() audit?: PlatformAuditSink,
+  ) {
+    this.audit = audit ?? new LoggerPlatformAuditSink();
+  }
+  private readonly audit: PlatformAuditSink;
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     if (ctx.getType() !== 'http') return false;
@@ -93,13 +103,26 @@ export class EndpointGuard implements CanActivate {
           '没有权限',
           HttpStatus.FORBIDDEN,
         );
+      // 平台只读查看租户数据，每次都留审计；审计写不进去就不查（契约 tenant.md 第 6 节）
+      try {
+        await this.audit.record({
+          action: 'cross-tenant-read',
+          userId: principal.userId,
+          targetTenantId: null,
+          detail: `${req.method} ${req.path}（${ctx.getClass().name}.${ctx.getHandler().name}）`,
+        });
+      } catch (e) {
+        this.logger.error({
+          event: 'tenant.cross-tenant.audit-failed',
+          err: e,
+        });
+        throw new BusinessException(
+          ErrorCode.ServiceUnavailable,
+          '审计日志写入失败，请稍后重试',
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
       this.context.allowCrossTenant();
-      this.logger.warn({
-        event: 'tenant.cross-tenant',
-        method: req.method,
-        path: req.path,
-        userId: principal.userId,
-      });
     }
     return true;
   }

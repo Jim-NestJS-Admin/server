@@ -41,6 +41,11 @@ export interface MenuNode {
   permission?: string | null;
   keepAlive?: boolean;
   hidden?: boolean;
+  /**
+   * platform：平台专用（租户管理、套餐管理、菜单管理），永远不给租户；
+   * tenant（不写时默认）：租户可用，按套餐决定（契约 tenant.md 第 2、5 节）
+   */
+  scope?: 'platform' | 'tenant';
 }
 
 /**
