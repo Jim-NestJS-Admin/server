@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { TenantDirectoryModule } from '../tenant/tenant-directory.module.js';
+import { PlatformOnlyGuard } from '../tenant/platform-only.guard.js';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SYSTEM_ENTITIES } from './entity/system.entity.js';
 import { SystemField, SystemRoleField } from './entity/system-field.entity.js';
@@ -34,6 +36,7 @@ import {
 
 @Module({
   imports: [
+    TenantDirectoryModule,
     TypeOrmModule.forFeature([
       ...SYSTEM_ENTITIES,
       SystemField,
@@ -41,6 +44,7 @@ import {
     ]),
   ],
   providers: [
+    PlatformOnlyGuard,
     SystemFieldCatalog,
     SystemFieldOverview,
     SystemFieldService,

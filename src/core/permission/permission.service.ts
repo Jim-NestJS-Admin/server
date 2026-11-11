@@ -1,8 +1,10 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { BusinessException } from '../exceptions/business.exception.js';
 import { ErrorCode } from '../exceptions/error-code.js';
 import { RedisService } from '../redis/redis.service.js';
 import { RequestContext } from '../tenant/request-context.js';
+import { PLATFORM_TENANT_ID } from '../tenant/tenant.constants.js';
+import { BuiltinTenantSource, TenantSource } from '../tenant/tenant-source.js';
 import {
   AuthzContext,
   type DataScopeGrant,
@@ -30,6 +32,8 @@ interface UserAuthz {
   /** 当前组织里还有角色，或者是全局超级管理员（没有当前组织时为 true） */
   orgValid: boolean;
   roles: ActiveRole[];
+  /** 套餐允许的权限码；null 是平台或套餐不限。角色的权限码、超级管理员的全部权限都在这个范围内 */
+  allowed: string[] | null;
 }
 
 export interface MenuItem {
@@ -93,7 +97,52 @@ export class PermissionService {
     private readonly context: RequestContext,
     private readonly authz: AuthzContext,
     private readonly fieldSource: FieldPermSource,
-  ) {}
+    // 单独测试权限时可以不装租户模块，按只有平台和默认租户处理
+    @Optional() tenants?: TenantSource,
+  ) {
+    this.tenants = tenants ?? new BuiltinTenantSource();
+  }
+  private readonly tenants: TenantSource;
+
+  /**
+   * 租户能用的菜单（契约 tenant.md 第 5 节）：平台用全部；租户去掉平台专用菜单和套餐外的菜单。
+   * 菜单数据本身由 PermissionSource 提供（多租户后是平台统一的一份）。
+   */
+  async menusFor(tenantId: string): Promise<MenuNode[]> {
+    const menus = await this.source.loadMenus(tenantId);
+    if (tenantId === PLATFORM_TENANT_ID) return menus;
+    const allowed = await this.tenants.packageMenuIds(tenantId);
+    const inPackage = allowed ? new Set(allowed) : null;
+    return menus.filter(
+      (m) => m.scope !== 'platform' && (!inPackage || inPackage.has(m.id)),
+    );
+  }
+
+  /**
+   * 租户套餐范围内的权限码：角色授权只能在这里面选，租户超级管理员拥有的也是这些；平台返回全部。
+   * 套餐只管挂在菜单上的权限码：只挂在套餐外（或平台专用）菜单上的码去掉；
+   * 没挂在任何菜单上的码（导出、字段权限配置等）不受套餐限制，仍按角色授予。platform:* 永远不给租户。
+   */
+  async packageCodes(tenantId: string): Promise<string[]> {
+    const menus = await this.source.loadMenus(tenantId);
+    const all = new Set<string>();
+    for (const p of this.registry.all()) all.add(p.code);
+    for (const m of menus) if (m.permission) all.add(m.permission);
+    if (tenantId === PLATFORM_TENANT_ID) return [...all].sort();
+    const usable = new Set(
+      (await this.menusFor(tenantId)).flatMap((m) =>
+        m.permission ? [m.permission] : [],
+      ),
+    );
+    const onMenus = new Set(
+      menus.flatMap((m) => (m.permission ? [m.permission] : [])),
+    );
+    return [...all]
+      .filter(
+        (c) => !c.startsWith('platform:') && (usable.has(c) || !onMenus.has(c)),
+      )
+      .sort();
+  }
 
   /** 当前有效组织内的超级管理员身份，由统一权限来源判断，业务模块不自行查角色。 */
   async isSuperAdmin(): Promise<boolean> {
@@ -196,15 +245,25 @@ export class PermissionService {
     );
     let orgs: OrgNode[] | null = null;
     const tree = async () => (orgs ??= await this.source.loadOrgs(tenantId));
+    // 套餐范围：套餐缩小后，角色里已经存的套餐外权限码立即不生效（不用等角色被修改）
+    // 平台、或套餐不限：不做套餐过滤（null）
+    const limited =
+      tenantId !== PLATFORM_TENANT_ID &&
+      (await this.tenants.packageMenuIds(tenantId)) !== null;
+    const allowed = limited ? await this.packageCodes(tenantId) : null;
+    const inPackage = allowed ? new Set(allowed) : null;
     const roles: ActiveRole[] = [];
     for (const g of active)
       roles.push({
         roleId: g.roleId,
         all: g.allPermissions === true,
-        perms: [...new Set(g.permissions)],
+        perms: [...new Set(g.permissions)].filter(
+          (p) => !inPackage || inPackage.has(p),
+        ),
         scope: await this.scopeOf(g, orgId, tree),
       });
     return {
+      allowed,
       // 当前组织有效：在这个组织有角色，或者是全局超级管理员（在任何组织都有效）
       orgValid:
         orgId === null ||
@@ -250,8 +309,10 @@ export class PermissionService {
     if (!userId) throw unauthorized();
     const { authz } = await this.load(tenantId, userId, orgId);
     if (!authz.orgValid) throw unauthorized();
+    // 超级管理员是「套餐内的全部」，不是全部
+    const inPackage = !authz.allowed || authz.allowed.includes(code);
     const effective = authz.roles.filter(
-      (r) => r.all || r.perms.includes(code),
+      (r) => (r.all && inPackage) || r.perms.includes(code),
     );
     if (effective.length === 0) throw forbidden();
     const orgIds = new Set<string>();
@@ -294,11 +355,9 @@ export class PermissionService {
     const { authz, version } = await this.load(tenantId, userId, orgId);
     if (!authz.orgValid) throw unauthorized();
     const codes = new Set<string>();
-    if (authz.roles.some((r) => r.all)) {
-      for (const p of this.registry.all()) codes.add(p.code);
-      for (const m of await this.source.loadMenus(tenantId))
-        if (m.permission) codes.add(m.permission);
-    }
+    if (authz.roles.some((r) => r.all))
+      for (const c of authz.allowed ?? (await this.packageCodes(tenantId)))
+        codes.add(c);
     for (const r of authz.roles) for (const p of r.perms) codes.add(p);
     return { codes: [...codes].sort(), version };
   }
@@ -311,7 +370,7 @@ export class PermissionService {
   }> {
     const { codes, version } = await this.permissions();
     const has = new Set(codes);
-    const all = await this.source.loadMenus(this.context.current().tenantId);
+    const all = await this.menusFor(this.context.current().tenantId);
     const byParent = new Map<string | null, MenuNode[]>();
     for (const m of all)
       if (m.type !== 'button')

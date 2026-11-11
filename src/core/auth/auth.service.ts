@@ -11,6 +11,9 @@ import { AppConfigService } from '../config/app-config.service.js';
 import { BusinessException } from '../exceptions/business.exception.js';
 import { ErrorCode } from '../exceptions/error-code.js';
 import { RequestContext } from '../tenant/request-context.js';
+import { PLATFORM_TENANT_ID } from '../tenant/tenant.constants.js';
+import { TenantResolver, type TenantHint } from '../tenant/tenant-resolver.js';
+import { BuiltinTenantSource, TenantSource } from '../tenant/tenant-source.js';
 import { AuthEvents, type LoginEvent } from './auth-events.js';
 import { AuthUserStore, type AuthOrg } from './auth-user.store.js';
 import {
@@ -49,6 +52,18 @@ export class AuthService {
   @Optional()
   @Inject(PermissionService)
   private readonly permissions?: PermissionService;
+  // 单独测试认证时可以不装租户模块，按只有平台和默认租户处理
+  @Optional()
+  @Inject(TenantSource)
+  private readonly tenantSource?: TenantSource;
+  private get tenants(): TenantSource {
+    return this.tenantSource ?? new BuiltinTenantSource();
+  }
+
+  /** 登录页要不要填租户编码（契约 tenant.md 第 4 节） */
+  tenantHint(req: Request): Promise<TenantHint> {
+    return new TenantResolver(this.tenants).hint(req);
+  }
 
   constructor(
     private readonly config: AppConfigService,
@@ -258,7 +273,15 @@ export class AuthService {
     const orgs = await this.users.listOrgs(tenantId, userId);
     const pick = (o: AuthOrg) => ({ id: o.id, name: o.name, path: o.path });
     const current = orgs.find((o) => o.id === orgId);
+    const tenant = await this.tenants.byId(tenantId);
+    if (!tenant?.enabled) throw unauthorized();
     return {
+      tenant: {
+        id: tenant.id,
+        code: tenant.code,
+        name: tenant.name,
+        platform: tenant.id === PLATFORM_TENANT_ID,
+      },
       user: {
         id: p.id,
         username: p.username,

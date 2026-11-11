@@ -116,12 +116,15 @@ export class SystemDirectory {
   }
 
   async menus(tenantId: string) {
-    this.check(tenantId);
-    return this.repos
-      .for(SystemMenu)
-      .query('m')
-      .orderBy('m.rank', 'ASC')
-      .addOrderBy('m.id', 'ASC')
-      .getMany();
+    // 菜单平台统一维护；参数保留以兼容PermissionSource，过滤由core按目标租户完成。
+    void tenantId;
+    return this.context.run({ tenantId: '0' }, () =>
+      this.repos
+        .for(SystemMenu)
+        .query('m')
+        .orderBy('m.rank', 'ASC')
+        .addOrderBy('m.id', 'ASC')
+        .getMany(),
+    );
   }
 }

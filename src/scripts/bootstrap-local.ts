@@ -1,4 +1,7 @@
 import { CodegenModuleSpec1794312000000 } from '../database/migrations/1794312000000-CodegenModuleSpec.js';
+import { TenantCatalog1794412800000 } from '../database/migrations/1794412800000-TenantCatalog.js';
+import { PlatformMenus1794412800001 } from '../database/migrations/1794412800001-PlatformMenus.js';
+import { TenantSeedService } from '../modules/tenant/service/tenant-seed.service.js';
 import { SharedDictionaries1794279600000 } from '../database/migrations/1794279600000-SharedDictionaries.js';
 import { PLATFORM_TENANT_ID } from '../core/tenant/tenant.constants.js';
 import 'reflect-metadata';
@@ -51,6 +54,7 @@ import {
  * 第一次时创建超级管理员。账号密码默认 admin / 123456（Jimmy 要求，只限本机开发库 jim_admin_local，
  * 登录后请修改）；也可以用未提交的 BOOTSTRAP_USERNAME / BOOTSTRAP_PASSWORD 覆盖。
  * 参数：--migrate-only 只迁移；--menus-only 迁移后只补菜单（新生成了模块时用）。
+ * --stage2-only 只执行租户目录与平台菜单两项迁移，可与上述参数组合。
  */
 async function bootstrapLocal(): Promise<void> {
   process.loadEnvFile();
@@ -83,17 +87,21 @@ async function bootstrapLocal(): Promise<void> {
     password: env.DB_PASSWORD,
     database: env.DB_NAME,
     timezone: 'Z',
-    migrations: [
-      CreateFileAsset1793923200000,
-      InitialSystem1793926800000,
-      SystemRelationships1793930400000,
-      FileAssetOrganization1793934000000,
-      SystemLogs1793937600000,
-      SystemFields1793941200000,
-      CoreTables1793944800000,
-      SharedDictionaries1794279600000,
-      CodegenModuleSpec1794312000000,
-    ],
+    migrations: process.argv.includes('--stage2-only')
+      ? [TenantCatalog1794412800000, PlatformMenus1794412800001]
+      : [
+          CreateFileAsset1793923200000,
+          InitialSystem1793926800000,
+          SystemRelationships1793930400000,
+          FileAssetOrganization1793934000000,
+          SystemLogs1793937600000,
+          SystemFields1793941200000,
+          CoreTables1793944800000,
+          SharedDictionaries1794279600000,
+          CodegenModuleSpec1794312000000,
+          TenantCatalog1794412800000,
+          PlatformMenus1794412800001,
+        ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,
     logging: false,
@@ -127,18 +135,26 @@ async function bootstrapLocal(): Promise<void> {
     );
     const menuOnly = process.argv.includes('--menus-only');
     const passwordHash = menuOnly ? '' : await PasswordHasher.hash(password);
-    const report = await context.run({ tenantId: DEFAULT_TENANT_ID }, () =>
+    const report = await context.run({ tenantId: PLATFORM_TENANT_ID }, () =>
       source.transaction(async (manager) => {
         const menus = await seedMenus(manager, repos, codes, generated);
-        if (menuOnly) return { menus, dicts: 0, admin: '跳过' };
+        const tenants = await app
+          .get(TenantSeedService)
+          .seed(manager, passwordHash, !menuOnly);
+        if (menuOnly) return { menus, dicts: 0, admin: '跳过', tenants };
         const dicts = await context.run({ tenantId: PLATFORM_TENANT_ID }, () =>
           seedDicts(manager, repos),
         );
-        const admin = await seedAdmin(manager, repos, username, passwordHash);
-        return { menus, dicts, admin };
+        const admin = await context.run({ tenantId: DEFAULT_TENANT_ID }, () =>
+          seedAdmin(manager, repos, username, passwordHash),
+        );
+        return { menus, dicts, admin, tenants };
       }),
     );
     await app.get(PermissionService).bumpVersion(DEFAULT_TENANT_ID);
+    await app.get(PermissionService).bumpVersion(PLATFORM_TENANT_ID);
+    if (report.tenants.demo)
+      await app.get(PermissionService).bumpVersion(report.tenants.demo);
     console.log(
       `本地初始化完成：菜单新增 ${report.menus.added} 个（已有 ${report.menus.kept} 个，` +
         `权限码未声明而跳过 ${report.menus.skipped.length} 个${report.menus.skipped.length ? '：' + report.menus.skipped.join('、') : ''}）；` +
@@ -190,6 +206,7 @@ async function seedMenus(
         hidden: false,
         rank: 0,
         parentId: null,
+        scope: 'tenant',
         ...values,
       },
       manager,
@@ -198,7 +215,12 @@ async function seedMenus(
     stats.added++;
     return id;
   };
-  const button = async (parentId: string, code: string, title: string) => {
+  const button = async (
+    parentId: string,
+    code: string,
+    title: string,
+    scope: 'platform' | 'tenant' = 'tenant',
+  ) => {
     const key = `${parentId}|${code}`;
     if (buttons.has(key)) {
       stats.kept++;
@@ -207,6 +229,7 @@ async function seedMenus(
     await repo.insert(
       {
         parentId,
+        scope,
         type: 'button',
         path: '',
         title,
@@ -238,6 +261,7 @@ async function seedMenus(
       title: dir.title,
       icon: dir.icon ?? null,
       rank: dirRank,
+      scope: dir.scope ?? 'tenant',
     });
     let rank = 0;
     for (const p of pages) {
@@ -252,6 +276,7 @@ async function seedMenus(
         component: p.component,
         hidden: p.hidden ?? false,
         permission: p.permission,
+        scope: p.scope ?? dir.scope ?? 'tenant',
       });
       const own = [...codes]
         .filter(
@@ -260,7 +285,13 @@ async function seedMenus(
             p.buttonPrefixes.some((pre) => c.startsWith(`${pre}:`)),
         )
         .sort();
-      for (const c of own) await button(pageId, c, buttonTitle(c));
+      for (const c of own)
+        await button(
+          pageId,
+          c,
+          buttonTitle(c),
+          p.scope ?? dir.scope ?? 'tenant',
+        );
     }
   }
 

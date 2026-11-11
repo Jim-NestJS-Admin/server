@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 /** 一个页面菜单：组件键要在前端 navigationViews 白名单里，权限码要由后端声明 */
 export interface PageSeed {
+  scope?: 'platform' | 'tenant';
   title: string;
   path: string;
   component: string;
@@ -15,6 +16,7 @@ export interface PageSeed {
 }
 
 export interface DirectorySeed {
+  scope?: 'platform' | 'tenant';
   title: string;
   path: string;
   icon?: string;
@@ -35,6 +37,17 @@ const crud = (title: string, key: string, extra: string[] = []): PageSeed => ({
  */
 export const DEFAULT_MENUS: DirectorySeed[] = [
   {
+    title: '平台管理',
+    path: '/platform',
+    icon: 'ri:global-line',
+    scope: 'platform',
+    pages: [
+      crud('租户管理', 'platform/tenant'),
+      crud('套餐管理', 'platform/package'),
+      crud('菜单管理', 'system/menu'),
+    ],
+  },
+  {
     title: '组织与权限',
     path: '/system',
     icon: 'ri:team-line',
@@ -42,7 +55,6 @@ export const DEFAULT_MENUS: DirectorySeed[] = [
       crud('用户管理', 'system/user'),
       crud('组织管理', 'system/org'),
       crud('角色管理', 'system/role'),
-      crud('菜单管理', 'system/menu'),
       { ...crud('角色分配', 'system/user-role'), hidden: true },
       { ...crud('上级关系', 'system/user-supervisor'), hidden: true },
       {

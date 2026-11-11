@@ -12,7 +12,8 @@ import { PermissionSource } from '../src/core/permission/permission-source.js';
 import { AllowAllPermissionSource } from './support/test-auth.js';
 import { FileModule } from '../src/modules/file/file.module.js';
 import type { FilePrincipal } from '../src/modules/file/file.ports.js';
-import type { BlobStore } from '../src/modules/file/storage/blob-store.js';
+import { BlobStore } from '../src/modules/file/storage/blob-store.js';
+import { TenantQuotaService } from '../src/modules/tenant/service/tenant-quota.service.js';
 
 /** 只在独立测试库执行；身份头只供测试认证，不进入生产模块。 */
 @Injectable()
@@ -65,6 +66,13 @@ describe('T09 数据库目录与上传下载', () => {
     })
       .overrideProvider(AdminAuth)
       .useClass(FileTestAuth)
+      .overrideProvider(BlobStore)
+      .useValue(store)
+      .overrideProvider(TenantQuotaService)
+      .useValue({
+        assertStorage: async () => undefined,
+        assertCanAddUser: async () => undefined,
+      })
       .overrideProvider(PermissionSource)
       .useClass(AllowAllPermissionSource)
       .compile();

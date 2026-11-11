@@ -14,7 +14,7 @@ export function assertPrincipal(principal: FilePrincipal): void {
   if (
     typeof principal?.tenantId !== 'string' ||
     typeof principal?.userId !== 'string' ||
-    !/^[1-9]\d{0,19}$/.test(principal?.tenantId) ||
+    !/^(?:0|[1-9]\d{0,19})$/.test(principal?.tenantId) ||
     !/^[1-9]\d{0,19}$/.test(principal?.userId)
   )
     throw new BusinessException(ErrorCode.Unauthorized, '请先登录', 401);
