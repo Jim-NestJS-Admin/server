@@ -6,6 +6,7 @@ import { AuthModule } from './core/auth/auth.module.js';
 import { CoreModule } from './core/core.module.js';
 import { TenantCoreModule } from './core/tenant/tenant-core.module.js';
 import { TenantModule } from './modules/tenant/tenant.module.js';
+import { FormModule } from './modules/form/form.module.js';
 import { TenantDirectoryModule } from './modules/tenant/tenant-directory.module.js';
 import { TenantDirectorySource } from './modules/tenant/service/tenant-directory.source.js';
 import { SystemPlatformAuditSink } from './modules/system-log/service/platform-audit.service.js';
@@ -33,6 +34,7 @@ import {
       imports: [TenantDirectoryModule, SystemLogModule],
     }),
     TenantModule,
+    FormModule,
     FileModule.register({
       store: new LocalBlobStore(resolve(process.cwd(), 'deploy/data/files')),
       policy: {

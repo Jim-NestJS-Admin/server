@@ -1,6 +1,7 @@
 import { CodegenModuleSpec1794312000000 } from '../database/migrations/1794312000000-CodegenModuleSpec.js';
 import { TenantCatalog1794412800000 } from '../database/migrations/1794412800000-TenantCatalog.js';
 import { PlatformMenus1794412800001 } from '../database/migrations/1794412800001-PlatformMenus.js';
+import { FormDefinition1794470400000 } from '../database/migrations/1794470400000-FormDefinition.js';
 import { TenantSeedService } from '../modules/tenant/service/tenant-seed.service.js';
 import { SharedDictionaries1794279600000 } from '../database/migrations/1794279600000-SharedDictionaries.js';
 import { PLATFORM_TENANT_ID } from '../core/tenant/tenant.constants.js';
@@ -101,6 +102,7 @@ async function bootstrapLocal(): Promise<void> {
           CodegenModuleSpec1794312000000,
           TenantCatalog1794412800000,
           PlatformMenus1794412800001,
+          FormDefinition1794470400000,
         ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,
