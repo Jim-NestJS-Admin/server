@@ -251,5 +251,17 @@ describe('T35 表单版本、校验与租户边界', () => {
     expect(doc.components?.schemas?.FormFieldDto).toMatchObject({
       properties: { field: { type: 'string' }, validation: expect.any(Object) },
     });
+    expect(doc.components?.schemas?.FormDesignerDto).toMatchObject({
+      properties: {
+        rule: {
+          type: 'array',
+          items: { type: 'object', additionalProperties: true },
+        },
+        option: { type: 'object', additionalProperties: true },
+      },
+    });
+    expect(doc.components?.schemas?.ValidateFormBody).toMatchObject({
+      properties: { data: { type: 'object', additionalProperties: true } },
+    });
   });
 });

@@ -127,11 +127,13 @@ export class FormDesignerDto {
   @ApiProperty({ enum: [1], description: '安全表单契约版本' })
   schemaVersion!: number;
   @ApiProperty({
-    type: [Object],
+    type: 'array',
+    items: { type: 'object', additionalProperties: true },
     description: 'FormCreate 规则安全子集，详见 docs/contracts/form.md',
   })
   rule!: Record<string, unknown>[];
-  @ApiPropertyOptional({ type: Object }) option?: Record<string, unknown>;
+  @ApiPropertyOptional({ type: 'object', additionalProperties: true })
+  option?: Record<string, unknown>;
   @ApiPropertyOptional({ type: [FormLinkageDto] }) linkages?: FormLinkageDto[];
 }
 export class FormDefinitionInput {
@@ -161,7 +163,9 @@ export class ValidateFormBody {
   @ApiProperty({ description: '固定表单版本记录编号' })
   @Matches(/^[1-9]\d{0,19}$/)
   definitionId!: string;
-  @ApiProperty({ type: Object }) @IsObject() data!: Record<string, unknown>;
+  @ApiProperty({ type: 'object', additionalProperties: true })
+  @IsObject()
+  data!: Record<string, unknown>;
 }
 export class FormValidationResult {
   @ApiProperty() definitionId!: string;

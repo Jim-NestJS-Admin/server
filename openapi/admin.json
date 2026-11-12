@@ -1602,11 +1602,13 @@
             "type": "array"
           },
           "option": {
+            "additionalProperties": true,
             "type": "object"
           },
           "rule": {
             "description": "FormCreate 规则安全子集，详见 docs/contracts/form.md",
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array"
@@ -9053,6 +9055,7 @@
       "ValidateFormBody": {
         "properties": {
           "data": {
+            "additionalProperties": true,
             "type": "object"
           },
           "definitionId": {
