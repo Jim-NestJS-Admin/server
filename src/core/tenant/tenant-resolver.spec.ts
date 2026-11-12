@@ -70,6 +70,17 @@ describe('后台租户识别 TenantResolver', () => {
     );
   });
 
+  it('不带编码时默认租户也要核对可用：默认租户停用后落到不存在的租户', async () => {
+    all[1].enabled = false;
+    try {
+      expect(await r.anonymous(req('localhost:8851'))).toBe(
+        UNRESOLVED_TENANT_ID,
+      );
+    } finally {
+      all[1].enabled = true;
+    }
+  });
+
   it('已登录请求只认令牌租户：租户停用、域名绑定了别的租户都不放行', async () => {
     expect(await r.tokenAllowed(req('localhost:8851'), '5')).toBe(true);
     expect(await r.tokenAllowed(req('acme.example.com'), '5')).toBe(true);
