@@ -331,8 +331,7 @@ describe('T32 真实多租户认证和权限失效', () => {
       });
     }
   });
-  // 已复现为200；core归Claude，待stage2-review修复后启用，不能以放宽断言掩盖问题。
-  it.skip('T30回归：默认租户停用后，不带租户编码也不能刷新', async () => {
+  it('T30回归：默认租户停用后，不带租户编码也不能刷新', async () => {
     const a = await signIn(0);
     await ctx.run({ tenantId: '0' }, () =>
       repos.for(SystemTenant).update([tenants[0]], { enabled: false }),
@@ -344,7 +343,7 @@ describe('T32 真实多租户认证和权限失效', () => {
       .expect(401);
   });
   // 此项只将契约允许的packageMenuIds(null)来源代入，真实令牌/角色/权限守卫仍全部执行。
-  it.skip('T30回归：不限套餐的租户超管仍不能访问平台权限码', async () => {
+  it('T30回归：不限套餐的租户超管仍不能访问平台权限码', async () => {
     const a = await signIn(0);
     const spy = vi
       .spyOn(app.get(TenantSource), 'packageMenuIds')
