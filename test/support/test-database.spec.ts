@@ -1,4 +1,4 @@
-import { resolveTestDatabase } from './test-database.js';
+import { assertTestDatabase, resolveTestDatabase } from './test-database.js';
 
 describe('端到端测试库保护 resolveTestDatabase', () => {
   it('默认用应用库名加 _test', () => {
@@ -21,5 +21,25 @@ describe('端到端测试库保护 resolveTestDatabase', () => {
     ['库名带特殊字符', 'app', 'x`; DROP DATABASE app; --_test', /_test 结尾/],
   ])('%s：拒绝', (_name, appDb, testDb, error) => {
     expect(() => resolveTestDatabase({ appDb, testDb })).toThrow(error);
+  });
+});
+
+describe('清理前实际连接库保护 assertTestDatabase', () => {
+  it.each(['jim_admin_test', 'jim_admin_integration_20261109_test'])(
+    '允许配置与实际连接一致的独立测试库 %s',
+    (database) => {
+      expect(() => assertTestDatabase(database, database)).not.toThrow();
+    },
+  );
+
+  it.each([
+    ['jim_admin_local', 'jim_admin_test'],
+    ['another_test', 'jim_admin_test'],
+    ['jim_admin_local', 'jim_admin_local'],
+    ['jim_admin_test', undefined],
+    [undefined, 'jim_admin_test'],
+    ['jim_admin_test', ''],
+  ])('拒绝未配置、非测试库或连接不一致 %s / %s', (actual, configured) => {
+    expect(() => assertTestDatabase(actual, configured)).toThrow();
   });
 });

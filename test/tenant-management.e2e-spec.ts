@@ -1,3 +1,4 @@
+import { assertTestDatabase } from './support/test-database.js';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -99,15 +100,13 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
     context = app.get(RequestContext);
     repos = app.get(TenantRepositoryFactory);
     system = app.get(SystemTenantService);
-    if (ds.options.database !== 'jim_admin_integration_20261109_test')
-      throw Error('仅允许指定独立测试库');
+    assertTestDatabase(ds.options.database, process.env.DB_NAME);
   });
   afterAll(async () => {
     await app?.close();
   });
   beforeEach(async () => {
-    if (ds.options.database !== 'jim_admin_integration_20261109_test')
-      throw Error('拒绝清理其他库');
+    assertTestDatabase(ds.options.database, process.env.DB_NAME);
     for (const table of [
       'sys_user_role',
       'sys_user_supervisor',

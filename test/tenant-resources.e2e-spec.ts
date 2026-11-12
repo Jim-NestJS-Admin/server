@@ -1,3 +1,4 @@
+import { assertTestDatabase } from './support/test-database.js';
 import type { INestApplication } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import request from 'supertest';
@@ -89,15 +90,13 @@ describe('T32 现有资源跨租户双向防漏', () => {
     configureApp(app);
     await app.init();
     ds = app.get(DataSource);
-    if (ds.options.database !== 'jim_admin_integration_20261109_test')
-      throw new Error('T32只允许指定独立测试库');
+    assertTestDatabase(ds.options.database, process.env.DB_NAME);
   });
   afterAll(async () => {
     await app?.close();
   });
   beforeEach(async () => {
-    if (ds.options.database !== 'jim_admin_integration_20261109_test')
-      throw new Error('拒绝清理其他库');
+    assertTestDatabase(ds.options.database, process.env.DB_NAME);
     for (const table of [
       'demo_order_tag',
       'demo_order_note',

@@ -1,3 +1,4 @@
+import { assertTestDatabase } from './support/test-database.js';
 import type { INestApplication } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module.js';
@@ -31,15 +32,13 @@ describe('T31 平台目录与迁移基础', () => {
     source = app.get(TenantDirectorySource);
     context = app.get(RequestContext);
     repos = app.get(TenantRepositoryFactory);
-    if (ds.options.database !== 'jim_admin_integration_20261109_test')
-      throw Error('T31只允许指定独立测试库');
+    assertTestDatabase(ds.options.database, process.env.DB_NAME);
   });
   afterAll(async () => {
     await app?.close();
   });
   beforeEach(async () => {
-    if (ds.options.database !== 'jim_admin_integration_20261109_test')
-      throw Error('拒绝清理其他库');
+    assertTestDatabase(ds.options.database, process.env.DB_NAME);
     await ds.query('DELETE FROM sys_tenant');
     await ds.query('DELETE FROM sys_package');
   });

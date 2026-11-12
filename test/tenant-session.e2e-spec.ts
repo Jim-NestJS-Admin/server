@@ -1,3 +1,4 @@
+import { assertTestDatabase } from './support/test-database.js';
 import { Get, Injectable, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -110,16 +111,14 @@ describe('T32 真实多租户认证和权限失效', () => {
     ds = app.get(DataSource);
     ctx = app.get(RequestContext);
     repos = app.get(TenantRepositoryFactory);
-    if (ds.options.database !== 'jim_admin_integration_20261109_test')
-      throw Error('只允许独立测试库');
+    assertTestDatabase(ds.options.database, process.env.DB_NAME);
   });
   afterAll(async () => {
     await raw.quit();
     await app?.close();
   });
   beforeEach(async () => {
-    if (ds.options.database !== 'jim_admin_integration_20261109_test')
-      throw Error('拒绝清理其他数据库');
+    assertTestDatabase(ds.options.database, process.env.DB_NAME);
     for (const table of [
       'sys_user_role',
       'sys_user_supervisor',
