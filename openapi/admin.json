@@ -141,6 +141,82 @@
         ],
         "type": "object"
       },
+      "CreateTenantBody": {
+        "properties": {
+          "adminPassword": {
+            "description": "初始管理员密码，仅用于创建，不返回",
+            "type": "string",
+            "writeOnly": true
+          },
+          "adminUsername": {
+            "description": "初始管理员账号",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CreateTenantData"
+          }
+        },
+        "required": [
+          "data",
+          "adminUsername",
+          "adminPassword"
+        ],
+        "type": "object"
+      },
+      "CreateTenantData": {
+        "properties": {
+          "code": {
+            "description": "租户编码",
+            "type": "string"
+          },
+          "contactName": {
+            "description": "联系人",
+            "nullable": true,
+            "type": "object"
+          },
+          "contactPhone": {
+            "description": "联系电话",
+            "nullable": true,
+            "type": "object"
+          },
+          "domains": {
+            "description": "绑定域名",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "description": "启用",
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "description": "到期时间",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "description": "租户名称",
+            "type": "string"
+          },
+          "packageId": {
+            "description": "套餐",
+            "type": "string"
+          },
+          "remark": {
+            "description": "备注",
+            "nullable": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "packageId"
+        ],
+        "type": "object"
+      },
       "CrudSchema": {
         "properties": {
           "actions": {
@@ -1477,6 +1553,47 @@
         ],
         "type": "object"
       },
+      "PackageMenuItem": {
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/PackageMenuItem"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "parentId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "permission": {
+            "nullable": true,
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "directory",
+              "page",
+              "button"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "parentId",
+          "type",
+          "title",
+          "permission",
+          "children"
+        ],
+        "type": "object"
+      },
       "PermissionItem": {
         "properties": {
           "code": {
@@ -1508,6 +1625,828 @@
         "required": [
           "list"
         ],
+        "type": "object"
+      },
+      "PlatformPackageAddBody": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PlatformPackageAddData"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "PlatformPackageAddData": {
+        "properties": {
+          "code": {
+            "description": "套餐编码",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "启用",
+            "type": "boolean"
+          },
+          "menuIds": {
+            "description": "可用菜单",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "description": "套餐名称",
+            "type": "string"
+          },
+          "quotas": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TenantQuotas"
+              }
+            ],
+            "description": "配额"
+          },
+          "remark": {
+            "description": "备注",
+            "nullable": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "type": "object"
+      },
+      "PlatformPackageDeleteBody": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "PlatformPackageDeleteResult": {
+        "properties": {
+          "count": {
+            "description": "处理的行数",
+            "type": "number"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "type": "object"
+      },
+      "PlatformPackageExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlatformPackagePageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：code、name",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformPackagePageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
+      "PlatformPackageInfoBody": {
+        "properties": {
+          "id": {
+            "example": "1",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "PlatformPackagePageBody": {
+        "properties": {
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlatformPackagePageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：code、name",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformPackagePageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
+      "PlatformPackagePageEq": {
+        "properties": {
+          "enabled": {
+            "description": "启用",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "PlatformPackagePageResult": {
+        "properties": {
+          "list": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformPackageRow"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "number"
+          },
+          "size": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "list",
+          "total",
+          "page",
+          "size"
+        ],
+        "type": "object"
+      },
+      "PlatformPackagePageSort": {
+        "properties": {
+          "field": {
+            "description": "排序字段",
+            "enum": [
+              "id",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "string"
+          },
+          "order": {
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "order"
+        ],
+        "type": "object"
+      },
+      "PlatformPackageRow": {
+        "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
+          "code": {
+            "description": "套餐编码",
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "创建时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "description": "创建人",
+            "nullable": true,
+            "type": "string"
+          },
+          "enabled": {
+            "description": "启用",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "编号",
+            "example": "1",
+            "type": "string"
+          },
+          "menuIds": {
+            "description": "可用菜单",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "description": "套餐名称",
+            "type": "string"
+          },
+          "orgId": {
+            "description": "所属组织（新增时取当前组织，数据权限按它过滤）",
+            "nullable": true,
+            "type": "string"
+          },
+          "quotas": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TenantQuotas"
+              }
+            ],
+            "description": "配额"
+          },
+          "remark": {
+            "description": "备注",
+            "nullable": true,
+            "type": "object"
+          },
+          "updatedAt": {
+            "description": "修改时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "description": "修改人",
+            "nullable": true,
+            "type": "string"
+          },
+          "version": {
+            "description": "版本号，修改时原样带回",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "orgId",
+          "createdBy",
+          "updatedBy",
+          "createdAt",
+          "updatedAt",
+          "version"
+        ],
+        "type": "object"
+      },
+      "PlatformPackageUpdateBody": {
+        "properties": {
+          "data": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlatformPackageUpdateData"
+              }
+            ],
+            "description": "只传要改的字段"
+          },
+          "id": {
+            "example": "1",
+            "type": "string"
+          },
+          "version": {
+            "description": "读到的版本号，原样带回",
+            "minimum": 1,
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "data"
+        ],
+        "type": "object"
+      },
+      "PlatformPackageUpdateData": {
+        "properties": {
+          "enabled": {
+            "description": "启用",
+            "type": "boolean"
+          },
+          "menuIds": {
+            "description": "可用菜单",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "description": "套餐名称",
+            "type": "string"
+          },
+          "quotas": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TenantQuotas"
+              }
+            ],
+            "description": "配额"
+          },
+          "remark": {
+            "description": "备注",
+            "nullable": true,
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "PlatformTenantDeleteBody": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "PlatformTenantDeleteResult": {
+        "properties": {
+          "count": {
+            "description": "处理的行数",
+            "type": "number"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "type": "object"
+      },
+      "PlatformTenantExportBody": {
+        "properties": {
+          "columns": {
+            "description": "当前可见列，按传入顺序导出；仍按服务端字段权限裁剪",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlatformTenantPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "xlsx"
+            ],
+            "type": "string"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：code、name",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformTenantPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "timeZone": {
+            "description": "浏览器 IANA 时区；省略时使用服务器本地时区",
+            "example": "Asia/Shanghai",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
+      "PlatformTenantInfoBody": {
+        "properties": {
+          "id": {
+            "example": "1",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "PlatformTenantPageBody": {
+        "properties": {
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlatformTenantPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：code、name",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformTenantPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
+      "PlatformTenantPageEq": {
+        "properties": {
+          "code": {
+            "description": "租户编码",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "启用",
+            "type": "boolean"
+          },
+          "packageId": {
+            "description": "套餐",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PlatformTenantPageResult": {
+        "properties": {
+          "list": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformTenantRow"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "number"
+          },
+          "size": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "list",
+          "total",
+          "page",
+          "size"
+        ],
+        "type": "object"
+      },
+      "PlatformTenantPageSort": {
+        "properties": {
+          "field": {
+            "description": "排序字段",
+            "enum": [
+              "id",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "string"
+          },
+          "order": {
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "order"
+        ],
+        "type": "object"
+      },
+      "PlatformTenantRow": {
+        "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
+          "code": {
+            "description": "租户编码",
+            "type": "string"
+          },
+          "contactName": {
+            "description": "联系人",
+            "nullable": true,
+            "type": "object"
+          },
+          "contactPhone": {
+            "description": "联系电话",
+            "nullable": true,
+            "type": "object"
+          },
+          "createdAt": {
+            "description": "创建时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "description": "创建人",
+            "nullable": true,
+            "type": "string"
+          },
+          "domains": {
+            "description": "绑定域名",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "description": "启用",
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "description": "到期时间",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "description": "编号",
+            "example": "1",
+            "type": "string"
+          },
+          "name": {
+            "description": "租户名称",
+            "type": "string"
+          },
+          "orgId": {
+            "description": "所属组织（新增时取当前组织，数据权限按它过滤）",
+            "nullable": true,
+            "type": "string"
+          },
+          "packageId": {
+            "description": "套餐",
+            "type": "string"
+          },
+          "remark": {
+            "description": "备注",
+            "nullable": true,
+            "type": "object"
+          },
+          "updatedAt": {
+            "description": "修改时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "description": "修改人",
+            "nullable": true,
+            "type": "string"
+          },
+          "version": {
+            "description": "版本号，修改时原样带回",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "orgId",
+          "createdBy",
+          "updatedBy",
+          "createdAt",
+          "updatedAt",
+          "version"
+        ],
+        "type": "object"
+      },
+      "PlatformTenantUpdateBody": {
+        "properties": {
+          "data": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlatformTenantUpdateData"
+              }
+            ],
+            "description": "只传要改的字段"
+          },
+          "id": {
+            "example": "1",
+            "type": "string"
+          },
+          "version": {
+            "description": "读到的版本号，原样带回",
+            "minimum": 1,
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "data"
+        ],
+        "type": "object"
+      },
+      "PlatformTenantUpdateData": {
+        "properties": {
+          "contactName": {
+            "description": "联系人",
+            "nullable": true,
+            "type": "object"
+          },
+          "contactPhone": {
+            "description": "联系电话",
+            "nullable": true,
+            "type": "object"
+          },
+          "domains": {
+            "description": "绑定域名",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "description": "启用",
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "description": "到期时间",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "description": "租户名称",
+            "type": "string"
+          },
+          "packageId": {
+            "description": "套餐",
+            "type": "string"
+          },
+          "remark": {
+            "description": "备注",
+            "nullable": true,
+            "type": "object"
+          }
+        },
         "type": "object"
       },
       "PreferenceKeyDto": {
@@ -1564,16 +2503,46 @@
             "description": "当前组织下有效的超级管理员身份",
             "type": "boolean"
           },
+          "tenant": {
+            "$ref": "#/components/schemas/ProfileTenant"
+          },
           "user": {
             "$ref": "#/components/schemas/ProfileUser"
           }
         },
         "required": [
+          "tenant",
           "superAdmin",
           "user",
           "currentOrg",
           "orgs",
           "locale"
+        ],
+        "type": "object"
+      },
+      "ProfileTenant": {
+        "properties": {
+          "code": {
+            "description": "租户编码，登录时填写",
+            "type": "string"
+          },
+          "id": {
+            "description": "租户编号（平台为 0）",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platform": {
+            "description": "是不是平台（管理所有租户）",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "platform"
         ],
         "type": "object"
       },
@@ -3800,6 +4769,14 @@
             "description": "排序",
             "type": "number"
           },
+          "scope": {
+            "description": "菜单范围",
+            "enum": [
+              "tenant",
+              "platform"
+            ],
+            "type": "string"
+          },
           "title": {
             "description": "标题",
             "type": "string"
@@ -3815,6 +4792,7 @@
           }
         },
         "required": [
+          "scope",
           "type",
           "title"
         ],
@@ -4118,6 +5096,14 @@
             "description": "排序",
             "type": "number"
           },
+          "scope": {
+            "description": "菜单范围",
+            "enum": [
+              "tenant",
+              "platform"
+            ],
+            "type": "string"
+          },
           "title": {
             "description": "标题",
             "type": "string"
@@ -4236,6 +5222,14 @@
           "rank": {
             "description": "排序",
             "type": "number"
+          },
+          "scope": {
+            "description": "菜单范围",
+            "enum": [
+              "tenant",
+              "platform"
+            ],
+            "type": "string"
           },
           "title": {
             "description": "标题",
@@ -7232,6 +8226,130 @@
         ],
         "type": "object"
       },
+      "TenantCreationResult": {
+        "properties": {
+          "id": {
+            "description": "编号",
+            "example": "1",
+            "type": "string"
+          },
+          "version": {
+            "description": "版本号，修改时原样带回",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "TenantHintResult": {
+        "properties": {
+          "mode": {
+            "description": "domain：域名已绑定租户，登录页不用填租户编码；code：要填租户编码（不填等同默认租户）",
+            "enum": [
+              "domain",
+              "code"
+            ],
+            "type": "string"
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/TenantHintTenant"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "TenantHintTenant": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "type": "object"
+      },
+      "TenantIdBody": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "TenantQuotas": {
+        "properties": {
+          "aiTokensMonthly": {
+            "default": null,
+            "nullable": true,
+            "type": "number"
+          },
+          "maxSites": {
+            "default": null,
+            "nullable": true,
+            "type": "number"
+          },
+          "maxUsers": {
+            "default": null,
+            "nullable": true,
+            "type": "number"
+          },
+          "mcpCallsMonthly": {
+            "default": null,
+            "nullable": true,
+            "type": "number"
+          },
+          "storageMb": {
+            "default": null,
+            "nullable": true,
+            "type": "number"
+          }
+        },
+        "required": [
+          "maxUsers",
+          "storageMb",
+          "maxSites",
+          "aiTokensMonthly",
+          "mcpCallsMonthly"
+        ],
+        "type": "object"
+      },
+      "TenantUsageResult": {
+        "properties": {
+          "quotas": {
+            "$ref": "#/components/schemas/TenantQuotas"
+          },
+          "storageBytes": {
+            "description": "已用字节，十进制字符串，避免大数丢精度",
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "users": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "tenantId",
+          "users",
+          "storageBytes",
+          "quotas"
+        ],
+        "type": "object"
+      },
       "TokenResult": {
         "properties": {
           "accessToken": {
@@ -7637,6 +8755,59 @@
           }
         },
         "summary": "刷新访问令牌",
+        "tags": [
+          "auth 登录认证"
+        ]
+      }
+    },
+    "/admin/auth/tenant-hint": {
+      "get": {
+        "description": "按访问的域名判断：已绑定租户返回 domain 和租户名称；否则返回 code，登录页显示「租户编码」，出题、登录、刷新、退出请求带 X-Tenant-Code 头（不带等同默认租户）",
+        "operationId": "authTenantHint",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TenantHintResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "5003：服务暂不可用"
+          }
+        },
+        "summary": "登录页要不要填租户编码",
         "tags": [
           "auth 登录认证"
         ]
@@ -9520,6 +10691,1118 @@
         ],
         "x-permission": {
           "code": "file:asset:upload",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/package/add": {
+      "post": {
+        "operationId": "platformPackageAdd",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformPackageAddBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformPackageRow"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          }
+        },
+        "summary": "新增套餐",
+        "tags": [
+          "platform/package 套餐"
+        ],
+        "x-permission": {
+          "code": "platform:package:add",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/package/delete": {
+      "post": {
+        "operationId": "platformPackageDelete",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformPackageDeleteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformPackageDeleteResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "summary": "删除套餐（整批成败）",
+        "tags": [
+          "platform/package 套餐"
+        ],
+        "x-permission": {
+          "code": "platform:package:delete",
+          "risk": "high"
+        }
+      }
+    },
+    "/admin/platform/package/export": {
+      "post": {
+        "operationId": "platformPackageExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformPackageExportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出套餐（Excel / CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "platform/package 套餐"
+        ],
+        "x-permission": {
+          "code": "platform:package:export",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/package/info": {
+      "post": {
+        "operationId": "platformPackageInfo",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformPackageInfoBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformPackageRow"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "summary": "套餐详情",
+        "tags": [
+          "platform/package 套餐"
+        ],
+        "x-permission": {
+          "code": "platform:package:info",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/package/menus": {
+      "post": {
+        "operationId": "platformPackageMenus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "items": {
+                        "$ref": "#/components/schemas/PackageMenuItem"
+                      },
+                      "type": "array"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          }
+        },
+        "summary": "可选租户菜单树（含按钮）",
+        "tags": [
+          "platform/package 套餐"
+        ],
+        "x-permission": {
+          "code": "platform:package:info",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/package/page": {
+      "post": {
+        "operationId": "platformPackagePage",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformPackagePageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformPackagePageResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          }
+        },
+        "summary": "套餐分页列表",
+        "tags": [
+          "platform/package 套餐"
+        ],
+        "x-permission": {
+          "code": "platform:package:page",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/package/schema": {
+      "get": {
+        "operationId": "platformPackageSchema",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CrudSchema"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "套餐页面描述",
+        "tags": [
+          "platform/package 套餐"
+        ],
+        "x-permission": {
+          "code": "platform:package:page",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/package/update": {
+      "post": {
+        "operationId": "platformPackageUpdate",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformPackageUpdateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformPackageRow"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "summary": "修改套餐",
+        "tags": [
+          "platform/package 套餐"
+        ],
+        "x-permission": {
+          "code": "platform:package:update",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/tenant/add": {
+      "post": {
+        "operationId": "platformTenantAdd",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTenantBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TenantCreationResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          }
+        },
+        "summary": "创建租户并在同一事务初始化管理员",
+        "tags": [
+          "platform/tenant 租户"
+        ],
+        "x-permission": {
+          "code": "platform:tenant:add",
+          "risk": "high"
+        }
+      }
+    },
+    "/admin/platform/tenant/delete": {
+      "post": {
+        "operationId": "platformTenantDelete",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformTenantDeleteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformTenantDeleteResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "summary": "删除租户（整批成败）",
+        "tags": [
+          "platform/tenant 租户"
+        ],
+        "x-permission": {
+          "code": "platform:tenant:delete",
+          "risk": "high"
+        }
+      }
+    },
+    "/admin/platform/tenant/export": {
+      "post": {
+        "operationId": "platformTenantExport",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformTenantExportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Excel / CSV 文件（CSV为UTF-8带BOM）"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4029：请求太频繁或输错次数过多，data.retryAfterSeconds 是多少秒后再试"
+          }
+        },
+        "summary": "导出租户（Excel / CSV，按列表的查询条件，最多 1 万行）",
+        "tags": [
+          "platform/tenant 租户"
+        ],
+        "x-permission": {
+          "code": "platform:tenant:export",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/tenant/info": {
+      "post": {
+        "operationId": "platformTenantInfo",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformTenantInfoBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformTenantRow"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "summary": "租户详情",
+        "tags": [
+          "platform/tenant 租户"
+        ],
+        "x-permission": {
+          "code": "platform:tenant:info",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/tenant/page": {
+      "post": {
+        "operationId": "platformTenantPage",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformTenantPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformTenantPageResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          }
+        },
+        "summary": "租户分页列表",
+        "tags": [
+          "platform/tenant 租户"
+        ],
+        "x-permission": {
+          "code": "platform:tenant:page",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/tenant/schema": {
+      "get": {
+        "operationId": "platformTenantSchema",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CrudSchema"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "租户页面描述",
+        "tags": [
+          "platform/tenant 租户"
+        ],
+        "x-permission": {
+          "code": "platform:tenant:page",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/tenant/update": {
+      "post": {
+        "operationId": "platformTenantUpdate",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformTenantUpdateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformTenantRow"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "summary": "修改租户",
+        "tags": [
+          "platform/tenant 租户"
+        ],
+        "x-permission": {
+          "code": "platform:tenant:update",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/platform/tenant/usage": {
+      "post": {
+        "operationId": "platformTenantUsage",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantIdBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TenantUsageResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "summary": "只读查看租户用户数、存储与配额",
+        "tags": [
+          "platform/tenant 租户"
+        ],
+        "x-permission": {
+          "code": "platform:tenant:info",
           "risk": "normal"
         }
       }

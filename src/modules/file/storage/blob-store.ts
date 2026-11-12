@@ -3,7 +3,7 @@ import { ErrorCode } from '../../../core/exceptions/error-code.js';
 
 /** 对象名只能由服务端生成；任何存储适配器都不能接受任意路径或 URL。 */
 export const BLOB_KEY =
-  /^tenants\/[1-9]\d{0,19}\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(png|jpg|webp|pdf)$/;
+  /^tenants\/(?:0|[1-9]\d{0,19})\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(png|jpg|webp|pdf)$/;
 export function assertBlobKey(key: string): void {
   if (!BLOB_KEY.test(key)) throw new Error('文件对象名无效');
 }

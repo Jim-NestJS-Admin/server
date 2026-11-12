@@ -187,13 +187,15 @@ describe('T26/T27共享字典与导出', () => {
       .set('x-test-tenant', tenant)
       .set('x-test-user', user)
       .send(body);
+  // 阶段 2：系统字典只有平台超级管理员能维护，所以系统字典默认用平台（租户 0）建
+  const builtinTypes = new Set<string>();
   const type = async (
     code = 'sys.test_status',
     builtin = true,
-    tenant = '1',
+    tenant = builtin ? '0' : '1',
     user = '100',
-  ) =>
-    (
+  ) => {
+    const data = (
       await post(
         'system/dict-type/add',
         { data: { code, name: code, builtin, enabled: true } },
@@ -201,11 +203,14 @@ describe('T26/T27共享字典与导出', () => {
         user,
       ).expect(200)
     ).body.data;
+    if (builtin) builtinTypes.add(String(data.id));
+    return data;
+  };
   const item = async (
     typeId: string,
     value = '1',
     label = '启用',
-    tenant = '1',
+    tenant = builtinTypes.has(typeId) ? '0' : '1',
     user = '100',
   ) =>
     (
@@ -259,13 +264,21 @@ describe('T26/T27共享字典与导出', () => {
       '2',
       '200',
     ).expect(404);
+    // 租户超管不能改系统字典（阶段 2 只给平台超管）
     await post('system/dict-item/update', {
       id: entry.id,
       version: entry.version,
-      data: { value: '2' },
-    }).expect(400);
-    await post('system/dict-item/delete', { ids: [entry.id] }).expect(400);
-    await post('system/dict-type/delete', { ids: [dictionary.id] }).expect(400);
+      data: { label: '租户改' },
+    }).expect(403);
+    await post(
+      'system/dict-item/update',
+      { id: entry.id, version: entry.version, data: { value: '2' } },
+      '0',
+    ).expect(400);
+    await post('system/dict-item/delete', { ids: [entry.id] }, '0').expect(400);
+    await post('system/dict-type/delete', { ids: [dictionary.id] }, '0').expect(
+      400,
+    );
   });
 
   it('修改共享显示名和停用会切换所有租户缓存版本；旧值不再可选', async () => {
@@ -274,21 +287,21 @@ describe('T26/T27共享字典与导出', () => {
     await options('sys.test_status', '1').expect(200);
     await options('sys.test_status', '2').expect(200);
     const changed = (
-      await post('system/dict-item/update', {
-        id: entry.id,
-        version: entry.version,
-        data: { label: '新的显示名' },
-      }).expect(200)
+      await post(
+        'system/dict-item/update',
+        { id: entry.id, version: entry.version, data: { label: '新的显示名' } },
+        '0',
+      ).expect(200)
     ).body.data;
     expect(
       (await options('sys.test_status', '2').expect(200)).body.data.items[0]
         .label,
     ).toBe('新的显示名');
-    await post('system/dict-item/update', {
-      id: entry.id,
-      version: changed.version,
-      data: { enabled: false },
-    }).expect(200);
+    await post(
+      'system/dict-item/update',
+      { id: entry.id, version: changed.version, data: { enabled: false } },
+      '0',
+    ).expect(200);
     expect(
       (await options('sys.test_status', '1').expect(200)).body.data.items,
     ).toEqual([]);
@@ -377,11 +390,11 @@ describe('T26/T27共享字典与导出', () => {
         200,
       )
     ).body.data;
-    await post('system/dict-item/update', {
-      id: entry.id,
-      version: entry.version,
-      data: { enabled: false },
-    }).expect(200);
+    await post(
+      'system/dict-item/update',
+      { id: entry.id, version: entry.version, data: { enabled: false } },
+      '0',
+    ).expect(200);
     await post('test/dictionary-probe/update', {
       id: row.id,
       version: row.version,
@@ -633,7 +646,11 @@ describe('T26/T27共享字典与导出', () => {
       await runner.release();
     }
     const row = (
-      await post('system/dict-type/page', { eq: { builtin: true } }).expect(200)
+      await post(
+        'system/dict-type/page',
+        { eq: { builtin: true } },
+        '0',
+      ).expect(200)
     ).body.data.list[0];
     expect(row.id).toBe(dictionary.id);
     expect(row.code).toBe('sys.common_status');

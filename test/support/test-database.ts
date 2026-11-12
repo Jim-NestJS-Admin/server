@@ -20,3 +20,17 @@ export function resolveTestDatabase(input: {
     );
   return testDb;
 }
+
+/** 清理数据前再次确认实际连接没有偏离端到端测试配置。 */
+export function assertTestDatabase(
+  actualDatabase: unknown,
+  configuredDatabase: string | undefined,
+): void {
+  if (!configuredDatabase) throw new Error('未设置端到端测试库，拒绝清理数据');
+  const expected = resolveTestDatabase({
+    appDb: undefined,
+    testDb: configuredDatabase,
+  });
+  if (actualDatabase !== expected)
+    throw new Error('实际连接库与端到端测试配置不一致，拒绝清理数据');
+}

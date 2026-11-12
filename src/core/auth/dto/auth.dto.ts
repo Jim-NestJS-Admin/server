@@ -89,7 +89,32 @@ export class ProfileUser {
   @ApiProperty({ type: String, nullable: true }) avatar!: string | null;
 }
 
+export class ProfileTenant {
+  @ApiProperty({ description: '租户编号（平台为 0）' }) id!: string;
+  @ApiProperty({ description: '租户编码，登录时填写' }) code!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({ description: '是不是平台（管理所有租户）' })
+  platform!: boolean;
+}
+
+export class TenantHintTenant {
+  @ApiProperty() code!: string;
+  @ApiProperty() name!: string;
+}
+
+export class TenantHintResult {
+  @ApiProperty({
+    enum: ['domain', 'code'],
+    description:
+      'domain：域名已绑定租户，登录页不用填租户编码；code：要填租户编码（不填等同默认租户）',
+  })
+  mode!: 'domain' | 'code';
+  @ApiPropertyOptional({ type: TenantHintTenant })
+  tenant?: TenantHintTenant;
+}
+
 export class ProfileResult {
+  @ApiProperty({ type: ProfileTenant }) tenant!: ProfileTenant;
   @ApiProperty({ description: '当前组织下有效的超级管理员身份' })
   superAdmin!: boolean;
   @ApiProperty({ type: ProfileUser }) user!: ProfileUser;

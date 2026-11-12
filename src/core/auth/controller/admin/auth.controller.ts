@@ -12,6 +12,7 @@ import {
   CaptchaQueryDto,
   CaptchaResultDto,
   LoginDto,
+  TenantHintResult,
   TokenResult,
 } from '../../dto/auth.dto.js';
 import {
@@ -35,6 +36,20 @@ export class AuthController {
     private readonly tokens: TokenService,
     private readonly config: AppConfigService,
   ) {}
+
+  @Get('tenant-hint')
+  @RateLimit('captcha', 30, 60)
+  @ApiOperation({
+    operationId: 'authTenantHint',
+    summary: '登录页要不要填租户编码',
+    description:
+      '按访问的域名判断：已绑定租户返回 domain 和租户名称；否则返回 code，登录页显示「租户编码」，出题、登录、刷新、退出请求带 X-Tenant-Code 头（不带等同默认租户）',
+  })
+  @ApiResult(TenantHintResult)
+  @ApiErrors(503)
+  tenantHint(@Req() req: Request): Promise<TenantHintResult> {
+    return this.auth.tenantHint(req);
+  }
 
   @Get('captcha')
   @RateLimit('captcha', 30, 60)

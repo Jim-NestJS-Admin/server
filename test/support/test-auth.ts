@@ -7,6 +7,11 @@ import { ErrorCode } from '../../src/core/exceptions/error-code.js';
 import type { Principal } from '../../src/core/tenant/request-context.js';
 import { DEFAULT_TENANT_ID } from '../../src/core/tenant/tenant.constants.js';
 import {
+  TenantSource,
+  BuiltinTenantSource,
+} from '../../src/core/tenant/tenant-source.js';
+import { TenantQuotaService } from '../../src/modules/tenant/service/tenant-quota.service.js';
+import {
   PermissionSource,
   type RoleGrant,
 } from '../../src/core/permission/permission-source.js';
@@ -67,5 +72,13 @@ export const createTestModule = (metadata: ModuleMetadata) =>
   Test.createTestingModule(metadata)
     .overrideProvider(AdminAuth)
     .useClass(TestAdminAuth)
+    // 旧资源测试使用身份头而非真实目录/套餐；T31/T32真实租户套件不使用这些替换。
+    .overrideProvider(TenantSource)
+    .useClass(BuiltinTenantSource)
+    .overrideProvider(TenantQuotaService)
+    .useValue({
+      assertCanAddUser: async () => undefined,
+      assertStorage: async () => undefined,
+    })
     .overrideProvider(PermissionSource)
     .useClass(AllowAllPermissionSource);

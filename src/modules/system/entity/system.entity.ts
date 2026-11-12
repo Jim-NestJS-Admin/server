@@ -185,6 +185,18 @@ export class SystemUserRole extends BaseEntity {
 
 @Entity('sys_menu')
 export class SystemMenu extends BaseEntity {
+  @CrudField({
+    label: '菜单范围',
+    dict: [
+      { value: 'tenant', label: '租户' },
+      { value: 'platform', label: '平台' },
+    ],
+    form: { required: true },
+  })
+  @IsOptional()
+  @IsIn(['platform', 'tenant'])
+  @Column({ type: 'varchar', length: 16, default: 'tenant' })
+  scope!: 'platform' | 'tenant';
   @ApiProperty({ type: String, nullable: true })
   @CrudField({ label: '上级菜单', nullable: true })
   @IsOptional()

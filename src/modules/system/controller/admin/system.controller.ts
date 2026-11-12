@@ -1,4 +1,5 @@
-import { Body, Get, HttpCode, Post } from '@nestjs/common';
+import { Body, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { PlatformOnlyGuard } from '../../../tenant/platform-only.guard.js';
 import { ApiBody, ApiOperation, ApiProperty } from '@nestjs/swagger';
 import { BaseController } from '../../../../core/crud/base.controller.js';
 import { CrudController } from '../../../../core/crud/crud-controller.decorator.js';
@@ -157,6 +158,7 @@ export class SystemRoleController extends BaseController<SystemRole> {}
 export class SystemOrgController extends BaseController<SystemOrg> {}
 
 @sensitiveWrites('system:menu')
+@UseGuards(PlatformOnlyGuard)
 @CrudController({
   prefix: 'system/menu',
   label: '菜单',
