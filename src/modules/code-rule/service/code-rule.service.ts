@@ -139,10 +139,7 @@ export class CodeRuleService
         invalid('请选择有效的系统时区', 'timezone');
       }
     }
-    if (
-      behaviorChanged ||
-      (changes.status === 'enabled' && existing.status !== 'enabled')
-    )
+    if (behaviorChanged || (changes.status === '1' && existing.status !== '1'))
       validateConfig(next);
     const used = await this.repos
       .for(CodeAllocation)
@@ -263,7 +260,7 @@ export class CodeRuleService
         .setLock('pessimistic_write')
         .getOne();
       if (!rule) throw crudErrors.notFound();
-      if (rule.firstBoundAt || rule.status !== 'enabled')
+      if (rule.firstBoundAt || rule.status !== '1')
         conflict('请选择从未绑定过且已启用的新规则');
       if (
         await this.repos
@@ -453,8 +450,7 @@ export class CodeRuleService
         .andWhere('r.id = :id', { id: item.ruleId })
         .setLock('pessimistic_read')
         .getOne();
-      if (!r || r.status !== 'enabled')
-        conflict('编码规则已停用，请联系管理员');
+      if (!r || r.status !== '1') conflict('编码规则已停用，请联系管理员');
       compatible(r, this.usages.get(item.usageKey));
       rules.set(r.id, r);
     }

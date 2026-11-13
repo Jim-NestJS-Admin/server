@@ -1,3 +1,4 @@
+import { CommonCodeRuleStatus1794618000000 } from '../src/database/migrations/1794618000000-CommonCodeRuleStatus.js';
 import { DictionaryTags1794614400000 } from '../src/database/migrations/1794614400000-DictionaryTags.js';
 import type { INestApplication } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -45,6 +46,7 @@ describe('T35 表单版本、校验与租户边界', () => {
     const dictionaryRunner = ds.createQueryRunner();
     try {
       await new DictionaryTags1794614400000().up(dictionaryRunner);
+      await new CommonCodeRuleStatus1794618000000().up(dictionaryRunner);
     } finally {
       await dictionaryRunner.release();
     }
@@ -86,7 +88,7 @@ describe('T35 表单版本、校验与租户边界', () => {
               { type: 'sequence', width: 6 },
             ],
             start: '1',
-            status: 'enabled',
+            status: '1',
           },
         })
         .expect(200);

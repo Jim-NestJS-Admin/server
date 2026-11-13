@@ -1,3 +1,4 @@
+import { CommonCodeRuleStatus1794618000000 } from '../database/migrations/1794618000000-CommonCodeRuleStatus.js';
 import { DictionaryTags1794614400000 } from '../database/migrations/1794614400000-DictionaryTags.js';
 import { CodegenModuleSpec1794312000000 } from '../database/migrations/1794312000000-CodegenModuleSpec.js';
 import { TenantCatalog1794412800000 } from '../database/migrations/1794412800000-TenantCatalog.js';
@@ -107,6 +108,7 @@ async function bootstrapLocal(): Promise<void> {
           FormDefinition1794470400000,
           CodeRules1794528000000,
           DictionaryTags1794614400000,
+          CommonCodeRuleStatus1794618000000,
         ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,

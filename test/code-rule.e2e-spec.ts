@@ -1,3 +1,4 @@
+import { CommonCodeRuleStatus1794618000000 } from '../src/database/migrations/1794618000000-CommonCodeRuleStatus.js';
 import { DictionaryTags1794614400000 } from '../src/database/migrations/1794614400000-DictionaryTags.js';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -59,6 +60,7 @@ describe('T43真实MySQL编码分配、规则与用途隔离', () => {
     const dictionaryRunner = db.createQueryRunner();
     try {
       await new DictionaryTags1794614400000().up(dictionaryRunner);
+      await new CommonCodeRuleStatus1794618000000().up(dictionaryRunner);
     } finally {
       await dictionaryRunner.release();
     }
@@ -103,7 +105,7 @@ describe('T43真实MySQL编码分配、规则与用途隔离', () => {
       { type: 'sequence', width },
     ],
     start,
-    status: 'enabled',
+    status: '1',
   });
   async function rule(prefix = 'f_', start = '1', tenant = '1', width = 6) {
     return (
@@ -481,7 +483,7 @@ describe('T43真实MySQL编码分配、规则与用途隔离', () => {
     await post('update', {
       id: r.id,
       version: next.body.data.version,
-      data: { status: 'disabled' },
+      data: { status: '0' },
     }).expect(200);
     await expect(take()).rejects.toMatchObject({ code: 4009 });
     await post('delete', { ids: [r.id] }).expect(409);
