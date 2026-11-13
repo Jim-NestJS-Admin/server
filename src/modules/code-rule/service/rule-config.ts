@@ -2,6 +2,9 @@ import { crudErrors } from '../../../core/crud/crud.errors.js';
 import type { Type } from '@nestjs/common';
 import type { BaseEntity } from '../../../core/crud/base.entity.js';
 
+export const CODE_START_MESSAGE =
+  '起始值必须为大于或等于1的整数，最多12位，不能以0开头。';
+
 export type Segment =
   | { type: 'literal'; value: string }
   | { type: 'date'; format: string }
@@ -100,12 +103,13 @@ export function validateConfig(input: RuleConfig): RuleConfig {
   }
   if (sequences !== 1 || dates > 1 || timestamps > 1 || length > 64)
     invalid('必须恰有一个流水段，最多一个日期和一个时间戳段，总长度不超过64');
-  if (
-    typeof input.start !== 'string' ||
-    !/^[1-9]\d{0,11}$/.test(input.start) ||
-    BigInt(input.start) >= 10n ** BigInt(width)
-  )
-    invalid('起始值必须大于0，且不能超过流水位宽', 'start');
+  if (typeof input.start !== 'string' || !/^[1-9]\d{0,11}$/.test(input.start))
+    invalid(CODE_START_MESSAGE, 'start');
+  if (BigInt(input.start) >= 10n ** BigInt(width))
+    invalid(
+      `起始值不能超过${width}位流水号的最大值${10n ** BigInt(width) - 1n}。`,
+      'start',
+    );
   const date = input.segments.find((s) => s.type === 'date');
   const format = date?.type === 'date' ? date.format : '';
   if (

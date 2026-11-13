@@ -9,7 +9,7 @@ import {
   IsObject,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import type { Segment } from '../service/rule-config.js';
+import { CODE_START_MESSAGE, type Segment } from '../service/rule-config.js';
 export class CodeRuleValidateInput {
   @ApiProperty() @IsString() timezone!: string;
   @ApiProperty() @IsIn(['never', 'year', 'month', 'day']) resetPeriod!: string;
@@ -19,7 +19,9 @@ export class CodeRuleValidateInput {
   })
   @IsArray()
   segments!: Segment[];
-  @ApiProperty() @Matches(/^[1-9]\d{0,11}$/) start!: string;
+  @ApiProperty()
+  @Matches(/^[1-9]\d{0,11}$/, { message: CODE_START_MESSAGE })
+  start!: string;
 }
 export class CodeRuleValidateBody {
   @ApiProperty({ type: CodeRuleValidateInput })

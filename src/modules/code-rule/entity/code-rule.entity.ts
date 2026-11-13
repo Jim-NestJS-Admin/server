@@ -3,7 +3,7 @@ import { IsArray, IsIn, IsString, Matches, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { BaseEntity, CrudField } from '../../../core/crud/index.js';
-import type { Segment } from '../service/rule-config.js';
+import { CODE_START_MESSAGE, type Segment } from '../service/rule-config.js';
 
 @Entity('sys_code_rule')
 @Index('uk_code_rule_code', ['tenantId', 'code', 'activeGuard'], {
@@ -58,7 +58,7 @@ export class CodeRule extends BaseEntity {
   @Column({ type: 'json' })
   segments!: Segment[];
   @CrudField({ label: '起始值', form: { required: true } })
-  @Matches(/^[1-9]\d{0,11}$/)
+  @Matches(/^[1-9]\d{0,11}$/, { message: CODE_START_MESSAGE })
   @Column({ type: 'bigint', unsigned: true })
   start!: string;
   @CrudField({
