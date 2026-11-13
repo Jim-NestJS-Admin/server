@@ -240,6 +240,43 @@
         ],
         "type": "object"
       },
+      "CodeTimeZoneItem": {
+        "properties": {
+          "common": {
+            "type": "boolean"
+          },
+          "labelEn": {
+            "type": "string"
+          },
+          "labelZh": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "labelZh",
+          "labelEn",
+          "common"
+        ],
+        "type": "object"
+      },
+      "CodeTimeZoneResult": {
+        "properties": {
+          "list": {
+            "items": {
+              "$ref": "#/components/schemas/CodeTimeZoneItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "list"
+        ],
+        "type": "object"
+      },
       "CodeUsageItem": {
         "properties": {
           "allowRuleSwitch": {
@@ -14896,6 +14933,52 @@
           }
         },
         "summary": "编码规则页面描述",
+        "tags": [
+          "system/code-rule 编码规则"
+        ],
+        "x-permission": {
+          "code": "system:code-rule:page",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/system/code-rule/timezones": {
+      "post": {
+        "operationId": "codeRuleTimeZones",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CodeTimeZoneResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "系统维护的IANA时区目录，含中文城市名",
         "tags": [
           "system/code-rule 编码规则"
         ],

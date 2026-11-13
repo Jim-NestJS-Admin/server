@@ -1,6 +1,7 @@
 import { Entity, Column, Index } from 'typeorm';
 import { IsArray, IsIn, IsString, Matches, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { BaseEntity, CrudField } from '../../../core/crud/index.js';
 import type { Segment } from '../service/rule-config.js';
 
@@ -10,7 +11,13 @@ import type { Segment } from '../service/rule-config.js';
 })
 export class CodeRule extends BaseEntity {
   @CrudField({ label: '规则编码', edit: 'add', form: { required: true } })
-  @Matches(/^[a-z][a-z0-9_]{1,63}$/)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.toLowerCase() : value,
+  )
+  @Matches(/^[a-z][a-z0-9_]{1,63}$/, {
+    message:
+      '规则编码须为2–64位，以小写字母开头，只能包含小写字母、数字和下划线，例如 test_code',
+  })
   @Column({ length: 64 })
   code!: string;
   @CrudField({ label: '规则名称', form: { required: true } })

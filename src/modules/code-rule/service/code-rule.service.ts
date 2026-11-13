@@ -20,6 +20,7 @@ import {
 } from '../entity/code-rule.entity.js';
 import { CodeUsageRegistry } from './usage-registry.js';
 import { CodeSequenceStore } from './code-sequence.store.js';
+import { canonicalTimeZone } from '../../../core/time/time-zones.js';
 import { BusinessException } from '../../../core/exceptions/business.exception.js';
 import { ErrorCode } from '../../../core/exceptions/error-code.js';
 import {
@@ -29,6 +30,7 @@ import {
   periodKey,
   renderCode,
   invalid,
+  validateOutput,
 } from './rule-config.js';
 
 function conflict(message: string): never {
@@ -96,6 +98,11 @@ export class CodeRuleService
       .catch(databaseFailure);
   }
   protected override async beforeAdd(data: Partial<CodeRule>) {
+    try {
+      data.timezone = canonicalTimeZone(data.timezone!);
+    } catch {
+      invalid('请选择有效的系统时区', 'timezone');
+    }
     Object.assign(data, validateConfig(data as CodeRule), {
       revision: 1,
       firstBoundAt: null,
@@ -111,21 +118,39 @@ export class CodeRuleService
     tx: CrudTx,
   ) {
     const next = Object.assign(new CodeRule(), existing, changes);
-    validateConfig(next);
+    const behaviorChanged = [
+      'segments',
+      'resetPeriod',
+      'timezone',
+      'start',
+    ].some(
+      (k) =>
+        JSON.stringify(next[k as keyof CodeRule]) !==
+        JSON.stringify(existing[k as keyof CodeRule]),
+    );
+    if (
+      changes.timezone !== undefined &&
+      changes.timezone !== existing.timezone
+    ) {
+      try {
+        next.timezone = canonicalTimeZone(changes.timezone);
+        changes.timezone = next.timezone;
+      } catch {
+        invalid('请选择有效的系统时区', 'timezone');
+      }
+    }
+    if (
+      behaviorChanged ||
+      (changes.status === 'enabled' && existing.status !== 'enabled')
+    )
+      validateConfig(next);
     const used = await this.repos
       .for(CodeAllocation)
       .query('a', tx.manager)
       .andWhere('a.ruleId = :id', { id: existing.id })
       .setLock('pessimistic_read')
       .getOne();
-    if (
-      used &&
-      ['segments', 'resetPeriod', 'timezone', 'start'].some(
-        (k) =>
-          JSON.stringify(next[k as keyof CodeRule]) !==
-          JSON.stringify(existing[k as keyof CodeRule]),
-      )
-    )
+    if (used && behaviorChanged)
       conflict(
         '规则已发号，格式、时区、周期和起始值不可修改，请复制新规则并换绑',
       );
@@ -135,7 +160,8 @@ export class CodeRuleService
       .andWhere('b.ruleId = :id', { id: existing.id })
       .setLock('pessimistic_read')
       .getOne();
-    if (binding) compatible(next, this.usages.get(binding.usageKey));
+    if (binding && behaviorChanged)
+      compatible(next, this.usages.get(binding.usageKey));
     changes.revision = existing.revision + 1;
   }
   protected override async afterUpdate(row: CodeRule, tx: CrudTx) {
@@ -423,6 +449,7 @@ export class CodeRuleService
       for (let i = 0; i < req.count; i++) {
         const n = end - BigInt(req.count) + 1n + BigInt(i),
           code = renderCode(rule, n, now);
+        validateOutput(code, this.usages.get(req.usageKey));
         await this.repos.for(CodeAllocation).insert(
           {
             usageKey: req.usageKey,

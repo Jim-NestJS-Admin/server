@@ -5,6 +5,7 @@ import type { BaseEntity } from '../../../core/crud/base.entity.js';
 export type Segment =
   | { type: 'literal'; value: string }
   | { type: 'date'; format: string }
+  | { type: 'timestamp'; unit: 'seconds' | 'milliseconds' }
   | { type: 'sequence'; width: number };
 export interface RuleConfig {
   timezone: string;
@@ -25,7 +26,15 @@ export interface CodeUsage {
   uniqueScope: 'tenant';
   allowRuleSwitch: boolean;
 }
-const formats = ['yyyy', 'yyyyMM', 'yyyy-MM', 'yyyyMMdd', 'yyyy-MM-dd'];
+const formats = [
+  'yyyy',
+  'yyyyMM',
+  'yyyy-MM',
+  'yyyyMMdd',
+  'yyyy-MM-dd',
+  'yyyyMMddHHmmss',
+  'yyyy-MM-dd_HH-mm-ss',
+];
 export function invalid(message: string, field = 'segments'): never {
   throw crudErrors.badRequest('编码规则不合法', [
     { field: `data.${field}`, messages: [message] },
@@ -46,6 +55,7 @@ export function validateConfig(input: RuleConfig): RuleConfig {
   )
     invalid('请配置1至4个编码段');
   let dates = 0,
+    timestamps = 0,
     sequences = 0,
     length = 0,
     width = 0;
@@ -56,7 +66,9 @@ export function validateConfig(input: RuleConfig): RuleConfig {
         ? ['type', 'value']
         : s.type === 'date'
           ? ['type', 'format']
-          : ['type', 'width'];
+          : s.type === 'timestamp'
+            ? ['type', 'unit']
+            : ['type', 'width'];
     if (Object.keys(s).some((k) => !allowed.includes(k)))
       invalid('编码段包含不支持的配置');
     if (s.type === 'literal') {
@@ -67,6 +79,12 @@ export function validateConfig(input: RuleConfig): RuleConfig {
       if (!formats.includes(s.format)) invalid('日期格式无效');
       dates++;
       length += s.format.length;
+    } else if (s.type === 'timestamp') {
+      if (!['seconds', 'milliseconds'].includes(s.unit))
+        invalid('请选择秒或毫秒时间戳');
+      timestamps++;
+      // 以Date支持的非负时间范围预算长度，生成时仍按用途校验真实输出。
+      length += s.unit === 'seconds' ? 13 : 16;
     } else if (s.type === 'sequence') {
       if (
         !Number.isInteger(s.width) ||
@@ -80,8 +98,8 @@ export function validateConfig(input: RuleConfig): RuleConfig {
       length += width;
     } else invalid('不支持的编码段类型');
   }
-  if (sequences !== 1 || dates > 1 || length > 64)
-    invalid('必须恰有一个流水段、最多一个日期段，总长度不超过64');
+  if (sequences !== 1 || dates > 1 || timestamps > 1 || length > 64)
+    invalid('必须恰有一个流水段，最多一个日期和一个时间戳段，总长度不超过64');
   if (
     typeof input.start !== 'string' ||
     !/^[1-9]\d{0,11}$/.test(input.start) ||
@@ -106,9 +124,20 @@ export function dateParts(timezone: string, now: Date) {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
   }).formatToParts(now);
   const part = (key: string) => p.find((v) => v.type === key)!.value;
-  return { yyyy: part('year'), MM: part('month'), dd: part('day') };
+  return {
+    yyyy: part('year'),
+    MM: part('month'),
+    dd: part('day'),
+    HH: part('hour'),
+    mm: part('minute'),
+    ss: part('second'),
+  };
 }
 export function periodKey(config: RuleConfig, now: Date) {
   const p = dateParts(config.timezone, now);
@@ -126,12 +155,21 @@ export function renderCode(config: RuleConfig, value: bigint, now: Date) {
     .map((s) =>
       s.type === 'literal'
         ? s.value
-        : s.type === 'sequence'
-          ? value.toString().padStart(s.width, '0')
-          : s.format
-              .replace('yyyy', p.yyyy)
-              .replace('MM', p.MM)
-              .replace('dd', p.dd),
+        : s.type === 'timestamp'
+          ? String(
+              s.unit === 'seconds'
+                ? Math.floor(now.getTime() / 1000)
+                : now.getTime(),
+            )
+          : s.type === 'sequence'
+            ? value.toString().padStart(s.width, '0')
+            : s.format
+                .replace('yyyy', p.yyyy)
+                .replace('MM', p.MM)
+                .replace('dd', p.dd)
+                .replace('HH', p.HH)
+                .replace('mm', p.mm)
+                .replace('ss', p.ss),
     )
     .join('');
 }
@@ -141,6 +179,22 @@ export function maximum(config: RuleConfig) {
 }
 export function compatible(config: RuleConfig, usage: CodeUsage) {
   validateConfig(config);
+  const lengthBudget = config.segments.reduce(
+    (n, s) =>
+      n +
+      (s.type === 'literal'
+        ? s.value.length
+        : s.type === 'date'
+          ? s.format.length
+          : s.type === 'sequence'
+            ? s.width
+            : s.unit === 'seconds'
+              ? 13
+              : 16),
+    0,
+  );
+  if (lengthBudget > usage.maxLength)
+    invalid(`规则与“${usage.name}”的最大长度不兼容`);
   for (const value of [BigInt(config.start), maximum(config)]) {
     const code = renderCode(config, value, new Date('2026-11-13T12:00:00Z'));
     const pattern =
@@ -158,4 +212,19 @@ export function compatible(config: RuleConfig, usage: CodeUsage) {
     )
       invalid(`规则与“${usage.name}”的长度或字符格式不兼容`);
   }
+}
+export function validateOutput(code: string, usage: CodeUsage) {
+  const pattern =
+    usage.charset === 'digits'
+      ? /^\d+$/
+      : usage.charset === 'lower_slug'
+        ? /^[a-z][a-z0-9_]*$/
+        : /^[A-Z0-9_-]+$/;
+  if (
+    !pattern.test(code) ||
+    code.length > usage.maxLength ||
+    code.length < (usage.minLength ?? 1) ||
+    (usage.mustStartWithLetter && !/^[A-Za-z]/.test(code))
+  )
+    invalid(`生成的编码与“${usage.name}”的长度或字符格式不兼容`);
 }

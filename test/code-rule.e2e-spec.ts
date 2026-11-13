@@ -213,6 +213,79 @@ describe('T43真实MySQL编码分配、规则与用途隔离', () => {
       3,
     );
   });
+  it('时间戳规则可保存、绑定、预览与批量分配，同一时刻仍通过流水保证唯一', async () => {
+    const created = await post('add', {
+      data: {
+        ...data('ts_'),
+        segments: [
+          { type: 'literal', value: 'ts_' },
+          { type: 'timestamp', unit: 'milliseconds' },
+          { type: 'sequence', width: 6 },
+        ],
+      },
+    }).expect(200);
+    await post('binding/set', {
+      usageKey: 'form_definition_code',
+      ruleId: created.body.data.id,
+    }).expect(200);
+    const preview = await post('preview', {
+      ruleId: created.body.data.id,
+    }).expect(200);
+    expect(preview.body.data.codes[0]).toMatch(/^ts_\d{13}000001$/);
+    const result = (await take(3))[0]!.codes;
+    expect(result.map((code) => code.slice(-6))).toEqual([
+      '000001',
+      '000002',
+      '000003',
+    ]);
+    expect(new Set(result.map((code) => code.slice(0, -6))).size).toBe(1);
+  });
+  it('时区目录完整且受权限保护，旧别名不会阻断无关字段修改', async () => {
+    const list = await post('timezones').expect(200);
+    expect(list.body.data.list.length).toBeGreaterThan(300);
+    expect(
+      list.body.data.list.find(
+        (x: { value: string }) => x.value === 'Asia/Shanghai',
+      ).labelZh,
+    ).toContain('上海');
+    await post('timezones', {}, '1', '2').expect(403);
+    const r = await rule();
+    await db.query('UPDATE sys_code_rule SET timezone=? WHERE id=?', [
+      'US/Eastern',
+      r.id,
+    ]);
+    const info = await post('info', { id: r.id }).expect(200);
+    await post('update', {
+      id: r.id,
+      version: info.body.data.version,
+      data: { name: '只改名称', timezone: 'US/Eastern' },
+    }).expect(200);
+    const saved = await post('info', { id: r.id }).expect(200);
+    expect(saved.body.data.timezone).toBe('US/Eastern');
+    const fresh = await post('add', {
+      data: { ...data(), timezone: 'Etc/UTC' },
+    }).expect(200);
+    expect(fresh.body.data.timezone).toBe('UTC');
+    await post('add', { data: { ...data(), timezone: 'invalid/zone' } }).expect(
+      400,
+    );
+  });
+  it('规则编码格式错误显示操作说明，不暴露英文正则消息', async () => {
+    const normalized = await post('add', {
+      data: { ...data(), code: 'TEST_CODE' },
+    }).expect(200);
+    expect(normalized.body.data.code).toBe('test_code');
+    await post('add', { data: { ...data(), code: 'test_code' } }).expect(400);
+    const res = await post('add', {
+      data: { ...data(), code: '1BAD-CODE' },
+    }).expect(400);
+    const messages = res.body.data.errors
+      .flatMap((e: { messages: string[] }) => e.messages)
+      .join('；');
+    expect(messages).toContain('以小写字母开头');
+    expect(messages).toContain('test_code');
+    expect(messages).not.toContain('regular expression');
+  });
   it('未保存配置可校验预览，缺字段、非法配置及未知用途返回可读400', async () => {
     const d = data();
     const body = {

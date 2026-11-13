@@ -70,3 +70,12 @@ export class CodeHistoryItem {
 export class CodeHistoryResult {
   @ApiProperty({ type: [CodeHistoryItem] }) list!: CodeHistoryItem[];
 }
+export class CodeTimeZoneItem {
+  @ApiProperty() value!: string;
+  @ApiProperty() labelZh!: string;
+  @ApiProperty() labelEn!: string;
+  @ApiProperty() common!: boolean;
+}
+export class CodeTimeZoneResult {
+  @ApiProperty({ type: [CodeTimeZoneItem] }) list!: CodeTimeZoneItem[];
+}

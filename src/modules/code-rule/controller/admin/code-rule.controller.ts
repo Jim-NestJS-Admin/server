@@ -15,7 +15,9 @@ import {
   CodeUsageResult,
   CodeHistoryResult,
   CodeRuleValidateBody,
+  CodeTimeZoneResult,
 } from '../../dto/code-rule.dto.js';
+import { timeZoneCatalog } from '../../../../core/time/time-zones.js';
 import {
   validateConfig,
   compatible,
@@ -36,6 +38,17 @@ import {
 export class CodeRuleController extends BaseController<CodeRule> {
   constructor(private readonly rules: CodeRuleService) {
     super();
+  }
+  @Post('timezones')
+  @HttpCode(200)
+  @Perms('system:code-rule:page')
+  @ApiOperation({
+    operationId: 'codeRuleTimeZones',
+    summary: '系统维护的IANA时区目录，含中文城市名',
+  })
+  @ApiResult(CodeTimeZoneResult)
+  timeZones() {
+    return { list: timeZoneCatalog() };
   }
   @Post('usage/list')
   @HttpCode(200)
