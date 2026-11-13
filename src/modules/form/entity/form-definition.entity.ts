@@ -12,7 +12,7 @@ import { FormDesignerDto, FormFieldDto } from '../dto/form.dto.js';
   { unique: true },
 )
 export class FormDefinition extends BaseEntity {
-  @CrudField({ label: '表单编码', edit: 'add', list: { sortable: true } })
+  @CrudField({ label: '表单编码', generated: true, list: { sortable: true } })
   @Matches(/^[a-z][a-z0-9_]{1,63}$/)
   @Column({ type: 'varchar', length: 64 })
   code!: string;

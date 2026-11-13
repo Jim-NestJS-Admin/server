@@ -1,0 +1,161 @@
+import { crudErrors } from '../../../core/crud/crud.errors.js';
+import type { Type } from '@nestjs/common';
+import type { BaseEntity } from '../../../core/crud/base.entity.js';
+
+export type Segment =
+  | { type: 'literal'; value: string }
+  | { type: 'date'; format: string }
+  | { type: 'sequence'; width: number };
+export interface RuleConfig {
+  timezone: string;
+  resetPeriod: string;
+  segments: Segment[];
+  start: string;
+}
+export interface CodeUsage {
+  entity?: Type<BaseEntity>;
+  key: string;
+  name: string;
+  resource: string;
+  field: string;
+  maxLength: number;
+  minLength?: number;
+  charset: 'upper_alnum' | 'lower_slug' | 'digits';
+  mustStartWithLetter?: boolean;
+  uniqueScope: 'tenant';
+  allowRuleSwitch: boolean;
+}
+const formats = ['yyyy', 'yyyyMM', 'yyyy-MM', 'yyyyMMdd', 'yyyy-MM-dd'];
+export function invalid(message: string, field = 'segments'): never {
+  throw crudErrors.badRequest('编码规则不合法', [
+    { field: `data.${field}`, messages: [message] },
+  ]);
+}
+export function validateConfig(input: RuleConfig): RuleConfig {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: input.timezone }).format();
+  } catch {
+    invalid('请选择有效时区', 'timezone');
+  }
+  if (!['never', 'year', 'month', 'day'].includes(input.resetPeriod))
+    invalid('重置周期无效', 'resetPeriod');
+  if (
+    !Array.isArray(input.segments) ||
+    input.segments.length < 1 ||
+    input.segments.length > 4
+  )
+    invalid('请配置1至4个编码段');
+  let dates = 0,
+    sequences = 0,
+    length = 0,
+    width = 0;
+  for (const [i, s] of input.segments.entries()) {
+    if (!s || typeof s !== 'object') invalid('编码段必须是对象');
+    const allowed =
+      s.type === 'literal'
+        ? ['type', 'value']
+        : s.type === 'date'
+          ? ['type', 'format']
+          : ['type', 'width'];
+    if (Object.keys(s).some((k) => !allowed.includes(k)))
+      invalid('编码段包含不支持的配置');
+    if (s.type === 'literal') {
+      if (typeof s.value !== 'string' || !/^[A-Za-z0-9_-]{1,16}$/.test(s.value))
+        invalid('固定文本限1至16位字母、数字、下划线或短横线');
+      length += s.value.length;
+    } else if (s.type === 'date') {
+      if (!formats.includes(s.format)) invalid('日期格式无效');
+      dates++;
+      length += s.format.length;
+    } else if (s.type === 'sequence') {
+      if (
+        !Number.isInteger(s.width) ||
+        s.width < 1 ||
+        s.width > 12 ||
+        i !== input.segments.length - 1
+      )
+        invalid('流水号必须放在最后，宽度1至12位');
+      sequences++;
+      width = s.width;
+      length += width;
+    } else invalid('不支持的编码段类型');
+  }
+  if (sequences !== 1 || dates > 1 || length > 64)
+    invalid('必须恰有一个流水段、最多一个日期段，总长度不超过64');
+  if (
+    typeof input.start !== 'string' ||
+    !/^[1-9]\d{0,11}$/.test(input.start) ||
+    BigInt(input.start) >= 10n ** BigInt(width)
+  )
+    invalid('起始值必须大于0，且不能超过流水位宽', 'start');
+  const date = input.segments.find((s) => s.type === 'date');
+  const format = date?.type === 'date' ? date.format : '';
+  if (
+    input.resetPeriod !== 'never' &&
+    (!format.includes('yyyy') ||
+      (['month', 'day'].includes(input.resetPeriod) &&
+        !format.includes('MM')) ||
+      (input.resetPeriod === 'day' && !format.includes('dd')))
+  )
+    invalid('日期段必须完整包含重置周期，避免重号');
+  return structuredClone(input);
+}
+export function dateParts(timezone: string, now: Date) {
+  const p = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const part = (key: string) => p.find((v) => v.type === key)!.value;
+  return { yyyy: part('year'), MM: part('month'), dd: part('day') };
+}
+export function periodKey(config: RuleConfig, now: Date) {
+  const p = dateParts(config.timezone, now);
+  return config.resetPeriod === 'never'
+    ? 'all'
+    : config.resetPeriod === 'year'
+      ? p.yyyy
+      : config.resetPeriod === 'month'
+        ? `${p.yyyy}-${p.MM}`
+        : `${p.yyyy}-${p.MM}-${p.dd}`;
+}
+export function renderCode(config: RuleConfig, value: bigint, now: Date) {
+  const p = dateParts(config.timezone, now);
+  return config.segments
+    .map((s) =>
+      s.type === 'literal'
+        ? s.value
+        : s.type === 'sequence'
+          ? value.toString().padStart(s.width, '0')
+          : s.format
+              .replace('yyyy', p.yyyy)
+              .replace('MM', p.MM)
+              .replace('dd', p.dd),
+    )
+    .join('');
+}
+export function maximum(config: RuleConfig) {
+  const s = config.segments.find((s) => s.type === 'sequence');
+  return 10n ** BigInt(s?.type === 'sequence' ? s.width : 0) - 1n;
+}
+export function compatible(config: RuleConfig, usage: CodeUsage) {
+  validateConfig(config);
+  for (const value of [BigInt(config.start), maximum(config)]) {
+    const code = renderCode(config, value, new Date('2026-11-13T12:00:00Z'));
+    const pattern =
+      usage.charset === 'digits'
+        ? /^\d+$/
+        : usage.charset === 'lower_slug'
+          ? /^[a-z][a-z0-9_]*$/
+          : /^[A-Z0-9_-]+$/;
+    if (
+      !pattern.test(code) ||
+      code.length > usage.maxLength ||
+      code.length < (usage.minLength ?? 1) ||
+      ((usage.mustStartWithLetter || usage.charset === 'lower_slug') &&
+        !/^[A-Za-z]/.test(code))
+    )
+      invalid(`规则与“${usage.name}”的长度或字符格式不兼容`);
+  }
+}

@@ -98,10 +98,10 @@ function resolveChild(
       `${at}：外键 ${c.foreignKey} 由框架填写，不能用 @CrudField 声明（否则前端能改它，把明细挂到别的单据上）`,
     );
   const addable = fields
-    .filter((f) => (f.edit ?? 'both') !== 'none')
+    .filter((f) => !f.generated && (f.edit ?? 'both') !== 'none')
     .map((f) => f.property);
   const updatable = fields
-    .filter((f) => (f.edit ?? 'both') === 'both')
+    .filter((f) => !f.generated && (f.edit ?? 'both') === 'both')
     .map((f) => f.property);
   const validated = validatedProps(c.entity);
   for (const p of addable)
@@ -174,10 +174,10 @@ export function resolveCrudMeta<T extends BaseEntity>(
     fail(`硬删除的资源没有回收站，不能开放 ${recycleApis.join('、')}`);
 
   const addable = fields
-    .filter((f) => (f.edit ?? 'both') !== 'none')
+    .filter((f) => !f.generated && (f.edit ?? 'both') !== 'none')
     .map((f) => f.property);
   const updatable = fields
-    .filter((f) => (f.edit ?? 'both') === 'both')
+    .filter((f) => !f.generated && (f.edit ?? 'both') === 'both')
     .map((f) => f.property);
 
   // 可写字段必须有校验规则：否则全局校验管道会把它当成未声明字段拒绝，或者更糟，不校验就入库

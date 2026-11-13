@@ -27,6 +27,9 @@ export interface CrudFieldOptions {
     | { component?: FormComponent; required?: boolean; placeholder?: string };
   /** 新增、修改时能不能写：both（默认）、add（只在新增时写）、none（只读） */
   edit?: 'both' | 'add' | 'none';
+  /** 后端生成，新增和修改请求均不能提供。 */
+  generated?: boolean;
+  generatedHint?: string;
   /** 固定字典（如状态）；数据库字典在 T08 接入 */
   dict?: DictItem[];
   /** 动态字典编码；与静态dict互斥。 */

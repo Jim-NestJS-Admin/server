@@ -68,7 +68,11 @@ export class FormDefinitionController extends BaseController<FormDefinition> {
   @ApiResult(FormDefinition)
   @ApiErrors(400, 403, 404, 409)
   revise(@Body() body: ReviseFormBody) {
-    return this.definitions.reviseDefinition(body.data, body.baseRevision);
+    return this.definitions.reviseDefinition(
+      body.data,
+      body.baseRevision,
+      body.definitionId,
+    );
   }
 
   @Post('inspect')

@@ -27,7 +27,33 @@ class NoValidatorEntity extends BaseEntity {
 
 const base = { label: '条目', entity: ItemEntity, api: ['page' as const] };
 
+@Entity('spec_generated_item')
+class GeneratedItem extends BaseEntity {
+  @CrudField({
+    label: '系统编码',
+    generated: true,
+    generatedHint: '保存后自动生成',
+  })
+  @Column({ type: 'varchar', length: 32 })
+  code!: string;
+  @CrudField({ label: '名称' })
+  @IsString()
+  @Column({ type: 'varchar', length: 32 })
+  name!: string;
+}
+
 describe('资源定义 resolveCrudMeta：配置写错在启动时就报错', () => {
+  it('生成字段保留可读，但即使默认edit为both也不能进入新增和修改白名单', () => {
+    const meta = resolveCrudMeta({
+      label: '自动编码',
+      entity: GeneratedItem,
+      prefix: 'spec/generated',
+      api: ['page', 'info', 'add', 'update'],
+    });
+    expect(meta.addable).toEqual(['name']);
+    expect(meta.updatable).toEqual(['name']);
+    expect(meta.readable).toContain('code');
+  });
   it('整理出可写、可读、可排序字段和权限码前缀', () => {
     const meta = resolveCrudMeta({ ...base, prefix: 'demo/item-type' });
     expect(meta).toMatchObject({

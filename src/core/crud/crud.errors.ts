@@ -58,6 +58,13 @@ export function translateDbError(
   const driver = (err as QueryFailedError & { driverError?: MysqlDriverError })
     .driverError;
   switch (driver?.code) {
+    case 'ER_LOCK_DEADLOCK':
+    case 'ER_LOCK_WAIT_TIMEOUT':
+      return new BusinessException(
+        ErrorCode.Conflict,
+        '操作发生并发冲突，请使用原请求重试',
+        HttpStatus.CONFLICT,
+      );
     case 'ER_DUP_ENTRY': {
       const key = /for key '(?:[^'.]*\.)?([^']+)'/.exec(
         driver.sqlMessage ?? '',

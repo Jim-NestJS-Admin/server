@@ -6,6 +6,7 @@ import { TenantSeedService } from '../modules/tenant/service/tenant-seed.service
 import { SharedDictionaries1794279600000 } from '../database/migrations/1794279600000-SharedDictionaries.js';
 import { PLATFORM_TENANT_ID } from '../core/tenant/tenant.constants.js';
 import 'reflect-metadata';
+import { CodeRules1794528000000 } from '../database/migrations/1794528000000-CodeRules.js';
 import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { DataSource } from 'typeorm';
@@ -103,6 +104,7 @@ async function bootstrapLocal(): Promise<void> {
           TenantCatalog1794412800000,
           PlatformMenus1794412800001,
           FormDefinition1794470400000,
+          CodeRules1794528000000,
         ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,

@@ -48,21 +48,61 @@ describe('T35 表单版本、校验与租户边界', () => {
   beforeEach(async () => {
     assertTestDatabase(ds.options.database, process.env.DB_NAME);
     await ds.query('DELETE FROM form_definition');
+    for (const table of [
+      'sys_code_allocation',
+      'sys_code_sequence',
+      'sys_code_binding',
+      'sys_code_rule_version',
+      'sys_code_rule',
+    ])
+      await ds.query(`DELETE FROM ${table}`);
     const redis = rawRedis();
     try {
       await clearTestRedis(redis);
     } finally {
       await redis.quit();
     }
+    for (const tenant of ['1', '2']) {
+      const created = await request(app.getHttpServer())
+        .post('/admin/system/code-rule/add')
+        .set('x-test-user', '1')
+        .set('x-test-tenant', tenant)
+        .send({
+          data: {
+            code: 'forms',
+            name: '表单编码',
+            description: '',
+            timezone: 'Asia/Shanghai',
+            resetPeriod: 'never',
+            segments: [
+              { type: 'literal', value: 'form_' },
+              { type: 'sequence', width: 6 },
+            ],
+            start: '1',
+            status: 'enabled',
+          },
+        })
+        .expect(200);
+      await request(app.getHttpServer())
+        .post('/admin/system/code-rule/binding/set')
+        .set('x-test-user', '1')
+        .set('x-test-tenant', tenant)
+        .send({
+          usageKey: 'form_definition_code',
+          ruleId: created.body.data.id,
+        })
+        .expect(200);
+    }
   });
+  let firstId = '',
+    firstCode = '';
   const post = (path: string, body: object, tenant = '1', user = '1') =>
     request(app.getHttpServer())
       .post('/admin/form/definition/' + path)
       .set('x-test-user', user)
       .set('x-test-tenant', tenant)
-      .send(body);
+      .send(path === 'revise' ? { definitionId: firstId, ...body } : body);
   const data = (required = false) => ({
-    code: 'leave_request',
     name: '请假申请',
     designer: {
       schemaVersion: 1,
@@ -71,14 +111,20 @@ describe('T35 表单版本、校验与租户边界', () => {
       ],
     },
   });
-  const add = async (tenant = '1', required = false) =>
-    (await post('add', { data: data(required) }, tenant).expect(200)).body
-      .data as {
+  const add = async (tenant = '1', required = false) => {
+    const row = (
+      await post('add', { data: data(required) }, tenant).expect(200)
+    ).body.data;
+    firstId = row.id;
+    firstCode = row.code;
+    return row as {
       id: string;
       revision: number;
+      code: string;
       designer: object;
       fields: object[];
     };
+  };
 
   it('正式迁移up/down/up可执行，字段与唯一索引可供实体使用', async () => {
     const runner = ds.createQueryRunner();
@@ -118,7 +164,7 @@ describe('T35 表单版本、校验与租户边界', () => {
     await post('add', {
       data: { ...data(), code: 'other_form', fields: [] },
     }).expect(400);
-    await post('add', { data: data() }).expect(400);
+    await post('add', { data: { ...data(), code: 'forbidden' } }).expect(400);
     const page = await post('page', {}).expect(200);
     expect(page.body.data.total).toBe(1);
   });
@@ -164,9 +210,7 @@ describe('T35 表单版本、校验与租户边界', () => {
     expect(results.map((r) => r.status).sort((a, b) => a - b)).toEqual([
       200, 409,
     ]);
-    const page = await post('page', { eq: { code: 'leave_request' } }).expect(
-      200,
-    );
+    const page = await post('page', { eq: { code: firstCode } }).expect(200);
     expect(page.body.data.total).toBe(2);
     expect(
       page.body.data.list.map((row: { revision: number }) => row.revision),

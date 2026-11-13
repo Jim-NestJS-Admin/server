@@ -137,9 +137,6 @@ export class FormDesignerDto {
   @ApiPropertyOptional({ type: [FormLinkageDto] }) linkages?: FormLinkageDto[];
 }
 export class FormDefinitionInput {
-  @ApiProperty({ example: 'leave_request' })
-  @Matches(/^[a-z][a-z0-9_]{1,63}$/)
-  code!: string;
   @ApiProperty() @IsString() @MaxLength(100) @Matches(/\S/) name!: string;
   @ApiProperty({ type: FormDesignerDto })
   @IsObject()
@@ -153,6 +150,9 @@ export class CreateFormBody {
   data!: FormDefinitionInput;
 }
 export class ReviseFormBody extends CreateFormBody {
+  @ApiProperty({ description: '作为修订来源的固定表单版本编号' })
+  @Matches(/^[1-9]\d{0,19}$/)
+  definitionId!: string;
   @ApiProperty({ description: '当前最新业务修订号，修订后加1' })
   @IsInt()
   @Min(1)

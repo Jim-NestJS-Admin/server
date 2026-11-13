@@ -77,6 +77,7 @@ export const DEFAULT_MENUS: DirectorySeed[] = [
       crud('字典管理', 'system/dict-type'),
       { ...crud('字典项', 'system/dict-item'), hidden: true },
       crud('系统参数', 'system/parameter'),
+      crud('编码规则', 'system/code-rule', ['system:code-sequence']),
       {
         title: '模块配置',
         path: '/system/page-config',

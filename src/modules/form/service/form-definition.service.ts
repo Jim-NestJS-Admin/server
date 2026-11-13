@@ -6,28 +6,48 @@ import type { CrudTx } from '../../../core/crud/crud.types.js';
 import type { FormDefinitionInput } from '../dto/form.dto.js';
 import { FormDefinition } from '../entity/form-definition.entity.js';
 import { parseFormDesigner, validateFormValues } from './form-rules.js';
+import { CodeRuleService } from '../../code-rule/service/code-rule.service.js';
 
 @Injectable()
 export class FormDefinitionService extends BaseService<FormDefinition> {
-  private readonly saving = new AsyncLocalStorage<number>();
+  private readonly saving = new AsyncLocalStorage<{
+    expected: number;
+    code?: string;
+  }>();
+  constructor(private readonly codes: CodeRuleService) {
+    super();
+  }
 
   createDefinition(data: FormDefinitionInput) {
-    return this.saving.run(0, () => super.add(data));
+    return this.saving.run({ expected: 0 }, () => super.add(data));
   }
-  reviseDefinition(data: FormDefinitionInput, baseRevision: number) {
-    return this.saving.run(baseRevision, () => super.add(data));
+  async reviseDefinition(
+    data: FormDefinitionInput,
+    baseRevision: number,
+    definitionId: string,
+  ) {
+    const original = await this.loadVersion(definitionId);
+    return this.saving.run(
+      { expected: baseRevision, code: original.code },
+      () => super.add(data),
+    );
   }
 
   protected override async beforeAdd(
     data: Partial<FormDefinition>,
     tx: CrudTx,
   ) {
-    const expected = this.saving.getStore();
-    if (expected === undefined)
-      throw crudErrors.badRequest('请使用表单创建或修订接口');
-    if (!data.code || !data.name || !data.designer)
+    const saving = this.saving.getStore();
+    if (!saving) throw crudErrors.badRequest('请使用表单创建或修订接口');
+    const expected = saving.expected;
+    if (!data.name || !data.designer)
       throw crudErrors.badRequest('缺少可写的表单编码、名称或设计');
     const parsed = parseFormDesigner(data.designer);
+    data.code =
+      expected === 0
+        ? (await this.codes.nextInTx(tx.manager, 'form_definition_code'))
+            .codes[0]!
+        : saving.code!;
     // 第一版是该编码永久存在的互斥行；所有修订按同一顺序加锁，旧版本不更新不删除。
     const first = await this.select(tx.manager, 'add')
       .andWhere('e.code = :code AND e.revision = 1', { code: data.code })
