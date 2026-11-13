@@ -201,6 +201,14 @@ export class CodeRuleService
           segments: row.segments,
           start: row.start,
           status: row.status,
+          // 保存规则自身的审计元数据；版本记录的系统字段属于版本行，不能当作规则版本号。
+          id: row.id,
+          createdBy: row.createdBy,
+          createdAt: row.createdAt,
+          updatedBy: row.updatedBy,
+          updatedAt: row.updatedAt,
+          orgId: row.orgId,
+          version: row.version,
         },
       },
       manager,
@@ -347,24 +355,44 @@ export class CodeRuleService
       .orderBy('v.revision', 'DESC')
       .take(100)
       .getMany();
-    return rows.map((row) => ({
-      revision: row.revision,
-      createdAt: row.createdAt,
-      snapshot: Object.fromEntries(
-        Object.entries(row.snapshot)
-          .filter(
-            ([key]) =>
-              Object.hasOwn(visible, key) && states?.[key] !== 'hidden',
-          )
-          .map(([key, value]) => [
-            key,
-            states?.[key] === 'masked'
-              ? (visible as Record<string, unknown>)[key]
-              : value,
-          ]),
-      ),
-    }));
+    const result = rows.map((row) => {
+      // 规则的编号、创建人/时间、归属组织不能通过此资源的更新接口修改。
+      // 旧快照缺失时可从原规则恢复这些稳定属性，不能借用当前修改人或当前版本号。
+      const historical: Record<string, unknown> = {
+        ...Object.fromEntries(
+          ['id', 'createdBy', 'createdAt', 'orgId']
+            .filter((key) => Object.hasOwn(visible, key))
+            .map((key) => [key, (visible as Record<string, unknown>)[key]]),
+        ),
+        // 版本行创建人是这次修订的操作人，创建时间是这次修订的保存时间。
+        updatedBy: row.createdBy,
+        updatedAt: row.createdAt,
+        ...(row.revision === 1 ? { version: 1 } : {}),
+        ...row.snapshot,
+      };
+      return {
+        revision: row.revision,
+        createdAt: row.createdAt,
+        snapshot: Object.fromEntries(
+          Object.entries(historical)
+            .filter(
+              ([key]) =>
+                Object.hasOwn(visible, key) && states?.[key] !== 'hidden',
+            )
+            .map(([key, value]) => [
+              key,
+              states?.[key] === 'masked'
+                ? (visible as Record<string, unknown>)[key]
+                : value,
+            ]),
+        ),
+      };
+    });
+    // 复用统一名称解析，历史操作人按历史编号显示，不能套用当前修改人的显示名。
+    await this.withDisplay(result.map((entry) => entry.snapshot));
+    return result;
   }
+
   async nextInTx(manager: EntityManager, usageKey: string) {
     return (await this.nextManyInTx(manager, [{ usageKey, count: 1 }]))[0]!;
   }
