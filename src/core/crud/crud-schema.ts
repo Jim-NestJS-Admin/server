@@ -172,6 +172,10 @@ export class CrudSchemaDictItem {
   })
   value: string | number | boolean;
   @ApiProperty() label: string;
+  @ApiPropertyOptional({
+    enum: ['primary', 'success', 'info', 'warning', 'danger'],
+  })
+  tagType?: DictItem['tagType'];
 }
 
 export class CrudSchemaPageAction {

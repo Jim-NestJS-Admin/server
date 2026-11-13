@@ -719,6 +719,16 @@
           "label": {
             "type": "string"
           },
+          "tagType": {
+            "enum": [
+              "primary",
+              "success",
+              "info",
+              "warning",
+              "danger"
+            ],
+            "type": "string"
+          },
           "value": {
             "oneOf": [
               {
@@ -940,6 +950,16 @@
       "DictionaryOption": {
         "properties": {
           "label": {
+            "type": "string"
+          },
+          "tagType": {
+            "enum": [
+              "primary",
+              "success",
+              "info",
+              "warning",
+              "danger"
+            ],
             "type": "string"
           },
           "value": {
@@ -4230,10 +4250,6 @@
           },
           "status": {
             "description": "状态",
-            "enum": [
-              "enabled",
-              "disabled"
-            ],
             "type": "string"
           },
           "timezone": {
@@ -4350,10 +4366,6 @@
           },
           "status": {
             "description": "状态",
-            "enum": [
-              "enabled",
-              "disabled"
-            ],
             "type": "string"
           }
         },
@@ -4499,10 +4511,6 @@
           },
           "status": {
             "description": "状态",
-            "enum": [
-              "enabled",
-              "disabled"
-            ],
             "type": "string"
           },
           "timezone": {
@@ -4596,10 +4604,6 @@
           },
           "status": {
             "description": "状态",
-            "enum": [
-              "enabled",
-              "disabled"
-            ],
             "type": "string"
           },
           "timezone": {
@@ -4836,6 +4840,18 @@
           "rank": {
             "description": "排序",
             "type": "number"
+          },
+          "tagType": {
+            "description": "标签样式",
+            "enum": [
+              "primary",
+              "success",
+              "info",
+              "warning",
+              "danger"
+            ],
+            "nullable": true,
+            "type": "string"
           },
           "typeId": {
             "description": "字典类型",
@@ -5121,6 +5137,18 @@
             "description": "排序",
             "type": "number"
           },
+          "tagType": {
+            "description": "标签样式",
+            "enum": [
+              "primary",
+              "success",
+              "info",
+              "warning",
+              "danger"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
           "typeId": {
             "description": "字典类型",
             "type": "string"
@@ -5195,6 +5223,18 @@
           "rank": {
             "description": "排序",
             "type": "number"
+          },
+          "tagType": {
+            "description": "标签样式",
+            "enum": [
+              "primary",
+              "success",
+              "info",
+              "warning",
+              "danger"
+            ],
+            "nullable": true,
+            "type": "string"
           },
           "value": {
             "description": "字典值",

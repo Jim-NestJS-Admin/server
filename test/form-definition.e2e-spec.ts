@@ -1,3 +1,4 @@
+import { DictionaryTags1794614400000 } from '../src/database/migrations/1794614400000-DictionaryTags.js';
 import type { INestApplication } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
@@ -41,6 +42,12 @@ describe('T35 表单版本、校验与租户边界', () => {
     await app.init();
     ds = app.get(DataSource);
     assertTestDatabase(ds.options.database, process.env.DB_NAME);
+    const dictionaryRunner = ds.createQueryRunner();
+    try {
+      await new DictionaryTags1794614400000().up(dictionaryRunner);
+    } finally {
+      await dictionaryRunner.release();
+    }
   });
   afterAll(async () => {
     await app?.close();

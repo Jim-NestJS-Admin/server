@@ -63,10 +63,7 @@ export class CodeRule extends BaseEntity {
   start!: string;
   @CrudField({
     label: '状态',
-    dict: [
-      { value: 'enabled', label: '启用' },
-      { value: 'disabled', label: '停用' },
-    ],
+    dictCode: 'sys.enabled_status',
     form: { required: true },
   })
   @IsIn(['enabled', 'disabled'])

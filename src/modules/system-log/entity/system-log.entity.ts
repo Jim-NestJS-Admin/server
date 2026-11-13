@@ -2,6 +2,7 @@ import { ApiHideProperty } from '@nestjs/swagger';
 import { Column, Entity, Index } from 'typeorm';
 import {
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -64,6 +65,21 @@ export class SystemDictItem extends BaseEntity {
   @Length(1, 100)
   @Column({ type: 'varchar', length: 100 })
   label: string;
+  @CrudField({
+    label: '标签样式',
+    nullable: true,
+    dict: [
+      { value: 'primary', label: '蓝色' },
+      { value: 'success', label: '绿色' },
+      { value: 'info', label: '灰色' },
+      { value: 'warning', label: '橙色' },
+      { value: 'danger', label: '红色' },
+    ],
+  })
+  @IsOptional()
+  @IsIn(['primary', 'success', 'info', 'warning', 'danger'])
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  tagType: 'primary' | 'success' | 'info' | 'warning' | 'danger' | null;
   @CrudField({ label: '启用', form: { component: 'switch' } })
   @IsBoolean()
   @Column({ type: 'boolean', default: true })

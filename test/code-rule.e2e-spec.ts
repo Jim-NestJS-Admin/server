@@ -1,3 +1,4 @@
+import { DictionaryTags1794614400000 } from '../src/database/migrations/1794614400000-DictionaryTags.js';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
@@ -55,6 +56,12 @@ describe('T43真实MySQL编码分配、规则与用途隔离', () => {
     await app.init();
     db = app.get(DataSource);
     assertTestDatabase(db.options.database, process.env.DB_NAME);
+    const dictionaryRunner = db.createQueryRunner();
+    try {
+      await new DictionaryTags1794614400000().up(dictionaryRunner);
+    } finally {
+      await dictionaryRunner.release();
+    }
     service = app.get(CodeRuleService);
     ctx = app.get(RequestContext);
   });

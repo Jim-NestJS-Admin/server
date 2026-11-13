@@ -14,6 +14,7 @@ export type FormComponent =
 export interface DictItem {
   value: string | number | boolean;
   label: string;
+  tagType?: 'primary' | 'success' | 'info' | 'warning' | 'danger';
 }
 
 export interface CrudFieldOptions {
