@@ -1,3 +1,4 @@
+import { CrudRuntime } from '../../../core/crud/crud.runtime.js';
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import {
   DataSource,
@@ -64,6 +65,7 @@ export class CodeRuleService
     private readonly repos: TenantRepositoryFactory,
     private readonly context: RequestContext,
     private readonly db: DataSource,
+    private readonly runtime: CrudRuntime,
     readonly usages: CodeUsageRegistry,
     private readonly sequences: CodeSequenceStore,
   ) {
@@ -71,6 +73,7 @@ export class CodeRuleService
   }
   onModuleInit() {
     this.db.subscribers.push(this.subscriber);
+    this.runtime.codes = this;
   }
   onModuleDestroy() {
     const i = this.db.subscribers.indexOf(this.subscriber);
@@ -158,7 +161,7 @@ export class CodeRuleService
       .setLock('pessimistic_read')
       .getOne();
     if (binding && behaviorChanged)
-      compatible(next, this.usages.get(binding.usageKey));
+      compatible(next, await this.usages.resolve(binding.usageKey, tx.manager));
     changes.revision = existing.revision + 1;
   }
   protected override async afterUpdate(row: CodeRule, tx: CrudTx) {
@@ -214,7 +217,7 @@ export class CodeRuleService
   async usageList() {
     const bindings = await this.repos.for(CodeBinding).query('b').getMany();
     const rules = await this.repos.for(CodeRule).query('r').getMany();
-    return this.usages.list().map((u) => {
+    return (await this.usages.catalog()).map((u) => {
       const b = bindings.find((b) => b.usageKey === u.key);
       const r = rules.find((r) => r.id === b?.ruleId);
       let issue = '';
@@ -232,9 +235,9 @@ export class CodeRuleService
     });
   }
   async bind(usageKey: string, ruleId: string) {
-    if (!this.usages.list().some((u) => u.key === usageKey))
+    if (!(await this.usages.catalog()).some((u) => u.key === usageKey))
       invalid('请选择已注册的用途', 'usageKey');
-    const usage = this.usages.get(usageKey);
+    const usage = await this.usages.resolve(usageKey);
     return this.transaction(async (tx) => {
       const repo = this.repos.for(CodeBinding);
       let binding = await repo
@@ -313,14 +316,17 @@ export class CodeRuleService
     });
   }
   async preview(ruleId: string, usageKey?: string) {
-    if (usageKey && !this.usages.list().some((u) => u.key === usageKey))
+    if (
+      usageKey &&
+      !(await this.usages.catalog()).some((u) => u.key === usageKey)
+    )
       invalid('请选择已注册的用途', 'usageKey');
     const rule = await this.select(this.crud.dataSource.manager, 'info')
       .andWhere('e.id = :ruleId', { ruleId })
       .getOne();
     if (!rule) throw crudErrors.notFound();
     validateConfig(rule);
-    if (usageKey) compatible(rule, this.usages.get(usageKey));
+    if (usageKey) compatible(rule, await this.usages.resolve(usageKey));
     const now = new Date(),
       period = periodKey(rule, now);
     const seq = await this.repos
@@ -427,16 +433,22 @@ export class CodeRuleService
     const sorted = [...requests].sort((a, b) =>
       a.usageKey.localeCompare(b.usageKey),
     );
+    const catalog = new Map(
+      (await this.usages.catalog(manager)).map((u) => [u.key, u]),
+    );
     const bound: { usageKey: string; count: number; ruleId: string }[] = [];
     for (const req of sorted) {
-      this.usages.get(req.usageKey);
+      if (!catalog.has(req.usageKey)) invalid('该业务字段未注册自动编码');
       const b = await this.repos
         .for(CodeBinding)
         .query('b', manager)
         .andWhere('b.usageKey = :key', { key: req.usageKey })
         .setLock('pessimistic_read')
         .getOne();
-      if (!b) conflict('该用途尚未绑定编码规则，请联系管理员');
+      if (!b)
+        conflict(
+          `“${catalog.get(req.usageKey)!.name}”尚未绑定编码规则，请在字段编码规则中完成绑定`,
+        );
       bound.push({ ...req, ruleId: b.ruleId });
     }
     const now = new Date(),
@@ -451,7 +463,7 @@ export class CodeRuleService
         .setLock('pessimistic_read')
         .getOne();
       if (!r || r.status !== '1') conflict('编码规则已停用，请联系管理员');
-      compatible(r, this.usages.get(item.usageKey));
+      compatible(r, catalog.get(item.usageKey)!);
       rules.set(r.id, r);
     }
     const result = new Map<string, { usageKey: string; codes: string[] }>();
@@ -473,7 +485,7 @@ export class CodeRuleService
       for (let i = 0; i < req.count; i++) {
         const n = end - BigInt(req.count) + 1n + BigInt(i),
           code = renderCode(rule, n, now);
-        validateOutput(code, this.usages.get(req.usageKey));
+        validateOutput(code, catalog.get(req.usageKey)!);
         await this.repos.for(CodeAllocation).insert(
           {
             usageKey: req.usageKey,

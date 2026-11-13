@@ -101,12 +101,12 @@ export class CodeRuleController extends BaseController<CodeRule> {
     summary: '校验规则与用途兼容性，不写入',
   })
   @ApiResult(CodePreviewResult)
-  validate(@Body() body: CodeRuleValidateBody) {
+  async validate(@Body() body: CodeRuleValidateBody) {
     const config = validateConfig(body.data);
     if (body.usageKey) {
-      const usage = this.rules.usages
-        .list()
-        .find((u) => u.key === body.usageKey);
+      const usage = (await this.rules.usages.catalog()).find(
+        (u) => u.key === body.usageKey,
+      );
       if (!usage) invalid('请选择已注册的用途', 'usageKey');
       compatible(config, usage);
     }

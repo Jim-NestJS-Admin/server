@@ -151,6 +151,7 @@ function entity(
       const perm = f.fieldPerm?.default
         ? `  @FieldPerm({ label: ${lit(f.label)}, default: ${lit(f.fieldPerm.default)}${f.fieldPerm.mask ? `, mask: ${lit(f.fieldPerm.mask)}` : ''} })\n`
         : '';
+      if (f.codeCharset) crud.push(`code: { charset: ${lit(f.codeCharset)} }`);
       if (f.dict) crud.push(`dictCode: ${lit(f.dict)}`);
       return `  @CrudField({ ${crud.join(', ')} })\n${perm}${validators.map((x) => `  ${x}\n`).join('')}  @Column(${col.replace('{ ', `{ name: ${lit(f.column)}, `)})\n  ${f.name}: ${ts}${f.nullable || isParent ? ' | null' : ''};`;
     })

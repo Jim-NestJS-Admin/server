@@ -129,6 +129,11 @@ export class SpecField {
   defaultValue?: string | number | boolean | null;
   @ApiPropertyOptional() comment?: string;
   @ApiPropertyOptional() unique?: boolean;
+  @ApiPropertyOptional({
+    enum: ['upper_alnum', 'lower_slug', 'digits'],
+    description: '自动编码字段字符集，保存时生成',
+  })
+  codeCharset?: 'upper_alnum' | 'lower_slug' | 'digits';
   @ApiPropertyOptional() dictCode?: string;
   @ApiPropertyOptional({ type: SpecFieldPerm }) fieldPerm?: SpecFieldPerm;
 }
@@ -278,6 +283,7 @@ export function validateSpec(raw: unknown): SpecError[] {
             'defaultValue',
             'comment',
             'unique',
+            'codeCharset',
             'dictCode',
             'fieldPerm',
           ],
@@ -321,6 +327,21 @@ export function validateSpec(raw: unknown): SpecError[] {
           Number(f.length) > 4000)
       )
         bad(`${p}.length`, '文本长度必须是 1 到 4000 的整数');
+      if (
+        f.codeCharset !== undefined &&
+        (typeof f.codeCharset !== 'string' ||
+          !['upper_alnum', 'lower_slug', 'digits'].includes(f.codeCharset) ||
+          f.type !== 'string' ||
+          f.nullable ||
+          f.unique !== true ||
+          Number(f.length ?? 255) > 64 ||
+          Object.hasOwn(f, 'defaultValue') ||
+          f.dictCode)
+      )
+        bad(
+          `${p}.codeCharset`,
+          '自动编码必须是1至64位非空唯一文本，不能设置默认值或字典',
+        );
       const numeric = f.type === 'decimal' || f.type === 'money';
       if (
         f.precision !== undefined &&
@@ -608,6 +629,7 @@ export function specToConfig(s: ModuleSpec): CodegenConfig {
       nullable: f.nullable ?? false,
       required: !f.nullable && !Object.hasOwn(f, 'defaultValue'),
       unique: f.unique,
+      codeCharset: f.codeCharset,
       dict: f.dictCode,
       fieldPerm: f.fieldPerm,
       list: f.type !== 'json' && f.type !== 'text',
@@ -660,6 +682,7 @@ export function migrateLegacyConfig(c: CodegenConfig): ModuleSpec {
       ...(f.scale !== undefined ? { scale: f.scale } : {}),
       nullable: f.nullable ?? false,
       unique: f.unique ?? false,
+      ...(f.codeCharset ? { codeCharset: f.codeCharset } : {}),
       ...(f.comment !== undefined ? { comment: f.comment } : {}),
       ...(Object.hasOwn(f, 'defaultValue')
         ? { defaultValue: f.defaultValue }

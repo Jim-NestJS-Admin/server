@@ -751,6 +751,9 @@
       },
       "CrudSchemaFormItem": {
         "properties": {
+          "codeUsageKey": {
+            "type": "string"
+          },
           "component": {
             "enum": [
               "input",
@@ -1889,6 +1892,14 @@
       },
       "FormFieldDto": {
         "properties": {
+          "codeCharset": {
+            "enum": [
+              "upper_alnum",
+              "lower_slug",
+              "digits"
+            ],
+            "type": "string"
+          },
           "component": {
             "enum": [
               "input",
@@ -1903,6 +1914,10 @@
           },
           "field": {
             "type": "string"
+          },
+          "generated": {
+            "description": "保存时由编码规则生成，不接受用户填写",
+            "type": "boolean"
           },
           "multilingual": {
             "type": "boolean"
@@ -2117,6 +2132,257 @@
         "required": [
           "label",
           "value"
+        ],
+        "type": "object"
+      },
+      "FormSubmissionAddBody": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/FormSubmissionAddData"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "FormSubmissionAddData": {
+        "properties": {
+          "definitionId": {
+            "description": "表单版本编号",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": true,
+            "description": "填写内容",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "FormSubmissionInfoBody": {
+        "properties": {
+          "id": {
+            "example": "1",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "FormSubmissionPageBody": {
+        "properties": {
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FormSubmissionPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：name、code",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/FormSubmissionPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
+      "FormSubmissionPageEq": {
+        "properties": {
+          "code": {
+            "description": "表单编码",
+            "type": "string"
+          },
+          "definitionId": {
+            "description": "表单版本编号",
+            "type": "string"
+          },
+          "revision": {
+            "description": "表单版本",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "FormSubmissionPageResult": {
+        "properties": {
+          "list": {
+            "items": {
+              "$ref": "#/components/schemas/FormSubmissionRow"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "number"
+          },
+          "size": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "list",
+          "total",
+          "page",
+          "size"
+        ],
+        "type": "object"
+      },
+      "FormSubmissionPageSort": {
+        "properties": {
+          "field": {
+            "description": "排序字段",
+            "enum": [
+              "id",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "string"
+          },
+          "order": {
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "order"
+        ],
+        "type": "object"
+      },
+      "FormSubmissionRow": {
+        "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
+          "code": {
+            "description": "表单编码",
+            "type": "string"
+          },
+          "codes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "自动编号",
+            "type": "object"
+          },
+          "createdAt": {
+            "description": "创建时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "description": "创建人",
+            "nullable": true,
+            "type": "string"
+          },
+          "definitionId": {
+            "description": "表单版本编号",
+            "type": "string"
+          },
+          "fieldTitles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "字段名称",
+            "type": "object"
+          },
+          "id": {
+            "description": "编号",
+            "example": "1",
+            "type": "string"
+          },
+          "name": {
+            "description": "表单名称",
+            "type": "string"
+          },
+          "orgId": {
+            "description": "所属组织（新增时取当前组织，数据权限按它过滤）",
+            "nullable": true,
+            "type": "string"
+          },
+          "revision": {
+            "description": "表单版本",
+            "type": "number"
+          },
+          "updatedAt": {
+            "description": "修改时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "description": "修改人",
+            "nullable": true,
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": true,
+            "description": "填写内容",
+            "type": "object"
+          },
+          "version": {
+            "description": "版本号，修改时原样带回",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "orgId",
+          "createdBy",
+          "updatedBy",
+          "createdAt",
+          "updatedAt",
+          "version"
         ],
         "type": "object"
       },
@@ -3761,6 +4027,15 @@
       },
       "SpecField": {
         "properties": {
+          "codeCharset": {
+            "description": "自动编码字段字符集，保存时生成",
+            "enum": [
+              "upper_alnum",
+              "lower_slug",
+              "digits"
+            ],
+            "type": "string"
+          },
           "column": {
             "type": "string"
           },
@@ -12823,6 +13098,260 @@
         ],
         "x-permission": {
           "code": "form:definition:validate",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/form/submission/add": {
+      "post": {
+        "operationId": "formSubmissionAdd",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormSubmissionAddBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FormSubmissionRow"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          }
+        },
+        "summary": "新增表单提交记录",
+        "tags": [
+          "form/submission 表单提交记录"
+        ],
+        "x-permission": {
+          "code": "form:submission:add",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/form/submission/info": {
+      "post": {
+        "operationId": "formSubmissionInfo",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormSubmissionInfoBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FormSubmissionRow"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "summary": "表单提交记录详情",
+        "tags": [
+          "form/submission 表单提交记录"
+        ],
+        "x-permission": {
+          "code": "form:submission:info",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/form/submission/page": {
+      "post": {
+        "operationId": "formSubmissionPage",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormSubmissionPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FormSubmissionPageResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          }
+        },
+        "summary": "表单提交记录分页列表",
+        "tags": [
+          "form/submission 表单提交记录"
+        ],
+        "x-permission": {
+          "code": "form:submission:page",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/form/submission/schema": {
+      "get": {
+        "operationId": "formSubmissionSchema",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CrudSchema"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "表单提交记录页面描述",
+        "tags": [
+          "form/submission 表单提交记录"
+        ],
+        "x-permission": {
+          "code": "form:submission:page",
           "risk": "normal"
         }
       }

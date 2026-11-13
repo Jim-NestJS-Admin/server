@@ -41,7 +41,7 @@ export class CodeRuleModule {
         CodeRuleService,
         CodeSequenceService,
       ],
-      exports: [CodeRuleService],
+      exports: [CodeRuleService, CodeUsageRegistry],
     };
   }
 }

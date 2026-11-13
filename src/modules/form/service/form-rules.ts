@@ -341,7 +341,11 @@ export function parseFormDesigner(input: unknown): {
         fail(`${p}.validate`, '最小值不能大于最大值');
       const meta =
         rule.meta === undefined ? {} : object(rule.meta, `${p}.meta`);
-      keys(meta, ['multilingual', 'queryable'], `${p}.meta`);
+      keys(
+        meta,
+        ['multilingual', 'queryable', 'generated', 'codeCharset'],
+        `${p}.meta`,
+      );
       const multilingual = bool(
         meta.multilingual,
         false,
@@ -349,7 +353,45 @@ export function parseFormDesigner(input: unknown): {
       );
       if (multilingual && valueType !== 'string')
         fail(`${p}.meta.multilingual`, '只有文本字段支持多语言标记');
+      const generated = bool(meta.generated, false, `${p}.meta.generated`);
+      if (
+        meta.codeCharset !== undefined &&
+        meta.codeCharset !== '' &&
+        (typeof meta.codeCharset !== 'string' ||
+          !['upper_alnum', 'lower_slug', 'digits'].includes(meta.codeCharset))
+      )
+        fail(`${p}.meta.codeCharset`, '请选择自动编号允许的字符集');
+      if (generated) {
+        if (
+          type !== 'input' ||
+          multilingual ||
+          (props.type && props.type !== 'text') ||
+          rule.hidden === true ||
+          rule.display === false ||
+          validation.format ||
+          (validation.min ?? 0) > 0 ||
+          (Object.hasOwn(rule, 'value') &&
+            rule.value !== null &&
+            rule.value !== '')
+        )
+          fail(
+            `${p}.meta.generated`,
+            '自动编号只能用于可见的普通文本字段，不支持默认值、多语言、隐藏或其他格式校验',
+          );
+        validation.max ??= 64;
+        if (validation.max < 1 || validation.max > 64)
+          fail(`${p}.props.maxlength`, '自动编号的最大长度必须为1至64');
+        if (fields.filter((f) => f.generated).length >= 20)
+          fail(p, '一个表单最多20个自动编号字段');
+      }
       fields.push({
+        ...(generated
+          ? {
+              generated: true,
+              codeCharset: (meta.codeCharset ??
+                'lower_slug') as FormFieldDto['codeCharset'],
+            }
+          : {}),
         field,
         title,
         component: type as FormFieldDto['component'],
@@ -426,6 +468,8 @@ export function parseFormDesigner(input: unknown): {
       );
       const source = fields.findIndex((f) => f.field === v.source),
         target = fields.findIndex((f) => f.field === v.target);
+      if (fields[source]?.generated || fields[target]?.generated)
+        fail(p, '自动编号在保存时产生，不能参与条件联动');
       if (source < 0 || target <= source || fields[source].multiple)
         fail(p, '联动只能从前置标量字段指向后置字段，禁止循环依赖');
       if (!['eq', 'ne', 'in'].includes(v.operator as string))
@@ -485,6 +529,7 @@ export function parseFormDesigner(input: unknown): {
 export function validateFormValues(
   definition: { fields: FormFieldDto[]; designer: FormDesignerDto },
   data: unknown,
+  generatedValues = false,
 ): void {
   const values = object(data, 'data'),
     errors: { field: string; messages: string[] }[] = [];
@@ -518,6 +563,12 @@ export function validateFormValues(
       value === null ||
       value === '' ||
       (Array.isArray(value) && !value.length);
+    if (field.generated && !generatedValues) {
+      if (!empty) add(field.field, '自动编号由系统在保存时生成，请勿填写');
+      continue;
+    }
+    if (field.generated && generatedValues && empty)
+      add(field.field, '自动编号生成失败');
     if (!field.visible) {
       if (!empty) add(field.field, '隐藏字段不允许提交');
       continue;

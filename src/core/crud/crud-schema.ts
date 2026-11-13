@@ -4,6 +4,7 @@ import {
   ApiPropertyOptional,
   getSchemaPath,
 } from '@nestjs/swagger';
+import { fieldUsageKey } from './crud-code.js';
 import { getMetadataArgsStorage } from 'typeorm';
 import type { DictItem, FormComponent } from './crud-field.decorator.js';
 import {
@@ -124,6 +125,7 @@ function columnArgs(entity: Function, p: string) {
 
 export class CrudSchemaFormItem {
   @ApiPropertyOptional() generated?: boolean;
+  @ApiPropertyOptional() codeUsageKey?: string;
   @ApiPropertyOptional() generatedHint?: string;
   @ApiProperty() field: string;
   @ApiProperty() label: string;
@@ -355,6 +357,15 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
         edit: f.generated ? 'none' : (f.edit ?? 'both'),
         ...(f.generated
           ? {
+              ...(f.code
+                ? {
+                    codeUsageKey: fieldUsageKey(
+                      'crud',
+                      meta.prefix,
+                      f.property,
+                    ),
+                  }
+                : {}),
               generated: true,
               generatedHint: f.generatedHint ?? '保存后自动生成',
             }
@@ -448,6 +459,15 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
             edit: f.generated ? 'none' : (f.edit ?? 'both'),
             ...(f.generated
               ? {
+                  ...(f.code
+                    ? {
+                        codeUsageKey: fieldUsageKey(
+                          'crud',
+                          `${meta.prefix}/${c.resource}`,
+                          f.property,
+                        ),
+                      }
+                    : {}),
                   generated: true,
                   generatedHint: f.generatedHint ?? '保存后自动生成',
                 }

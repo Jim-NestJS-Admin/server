@@ -1,3 +1,4 @@
+import { fillCodeFields } from './crud-code.js';
 import { exportValue } from './export-value.js';
 import {
   validateDictionaryValues,
@@ -86,6 +87,7 @@ export interface CrudBinding<T extends BaseEntity> {
   /** 列表显示名来源（系统模块注册；没有时只返回编号） */
   display: () => CrudDisplaySource | undefined;
   dictionary?: () => CrudDictionarySource | undefined;
+  codes?: () => import('./crud-code.js').CrudCodeSource | undefined;
 }
 
 const ALIAS = 'e';
@@ -457,6 +459,18 @@ export class BaseService<T extends BaseEntity> {
       });
       this.assertNullable(values);
       await this.beforeAdd(values, tx);
+      await fillCodeFields(this.crud.codes?.(), tx.manager, [
+        {
+          resource: this.meta.prefix,
+          fields: this.meta.fields,
+          rows: [values as Record<string, unknown>],
+        },
+        ...plans.map((p) => ({
+          resource: `${this.meta.prefix}/${p.child.resource}`,
+          fields: p.child.fields,
+          rows: p.added.map((r) => r.values),
+        })),
+      ]);
       await validateDictionaryValues(
         this.crud.dictionary?.(),
         this.meta.fields,
@@ -512,6 +526,15 @@ export class BaseService<T extends BaseEntity> {
       this.dropNotEditable(changes, existing as unknown as RowOwner);
       this.assertNullable(changes);
       await this.beforeUpdate(changes, existing, tx);
+      await fillCodeFields(
+        this.crud.codes?.(),
+        tx.manager,
+        plans.map((p) => ({
+          resource: `${this.meta.prefix}/${p.child.resource}`,
+          fields: p.child.fields,
+          rows: p.added.map((r) => r.values),
+        })),
+      );
       await validateDictionaryValues(
         this.crud.dictionary?.(),
         this.meta.fields,

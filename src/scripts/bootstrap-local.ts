@@ -1,3 +1,4 @@
+import { FormSubmission1794621600000 } from '../database/migrations/1794621600000-FormSubmission.js';
 import { CommonCodeRuleStatus1794618000000 } from '../database/migrations/1794618000000-CommonCodeRuleStatus.js';
 import { DictionaryTags1794614400000 } from '../database/migrations/1794614400000-DictionaryTags.js';
 import { CodegenModuleSpec1794312000000 } from '../database/migrations/1794312000000-CodegenModuleSpec.js';
@@ -109,6 +110,7 @@ async function bootstrapLocal(): Promise<void> {
           CodeRules1794528000000,
           DictionaryTags1794614400000,
           CommonCodeRuleStatus1794618000000,
+          FormSubmission1794621600000,
         ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,

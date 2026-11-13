@@ -40,7 +40,10 @@ export const DEFAULT_MENUS: DirectorySeed[] = [
     title: '表单与流程',
     path: '/forms',
     icon: 'ri:file-list-3-line',
-    pages: [crud('表单定义', 'form/definition')],
+    pages: [
+      crud('表单定义', 'form/definition'),
+      crud('提交记录', 'form/submission'),
+    ],
   },
   {
     title: '平台管理',

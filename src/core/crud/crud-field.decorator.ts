@@ -1,3 +1,4 @@
+import type { CrudCodeOptions } from './crud-code.js';
 import { ApiProperty } from '@nestjs/swagger';
 
 /** tree-select：树形资源的父级字段，选项来自本资源的 tree 接口 */
@@ -30,6 +31,8 @@ export interface CrudFieldOptions {
   edit?: 'both' | 'add' | 'none';
   /** 后端生成，新增和修改请求均不能提供。 */
   generated?: boolean;
+  /** 新增时由框架在保存事务内取号，修改时不可覆盖。 */
+  code?: CrudCodeOptions;
   generatedHint?: string;
   /** 固定字典（如状态）；数据库字典在 T08 接入 */
   dict?: DictItem[];
@@ -68,6 +71,19 @@ export function CrudField(options: CrudFieldOptions): PropertyDecorator {
     (options.dict || !/^[a-z][a-z0-9_.-]{1,63}$/.test(options.dictCode))
   )
     throw new Error('dictCode编码无效或与静态dict冲突');
+  if (options.code) {
+    if (
+      !['upper_alnum', 'lower_slug', 'digits'].includes(options.code.charset) ||
+      options.dict ||
+      options.dictCode
+    )
+      throw new Error('自动编码字段的字符集无效或配置了字典');
+    options = {
+      ...options,
+      generated: true,
+      generatedHint: '保存时自动生成，请先绑定编码规则',
+    };
+  }
   return (target, propertyKey) => {
     const property = String(propertyKey);
     const ctor = target.constructor;
