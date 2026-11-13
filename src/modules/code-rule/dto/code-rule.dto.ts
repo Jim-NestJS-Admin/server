@@ -1,5 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMinSize,
+  ArrayMaxSize,
+  ValidateIf,
   IsIn,
   IsOptional,
   IsString,
@@ -9,7 +12,11 @@ import {
   IsObject,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { CODE_START_MESSAGE, type Segment } from '../service/rule-config.js';
+import {
+  CODE_START_MESSAGE,
+  codeSegmentsReadyForStart,
+  type Segment,
+} from '../service/rule-config.js';
 export class CodeRuleValidateInput {
   @ApiProperty() @IsString() timezone!: string;
   @ApiProperty() @IsIn(['never', 'year', 'month', 'day']) resetPeriod!: string;
@@ -17,9 +24,14 @@ export class CodeRuleValidateInput {
     type: 'array',
     items: { type: 'object', additionalProperties: true },
   })
-  @IsArray()
+  @IsArray({ message: '请添加编码段' })
+  @ArrayMinSize(1, { message: '请至少添加一个编码段，并将流水号放在最后。' })
+  @ArrayMaxSize(4, { message: '编码段最多只能配置4段。' })
   segments!: Segment[];
   @ApiProperty()
+  @ValidateIf((input: { segments?: unknown }) =>
+    codeSegmentsReadyForStart(input.segments),
+  )
   @Matches(/^[1-9]\d{0,11}$/, { message: CODE_START_MESSAGE })
   start!: string;
 }

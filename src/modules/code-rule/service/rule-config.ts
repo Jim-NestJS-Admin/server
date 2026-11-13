@@ -43,6 +43,20 @@ export function invalid(message: string, field = 'segments'): never {
     { field: `data.${field}`, messages: [message] },
   ]);
 }
+/** DTO先检查结构；结构有误时先由段校验/服务报错，不抢先报起始值格式。 */
+export function codeSegmentsReadyForStart(segments: unknown): boolean {
+  try {
+    validateConfig({
+      timezone: 'UTC',
+      resetPeriod: 'never',
+      segments: segments as Segment[],
+      start: '1',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 export function validateConfig(input: RuleConfig): RuleConfig {
   try {
     new Intl.DateTimeFormat('en', { timeZone: input.timezone }).format();

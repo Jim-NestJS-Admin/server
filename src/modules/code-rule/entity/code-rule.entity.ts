@@ -1,9 +1,22 @@
 import { Entity, Column, Index } from 'typeorm';
-import { IsArray, IsIn, IsString, Matches, MaxLength } from 'class-validator';
+import {
+  ArrayMinSize,
+  ArrayMaxSize,
+  ValidateIf,
+  IsArray,
+  IsIn,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { BaseEntity, CrudField } from '../../../core/crud/index.js';
-import { CODE_START_MESSAGE, type Segment } from '../service/rule-config.js';
+import {
+  CODE_START_MESSAGE,
+  codeSegmentsReadyForStart,
+  type Segment,
+} from '../service/rule-config.js';
 
 @Entity('sys_code_rule')
 @Index('uk_code_rule_code', ['tenantId', 'code', 'activeGuard'], {
@@ -54,10 +67,15 @@ export class CodeRule extends BaseEntity {
     type: 'array',
     items: { type: 'object', additionalProperties: true },
   })
-  @IsArray()
+  @IsArray({ message: '请添加编码段' })
+  @ArrayMinSize(1, { message: '请至少添加一个编码段，并将流水号放在最后。' })
+  @ArrayMaxSize(4, { message: '编码段最多只能配置4段。' })
   @Column({ type: 'json' })
   segments!: Segment[];
   @CrudField({ label: '起始值', form: { required: true } })
+  @ValidateIf((input: { segments?: unknown }) =>
+    codeSegmentsReadyForStart(input.segments),
+  )
   @Matches(/^[1-9]\d{0,11}$/, { message: CODE_START_MESSAGE })
   @Column({ type: 'bigint', unsigned: true })
   start!: string;
