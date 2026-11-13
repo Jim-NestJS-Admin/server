@@ -4632,7 +4632,7 @@
             "description": "按等于筛选"
           },
           "keyword": {
-            "description": "这个资源没有配置搜索字段，传了也不生效",
+            "description": "搜索框，模糊匹配：periodKey、lastCode",
             "maxLength": 100,
             "type": "string"
           },

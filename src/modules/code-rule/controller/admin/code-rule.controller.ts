@@ -129,6 +129,9 @@ export class CodeRuleController extends BaseController<CodeRule> {
   service: CodeSequenceService,
   delete: 'hard',
   api: ['page', 'info'],
-  pageQuery: { fieldEq: ['ruleId', 'periodKey'] },
+  pageQuery: {
+    keyWords: ['periodKey', 'lastCode'],
+    fieldEq: ['ruleId', 'periodKey'],
+  },
 })
 export class CodeSequenceController extends BaseController<CodeSequence> {}

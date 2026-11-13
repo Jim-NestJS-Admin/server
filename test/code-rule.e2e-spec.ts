@@ -124,6 +124,36 @@ describe('T43真实MySQL编码分配、规则与用途隔离', () => {
         service.nextManyInTx(m, [{ usageKey: key, count }]),
       ),
     );
+  it('序号监控按周期和最近编码搜索，规则过滤与租户边界仍生效', async () => {
+    const first = await bound('search_');
+    await bound('other_', '1', '1', 'other_code');
+    await take();
+    await take(1, '1', 'other_code');
+    await bound('search_', '1', '2');
+    await take(1, '2');
+    const schema = await request(app.getHttpServer())
+      .get('/admin/system/code-sequence/schema')
+      .set('x-test-user', '1')
+      .set('x-test-tenant', '1')
+      .expect(200);
+    expect(schema.body.data.actions.page.keyWords).toEqual([
+      'periodKey',
+      'lastCode',
+    ]);
+    const page = (keyword: string, ruleId = first.id) =>
+      request(app.getHttpServer())
+        .post('/admin/system/code-sequence/page')
+        .set('x-test-user', '1')
+        .set('x-test-tenant', '1')
+        .send({ page: 1, size: 20, keyword, eq: { ruleId } });
+    const found = await page('search_').expect(200);
+    expect(found.body.data.total).toBe(1);
+    expect(found.body.data.list[0].lastCode).toBe('search_000001');
+    expect((await page('other_').expect(200)).body.data.total).toBe(0);
+    expect((await page('').expect(200)).body.data.total).toBe(1);
+    expect((await page('all').expect(200)).body.data.total).toBe(1);
+    await page('', 'not-an-id').expect(400);
+  });
   it('正式迁移可往返，计数器与登记表唯一索引和实体一致', async () => {
     const runner = db.createQueryRunner();
     try {

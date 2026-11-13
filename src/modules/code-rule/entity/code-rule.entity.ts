@@ -108,9 +108,12 @@ export class CodeBinding extends BaseEntity {
 })
 export class CodeSequence extends BaseEntity {
   @CrudField({ label: '规则编号', edit: 'none' })
+  @Matches(/^[1-9]\d{0,19}$/, { message: '请选择有效的规则' })
   @Column({ type: 'bigint', unsigned: true })
   ruleId!: string;
   @CrudField({ label: '周期', edit: 'none' })
+  @IsString()
+  @MaxLength(10)
   @Column({ length: 10 })
   periodKey!: string;
   @CrudField({ label: '当前序号', edit: 'none' })
