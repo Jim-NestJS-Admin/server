@@ -73,7 +73,9 @@ export function CrudField(options: CrudFieldOptions): PropertyDecorator {
     throw new Error('dictCode编码无效或与静态dict冲突');
   if (options.code) {
     if (
-      !['upper_alnum', 'lower_slug', 'digits'].includes(options.code.charset) ||
+      !['upper_alnum', 'lower_slug', 'digits', 'unrestricted'].includes(
+        options.code.charset,
+      ) ||
       options.dict ||
       options.dictCode
     )

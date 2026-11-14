@@ -24,7 +24,7 @@ export interface CodeUsage {
   field: string;
   maxLength: number;
   minLength?: number;
-  charset: 'upper_alnum' | 'lower_slug' | 'digits';
+  charset: 'upper_alnum' | 'lower_slug' | 'digits' | 'unrestricted';
   mustStartWithLetter?: boolean;
   uniqueScope: 'tenant';
   allowRuleSwitch: boolean;
@@ -216,13 +216,15 @@ export function compatible(config: RuleConfig, usage: CodeUsage) {
   for (const value of [BigInt(config.start), maximum(config)]) {
     const code = renderCode(config, value, new Date('2026-11-13T12:00:00Z'));
     const pattern =
-      usage.charset === 'digits'
-        ? /^\d+$/
-        : usage.charset === 'lower_slug'
-          ? /^[a-z][a-z0-9_]*$/
-          : /^[A-Z0-9_-]+$/;
+      usage.charset === 'unrestricted'
+        ? null
+        : usage.charset === 'digits'
+          ? /^\d+$/
+          : usage.charset === 'lower_slug'
+            ? /^[a-z][a-z0-9_]*$/
+            : /^[A-Z0-9_-]+$/;
     if (
-      !pattern.test(code) ||
+      (pattern !== null && !pattern.test(code)) ||
       code.length > usage.maxLength ||
       code.length < (usage.minLength ?? 1) ||
       ((usage.mustStartWithLetter || usage.charset === 'lower_slug') &&
@@ -233,13 +235,15 @@ export function compatible(config: RuleConfig, usage: CodeUsage) {
 }
 export function validateOutput(code: string, usage: CodeUsage) {
   const pattern =
-    usage.charset === 'digits'
-      ? /^\d+$/
-      : usage.charset === 'lower_slug'
-        ? /^[a-z][a-z0-9_]*$/
-        : /^[A-Z0-9_-]+$/;
+    usage.charset === 'unrestricted'
+      ? null
+      : usage.charset === 'digits'
+        ? /^\d+$/
+        : usage.charset === 'lower_slug'
+          ? /^[a-z][a-z0-9_]*$/
+          : /^[A-Z0-9_-]+$/;
   if (
-    !pattern.test(code) ||
+    (pattern !== null && !pattern.test(code)) ||
     code.length > usage.maxLength ||
     code.length < (usage.minLength ?? 1) ||
     (usage.mustStartWithLetter && !/^[A-Za-z]/.test(code))

@@ -63,8 +63,10 @@ export class CodeUsageItem {
   @ApiProperty() field!: string;
   @ApiProperty() maxLength!: number;
   @ApiPropertyOptional() minLength?: number;
-  @ApiProperty({ enum: ['upper_alnum', 'lower_slug', 'digits'] })
-  @IsIn(['upper_alnum', 'lower_slug', 'digits'])
+  @ApiProperty({
+    enum: ['upper_alnum', 'lower_slug', 'digits', 'unrestricted'],
+  })
+  @IsIn(['upper_alnum', 'lower_slug', 'digits', 'unrestricted'])
   charset!: string;
   @ApiProperty() uniqueScope!: string;
   @ApiProperty() allowRuleSwitch!: boolean;

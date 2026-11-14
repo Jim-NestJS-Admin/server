@@ -63,7 +63,7 @@ export interface CodegenField {
   form?: boolean;
   required?: boolean;
   unique?: boolean;
-  codeCharset?: 'upper_alnum' | 'lower_slug' | 'digits';
+  codeCharset?: 'upper_alnum' | 'lower_slug' | 'digits' | 'unrestricted';
   component?: (typeof COMPONENTS)[number];
   dict?: string | null;
   fieldPerm?: { default?: string; mask?: string | null } | null;
@@ -152,7 +152,9 @@ export function validateCodegenConfig(raw: unknown): Err[] {
       const p = `${path}[${i}]`;
       if (
         f?.codeCharset !== undefined &&
-        (!['upper_alnum', 'lower_slug', 'digits'].includes(f.codeCharset) ||
+        (!['upper_alnum', 'lower_slug', 'digits', 'unrestricted'].includes(
+          f.codeCharset,
+        ) ||
           f.type !== 'string' ||
           f.nullable ||
           !f.unique ||

@@ -358,7 +358,9 @@ export function parseFormDesigner(input: unknown): {
         meta.codeCharset !== undefined &&
         meta.codeCharset !== '' &&
         (typeof meta.codeCharset !== 'string' ||
-          !['upper_alnum', 'lower_slug', 'digits'].includes(meta.codeCharset))
+          !['upper_alnum', 'lower_slug', 'digits', 'unrestricted'].includes(
+            meta.codeCharset,
+          ))
       )
         fail(`${p}.meta.codeCharset`, '请选择自动编号允许的字符集');
       if (generated) {

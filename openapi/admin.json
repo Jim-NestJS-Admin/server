@@ -286,7 +286,8 @@
             "enum": [
               "upper_alnum",
               "lower_slug",
-              "digits"
+              "digits",
+              "unrestricted"
             ],
             "type": "string"
           },
@@ -1896,7 +1897,8 @@
             "enum": [
               "upper_alnum",
               "lower_slug",
-              "digits"
+              "digits",
+              "unrestricted"
             ],
             "type": "string"
           },
@@ -4032,7 +4034,8 @@
             "enum": [
               "upper_alnum",
               "lower_slug",
-              "digits"
+              "digits",
+              "unrestricted"
             ],
             "type": "string"
           },

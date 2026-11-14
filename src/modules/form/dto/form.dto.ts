@@ -43,8 +43,10 @@ export class FormValidationDto {
 export class FormFieldDto {
   @ApiPropertyOptional({ description: '保存时由编码规则生成，不接受用户填写' })
   generated?: boolean;
-  @ApiPropertyOptional({ enum: ['upper_alnum', 'lower_slug', 'digits'] })
-  codeCharset?: 'upper_alnum' | 'lower_slug' | 'digits';
+  @ApiPropertyOptional({
+    enum: ['upper_alnum', 'lower_slug', 'digits', 'unrestricted'],
+  })
+  codeCharset?: 'upper_alnum' | 'lower_slug' | 'digits' | 'unrestricted';
   @ApiProperty() field!: string;
   @ApiProperty() title!: string;
   @ApiProperty({ enum: FORM_TYPES }) component!: (typeof FORM_TYPES)[number];

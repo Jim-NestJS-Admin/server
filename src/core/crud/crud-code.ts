@@ -4,7 +4,7 @@ import type { CrudFieldMeta } from './crud-field.decorator.js';
 
 /** 字段声明是接入入口；模块配置只能绑定规则，不能将普通字段变成可自动写入字段。 */
 export interface CrudCodeOptions {
-  charset: 'upper_alnum' | 'lower_slug' | 'digits';
+  charset: 'upper_alnum' | 'lower_slug' | 'digits' | 'unrestricted';
   minLength?: number;
   allowRuleSwitch?: boolean;
 }

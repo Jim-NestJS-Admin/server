@@ -33,7 +33,9 @@ export class CodeUsageRegistry implements OnModuleInit, OnApplicationBootstrap {
         !/^[a-z][a-z0-9_]{1,63}$/.test(u.key) ||
         this.entries.has(u.key) ||
         u.uniqueScope !== 'tenant' ||
-        !['upper_alnum', 'lower_slug', 'digits'].includes(u.charset) ||
+        !['upper_alnum', 'lower_slug', 'digits', 'unrestricted'].includes(
+          u.charset,
+        ) ||
         !Number.isInteger(u.maxLength) ||
         u.maxLength < 1 ||
         u.maxLength > 64 ||

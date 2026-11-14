@@ -130,10 +130,10 @@ export class SpecField {
   @ApiPropertyOptional() comment?: string;
   @ApiPropertyOptional() unique?: boolean;
   @ApiPropertyOptional({
-    enum: ['upper_alnum', 'lower_slug', 'digits'],
+    enum: ['upper_alnum', 'lower_slug', 'digits', 'unrestricted'],
     description: '自动编码字段字符集，保存时生成',
   })
-  codeCharset?: 'upper_alnum' | 'lower_slug' | 'digits';
+  codeCharset?: 'upper_alnum' | 'lower_slug' | 'digits' | 'unrestricted';
   @ApiPropertyOptional() dictCode?: string;
   @ApiPropertyOptional({ type: SpecFieldPerm }) fieldPerm?: SpecFieldPerm;
 }
@@ -330,7 +330,9 @@ export function validateSpec(raw: unknown): SpecError[] {
       if (
         f.codeCharset !== undefined &&
         (typeof f.codeCharset !== 'string' ||
-          !['upper_alnum', 'lower_slug', 'digits'].includes(f.codeCharset) ||
+          !['upper_alnum', 'lower_slug', 'digits', 'unrestricted'].includes(
+            f.codeCharset,
+          ) ||
           f.type !== 'string' ||
           f.nullable ||
           f.unique !== true ||
