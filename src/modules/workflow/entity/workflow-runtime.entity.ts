@@ -1,5 +1,14 @@
 import { Column, Entity, Index } from 'typeorm';
 import { ApiHideProperty } from '@nestjs/swagger';
+import {
+  IsIn,
+  IsInt,
+  IsString,
+  Matches,
+  MaxLength,
+  Min,
+} from 'class-validator';
+import { ID_PATTERN } from '../../../core/crud/crud.dto.js';
 import type { BpmnEngineExecutionState } from 'bpmn-engine';
 import { BaseEntity, CrudField } from '../../../core/crud/index.js';
 import { FieldPerm } from '../../../core/field-perm/field-perm.decorator.js';
@@ -33,12 +42,18 @@ export class WorkflowInstance extends BaseEntity {
   originSubmissionId!: string;
   @CrudField({ label: '申请轮次', edit: 'none' })
   @Column({ type: 'int', unsigned: true, default: 1 })
+  @IsInt({ message: '申请轮次必须是整数' })
+  @Min(1, { message: '申请轮次至少为1' })
   round!: number;
   @CrudField({ label: '业务类型', edit: 'none' })
   @Column({ type: 'varchar', length: 64, default: 'form/submission' })
+  @IsString({ message: '业务类型必须是文本' })
+  @MaxLength(64, { message: '业务类型最多64个字符' })
   businessType!: string;
   @CrudField({ label: '业务编号', edit: 'none' })
   @Column({ type: 'varchar', length: 64 })
+  @IsString({ message: '业务编号必须是文本' })
+  @MaxLength(64, { message: '业务编号最多64个字符' })
   businessId!: string;
   @ApiHideProperty() @Column({ type: 'json' }) selections!: Record<
     string,
@@ -50,9 +65,11 @@ export class WorkflowInstance extends BaseEntity {
   applicantOrgId!: string | null;
   @CrudField({ label: '流程定义', edit: 'none' })
   @Column({ type: 'bigint', unsigned: true })
+  @Matches(ID_PATTERN, { message: '流程定义编号格式不正确' })
   definitionId!: string;
   @CrudField({ label: '表单提交记录', edit: 'none' })
   @Column({ type: 'bigint', unsigned: true })
+  @Matches(ID_PATTERN, { message: '表单提交编号格式不正确' })
   submissionId!: string;
   @CrudField({ label: '固定表单版本', edit: 'none' })
   @Column({ type: 'bigint', unsigned: true })
@@ -68,6 +85,7 @@ export class WorkflowInstance extends BaseEntity {
   revision!: number;
   @CrudField({ label: '申请人', edit: 'none', display: 'users' })
   @Column({ type: 'bigint', unsigned: true })
+  @Matches(ID_PATTERN, { message: '申请人编号格式不正确' })
   applicantId!: string;
   @CrudField({
     label: '状态',
@@ -80,6 +98,9 @@ export class WorkflowInstance extends BaseEntity {
     ],
   })
   @Column({ type: 'varchar', length: 16 })
+  @IsIn(['running', 'approved', 'returned', 'withdrawn'], {
+    message: '请选择有效的申请状态',
+  })
   status!: 'running' | 'approved' | 'returned' | 'withdrawn';
   @CrudField({ label: '结束时间', edit: 'none', nullable: true })
   @Column({ type: 'datetime', precision: 3, nullable: true })
@@ -116,6 +137,8 @@ export class WorkflowTask extends BaseEntity {
   @ApiHideProperty() @Column({ type: 'json' }) viewerIds!: string[];
   @CrudField({ label: '申请轮次', edit: 'none' })
   @Column({ type: 'int', unsigned: true, default: 1 })
+  @IsInt({ message: '申请轮次必须是整数' })
+  @Min(1, { message: '申请轮次至少为1' })
   round!: number;
   @CrudField({
     label: '种类',
@@ -126,6 +149,7 @@ export class WorkflowTask extends BaseEntity {
     ],
   })
   @Column({ type: 'varchar', length: 16, default: 'approve' })
+  @IsIn(['approve', 'copy'], { message: '请选择审批或抄送任务' })
   kind!: 'approve' | 'copy';
   @ApiHideProperty() @Column({ type: 'json' }) fieldPermissions!: Record<
     string,
@@ -135,9 +159,11 @@ export class WorkflowTask extends BaseEntity {
   lastUrgedAt!: Date | null;
   @CrudField({ label: '审批实例', edit: 'none' })
   @Column({ type: 'bigint', unsigned: true })
+  @Matches(ID_PATTERN, { message: '审批实例编号格式不正确' })
   instanceId!: string;
   @CrudField({ label: '节点标识', edit: 'none' })
   @Column({ type: 'varchar', length: 48 })
+  @Matches(/^[A-Za-z][A-Za-z0-9_]{0,47}$/, { message: '节点标识格式不正确' })
   nodeId!: string;
   @CrudField({ label: '节点名称', edit: 'none' })
   @Column({ type: 'varchar', length: 100 })
@@ -158,6 +184,10 @@ export class WorkflowTask extends BaseEntity {
     ],
   })
   @Column({ type: 'varchar', length: 16 })
+  @IsIn(
+    ['pending', 'approved', 'cancelled', 'rejected', 'transferred', 'copied'],
+    { message: '请选择有效的任务状态' },
+  )
   status!:
     | 'pending'
     | 'approved'
@@ -191,6 +221,8 @@ export class WorkflowRecord extends BaseEntity {
   @ApiHideProperty() @Column({ type: 'json' }) viewerIds!: string[];
   @CrudField({ label: '申请轮次', edit: 'none' })
   @Column({ type: 'int', unsigned: true, default: 1 })
+  @IsInt({ message: '申请轮次必须是整数' })
+  @Min(1, { message: '申请轮次至少为1' })
   round!: number;
   @CrudField({ label: '表单提交记录', edit: 'none', nullable: true })
   @Column({ type: 'bigint', unsigned: true, nullable: true })
@@ -200,9 +232,11 @@ export class WorkflowRecord extends BaseEntity {
   attachmentIds!: string[];
   @CrudField({ label: '审批实例', edit: 'none' })
   @Column({ type: 'bigint', unsigned: true })
+  @Matches(ID_PATTERN, { message: '审批实例编号格式不正确' })
   instanceId!: string;
   @CrudField({ label: '待办', edit: 'none', nullable: true })
   @Column({ type: 'bigint', unsigned: true, nullable: true })
+  @Matches(ID_PATTERN, { message: '待办编号格式不正确' })
   taskId!: string | null;
   @CrudField({
     label: '动作',
@@ -221,6 +255,21 @@ export class WorkflowRecord extends BaseEntity {
     ],
   })
   @Column({ type: 'varchar', length: 16 })
+  @IsIn(
+    [
+      'start',
+      'approve',
+      'empty_pass',
+      'repeat_pass',
+      'reject',
+      'transfer',
+      'withdraw',
+      'resubmit',
+      'urge',
+      'timeout',
+    ],
+    { message: '请选择有效的审批记录动作' },
+  )
   action!:
     | 'start'
     | 'approve'
@@ -242,6 +291,7 @@ export class WorkflowRecord extends BaseEntity {
     display: 'users',
   })
   @Column({ type: 'bigint', unsigned: true, nullable: true })
+  @Matches(ID_PATTERN, { message: '操作人编号格式不正确' })
   actorId!: string | null;
   @CrudField({ label: '意见', edit: 'none' })
   @FieldPerm({ label: '审批意见', default: 'readonly' })
