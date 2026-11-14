@@ -37,6 +37,7 @@ export class FileModule {
     const database = options.catalog === 'database';
     return {
       module: FileModule,
+      global: true,
       imports: [
         ...(database ? [TypeOrmModule.forFeature([FileAssetEntity])] : []),
         MulterModule.register({

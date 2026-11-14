@@ -45,7 +45,11 @@ abstract class FieldConfigurationService<
           throw crudErrors.badRequest('跟随默认时不能单独保留委派上限');
         if (roleId && change.delegable)
           throw crudErrors.badRequest('角色配置不能修改模块可委派上限');
-        const code = this.catalog.find(change.resource, change.field);
+        const code = await this.catalog.resolve(
+          change.resource,
+          change.field,
+          tx.manager,
+        );
         if (!code) throw crudErrors.badRequest('资源字段不存在或不允许配置');
         const query = this.select(tx.manager, 'update').where(
           'e.resource = :resource AND e.field = :field',
@@ -64,12 +68,13 @@ abstract class FieldConfigurationService<
           }
           continue;
         }
-        this.catalog.validate(
+        await this.catalog.validateAsync(
           change.resource,
           change.field,
           change.state,
           change.mask,
           change.delegable,
+          tx.manager,
         );
         const values = {
           resource: change.resource,
@@ -136,15 +141,19 @@ abstract class FieldConfigurationService<
 }
 @Injectable()
 export class SystemFieldService extends FieldConfigurationService<SystemField> {
-  protected async validate(data: Partial<SystemField>): Promise<void> {
-    this.catalog.validate(
+  protected async validate(
+    data: Partial<SystemField>,
+    tx: CrudTx,
+  ): Promise<void> {
+    const code = await this.catalog.validateAsync(
       data.resource!,
       data.field!,
       data.state!,
       data.mask,
       data.delegable,
+      tx.manager,
     );
-    data.mask ??= this.catalog.find(data.resource!, data.field!)?.mask ?? null;
+    data.mask ??= code.mask;
     data.delegable ??= null;
     data.enabled ??= true;
     data.configurable = true;
@@ -157,11 +166,13 @@ export class SystemRoleFieldService extends FieldConfigurationService<SystemRole
     data: Partial<SystemRoleField>,
     tx: CrudTx,
   ): Promise<void> {
-    const code = this.catalog.validate(
+    const code = await this.catalog.validateAsync(
       data.resource!,
       data.field!,
       data.state!,
       data.mask,
+      undefined,
+      tx.manager,
     );
     data.mask ??= code.mask;
     const role = await this.reference(SystemRole, data.roleId!, tx);

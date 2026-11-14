@@ -1,4 +1,9 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  ApiExtraModels,
+  ApiProperty,
+  ApiPropertyOptional,
+  getSchemaPath,
+} from '@nestjs/swagger';
 import {
   IsInt,
   IsObject,
@@ -11,15 +16,26 @@ import {
 import { Type } from 'class-transformer';
 import { ID_PATTERN } from '../../../core/crud/crud.dto.js';
 
-export interface WorkflowActor {
-  type:
+export class WorkflowActor {
+  @ApiProperty({
+    enum: [
+      'users',
+      'roles',
+      'department_leader',
+      'supervisor',
+      'self_select',
+      'applicant',
+    ],
+  })
+  type!:
     | 'users'
     | 'roles'
     | 'department_leader'
     | 'supervisor'
     | 'self_select'
     | 'applicant';
-  ids?: string[];
+  @ApiPropertyOptional({ type: [String] }) ids?: string[];
+  @ApiPropertyOptional({ minimum: 1, maximum: 10 })
   level?: number;
 }
 export type WorkflowCondition =
@@ -30,34 +46,89 @@ export type WorkflowCondition =
       operator: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'not_in';
       value: string | number | boolean | (string | number | boolean)[];
     };
-export interface WorkflowBranch {
-  id: string;
-  name: string;
-  condition?: WorkflowCondition;
-  default?: boolean;
-  nodes: WorkflowNode[];
+export class WorkflowConditionValue {
+  @ApiProperty({ enum: ['field', 'applicant_org', 'applicant_role'] }) source!:
+    'field' | 'applicant_org' | 'applicant_role';
+  @ApiPropertyOptional() field?: string;
+  @ApiProperty({ enum: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'in', 'not_in'] })
+  operator!: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'not_in';
+  @ApiProperty({
+    oneOf: [
+      { type: 'string' },
+      { type: 'number' },
+      { type: 'boolean' },
+      {
+        type: 'array',
+        items: {
+          oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }],
+        },
+      },
+    ],
+  })
+  value!: string | number | boolean | (string | number | boolean)[];
 }
-export interface WorkflowNode {
-  id: string;
-  name: string;
-  type: 'approve' | 'copy' | 'condition' | 'parallel';
-  actor?: WorkflowActor;
-  mode?: 'sequential' | 'all' | 'any';
-  empty?: 'pass' | 'administrator' | 'stop';
-  skipRepeated?: boolean;
-  rejectTo?: 'applicant';
-  timeout?: { minutes: number; action: 'remind' | 'supervisor' };
+const conditionSchema = () => [
+  { $ref: getSchemaPath('WorkflowConditionValue') },
+  { $ref: getSchemaPath('WorkflowConditionGroup') },
+];
+export class WorkflowConditionGroup {
+  @ApiProperty({ enum: ['all', 'any'] }) logic!: 'all' | 'any';
+  @ApiProperty({ type: 'array', items: { oneOf: conditionSchema() } })
+  conditions!: WorkflowCondition[];
+}
+export class WorkflowBranch {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiPropertyOptional({ oneOf: conditionSchema() })
+  condition?: WorkflowCondition;
+  @ApiPropertyOptional() default?: boolean;
+  @ApiProperty({ type: () => [WorkflowNode] }) nodes!: WorkflowNode[];
+}
+export class WorkflowTimeout {
+  @ApiProperty() minutes!: number;
+  @ApiProperty({ enum: ['remind', 'supervisor'] }) action!:
+    'remind' | 'supervisor';
+}
+export class WorkflowNode {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({ enum: ['approve', 'copy', 'condition', 'parallel'] }) type!:
+    'approve' | 'copy' | 'condition' | 'parallel';
+  @ApiPropertyOptional({ type: WorkflowActor }) actor?: WorkflowActor;
+  @ApiPropertyOptional({ enum: ['sequential', 'all', 'any'] }) mode?:
+    'sequential' | 'all' | 'any';
+  @ApiPropertyOptional({ enum: ['pass', 'administrator', 'stop'] }) empty?:
+    'pass' | 'administrator' | 'stop';
+  @ApiPropertyOptional() skipRepeated?: boolean;
+  @ApiPropertyOptional({ enum: ['applicant'] }) rejectTo?: 'applicant';
+  @ApiPropertyOptional({ type: () => WorkflowTimeout })
+  timeout?: WorkflowTimeout;
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: {
+      type: 'string',
+      enum: ['editable', 'readonly', 'masked', 'hidden'],
+    },
+  })
   fieldPermissions?: Record<
     string,
     'editable' | 'readonly' | 'masked' | 'hidden'
   >;
+  @ApiPropertyOptional({ type: () => [WorkflowBranch] })
   branches?: WorkflowBranch[];
 }
+@ApiExtraModels(
+  WorkflowActor,
+  WorkflowNode,
+  WorkflowBranch,
+  WorkflowConditionGroup,
+  WorkflowConditionValue,
+  WorkflowTimeout,
+)
 export class WorkflowDesignerDto {
   @ApiProperty({ enum: [1] }) schemaVersion!: 1;
   @ApiProperty({
-    type: 'array',
-    items: { type: 'object', additionalProperties: true },
+    type: () => [WorkflowNode],
     description:
       '安全流程节点树，结构见docs/contracts/workflow.md；不接收BPMN或脚本',
   })

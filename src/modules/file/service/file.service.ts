@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { RequestContext } from '../../../core/tenant/request-context.js';
+import { documentAccess } from '../../../core/permission/document-access.js';
 import { BusinessException } from '../../../core/exceptions/business.exception.js';
 import { ErrorCode } from '../../../core/exceptions/error-code.js';
 import {
@@ -18,6 +20,7 @@ const digest = (data: Buffer) =>
   createHash('sha256').update(data).digest('hex');
 @Injectable()
 export class FileService {
+  @Optional() @Inject(RequestContext) private readonly context?: RequestContext;
   private readonly logger = new Logger('FileService');
   constructor(
     @Inject(FileAccess) private readonly access: FileAccess,
@@ -71,10 +74,19 @@ export class FileService {
   async download(id: string) {
     const principal = await this.access.current('read');
     assertPrincipal(principal);
+    return this.readStored(id, principal.tenantId);
+  }
+  /** workflow先核实记录/附件查看权限，再签发仅此文件、仅此回调内的授权。 */
+  async workflowDownload(id: string) {
+    const ctx = this.context?.current();
+    if (!ctx?.userId || documentAccess(ctx, 'file:asset') !== id)
+      throw missing();
+    return this.readStored(id, ctx.tenantId);
+  }
+  private async readStored(id: string, tenantId: string) {
     const file = await this.catalog.find(id);
     // 即使未来 Catalog 实现出错，也不能用别的租户的对象名去读取存储。
-    if (!file || !file.key.startsWith(`tenants/${principal.tenantId}/`))
-      throw missing();
+    if (!file || !file.key.startsWith(`tenants/${tenantId}/`)) throw missing();
     assertBlobKey(file.key);
     const data = await this.store.get(file.key, this.policy.maxBytes);
     if (data.length !== file.bytes || digest(data) !== file.sha256)

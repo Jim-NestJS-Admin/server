@@ -1,6 +1,7 @@
 import type { CrudDictionarySource } from './crud-dictionary.js';
 import { Injectable } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, type EntityManager } from 'typeorm';
+import type { DynamicFieldResource } from '../field-perm/dynamic-fields.js';
 import { AuthzContext } from '../permission/authz-context.js';
 import { CrudAudit } from './crud-audit.js';
 import { CrudContextProvider, CrudScope } from './crud-scope.js';
@@ -14,6 +15,25 @@ import type { CrudDisplaySource } from './crud-display.js';
  */
 @Injectable()
 export class CrudRuntime {
+  private readonly dynamicSources = new Map<
+    string,
+    (manager?: EntityManager) => Promise<DynamicFieldResource[]>
+  >();
+  setDynamicFields(
+    key: string,
+    source: (manager?: EntityManager) => Promise<DynamicFieldResource[]>,
+  ): void {
+    this.dynamicSources.set(key, source);
+  }
+  async dynamicFields(
+    manager?: EntityManager,
+  ): Promise<DynamicFieldResource[]> {
+    return (
+      await Promise.all(
+        [...this.dynamicSources.values()].map((source) => source(manager)),
+      )
+    ).flat();
+  }
   private readonly resources = new Map<string, CrudResourceMeta>();
 
   constructor(

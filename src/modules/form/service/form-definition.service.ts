@@ -3,7 +3,12 @@ import { TenantRepositoryFactory } from '../../../core/tenant/tenant-repository.
 import { CodeUsageRegistry } from '../../code-rule/service/usage-registry.js';
 import { fieldUsageKey } from '../../../core/crud/crud-code.js';
 import type { EntityManager } from 'typeorm';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, type OnModuleInit } from '@nestjs/common';
+import { CrudRuntime } from '../../../core/crud/crud.runtime.js';
+import {
+  dynamicFieldResource,
+  type DynamicFieldResource,
+} from '../../../core/field-perm/dynamic-fields.js';
 import { BaseService } from '../../../core/crud/base.service.js';
 import { crudErrors } from '../../../core/crud/crud.errors.js';
 import type { CrudTx } from '../../../core/crud/crud.types.js';
@@ -13,7 +18,48 @@ import { parseFormDesigner, validateFormValues } from './form-rules.js';
 import { CodeRuleService } from '../../code-rule/service/code-rule.service.js';
 
 @Injectable()
-export class FormDefinitionService extends BaseService<FormDefinition> {
+export class FormDefinitionService
+  extends BaseService<FormDefinition>
+  implements OnModuleInit
+{
+  /** 发起审批用的表单结构仍走统一字段裁剪，不把内部实体直接返回前端。 */
+  async forStartView(id: string, manager: EntityManager) {
+    return this.toRow(await this.forSubmission(id, manager));
+  }
+  @Inject(CrudRuntime) private readonly runtime!: CrudRuntime;
+  onModuleInit() {
+    this.runtime.setDynamicFields('form', async (manager) => {
+      const rows = await this.repos
+        .for(FormDefinition)
+        .query('f', manager)
+        .select(['f.code', 'f.name', 'f.fields', 'f.revision'])
+        .orderBy('f.revision', 'DESC')
+        .getMany();
+      const forms = new Map<string, DynamicFieldResource>();
+      for (const row of rows) {
+        const resource = dynamicFieldResource('form', row.code);
+        if (!forms.has(resource))
+          forms.set(resource, {
+            resource,
+            label: `表单 · ${row.name}（${row.code}）`,
+            fields: [],
+          });
+        const fields = forms.get(resource)!.fields;
+        for (const field of row.fields)
+          if (!fields.some((f) => f.field === field.field))
+            fields.push({
+              field: field.field,
+              label: field.title,
+              default: field.generated ? 'readonly' : 'editable',
+              mask: 'all',
+              // 是否显示由固定表单版本判断，显示设置不能改写跨版本的安全配置上限。
+              delegable: field.generated ? 'readonly' : 'editable',
+              configurable: true,
+            });
+      }
+      return [...forms.values()];
+    });
+  }
   private readonly saving = new AsyncLocalStorage<{
     expected: number;
     code?: string;
@@ -151,6 +197,7 @@ export class FormDefinitionService extends BaseService<FormDefinition> {
       throw crudErrors.notFound();
     return {
       id: row.id,
+      fieldResource: dynamicFieldResource('form', row.code),
       code: row.code,
       revision: row.revision,
       fields: structuredClone(row.fields),

@@ -69,6 +69,12 @@ export class SystemUser extends BaseEntity {
 
 @Entity('sys_org')
 export class SystemOrg extends BaseEntity {
+  @ApiProperty({ type: String, nullable: true })
+  @CrudField({ label: '部门负责人', nullable: true, display: 'users' })
+  @IsOptional()
+  @Matches(ID_PATTERN)
+  @Column({ type: 'bigint', unsigned: true, nullable: true })
+  leaderId!: string | null;
   @CrudField({ label: '组织名称', form: { required: true } })
   @IsString()
   @Length(1, 100)

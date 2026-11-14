@@ -10,6 +10,7 @@ import type {
   CrudResourceMeta,
 } from '../crud/crud.types.js';
 import { AuthzContext } from './authz-context.js';
+import { participantField, documentAccess } from './document-access.js';
 
 /**
  * 通用 CRUD 的范围条件：租户 + 数据范围（T06）。
@@ -31,6 +32,22 @@ export class DataScopeCrudScope extends TenantOnlyScope {
     alias?: string,
   ): ScopeCondition[] {
     const out = super.conditions(ctx, meta, action, alias);
+    const memberField = participantField(meta.entity);
+    if (memberField && ctx.endpoint !== 'system') {
+      if (!ctx.userId || !this.authz.get())
+        return [...out, { sql: '1 = 0', params: {} }];
+      const column = memberField.replace(
+        /[A-Z]/g,
+        (c) => `_${c.toLowerCase()}`,
+      );
+      return [
+        ...out,
+        {
+          sql: `JSON_CONTAINS(${col(alias, column)}, :__participant) = 1`,
+          params: { __participant: JSON.stringify(ctx.userId ?? '') },
+        },
+      ];
+    }
     if (!meta.dataScope || ctx.endpoint === 'system') return out;
     const a = this.authz.get();
     if (!a) return [...out, { sql: '1 = 0', params: {} }];
@@ -38,6 +55,11 @@ export class DataScopeCrudScope extends TenantOnlyScope {
     if (ds.all) return out;
     const parts: string[] = [];
     const params: Record<string, unknown> = {};
+    const document = documentAccess(ctx, meta.permPrefix);
+    if (document) {
+      parts.push(`${col(alias, 'id')} = :__documentId`);
+      params.__documentId = document;
+    }
     if (ds.orgIds.length) {
       parts.push(`${col(alias, 'org_id')} IN (:...__dsOrgs)`);
       params.__dsOrgs = [...ds.orgIds];
