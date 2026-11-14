@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { EntityManager } from 'typeorm';
 import { BaseService } from '../../../core/crud/base.service.js';
 import type { CrudTx } from '../../../core/crud/crud.types.js';
 import { crudErrors } from '../../../core/crud/crud.errors.js';
@@ -14,6 +15,19 @@ export class FormSubmissionService extends BaseService<FormSubmission> {
     private readonly codesService: CodeRuleService,
   ) {
     super();
+  }
+  /** 发起审批仅能引用本人且仍在本次数据范围内的提交，不向workflow复制填写内容。 */
+  async forWorkflow(id: string, applicantId: string, manager: EntityManager) {
+    const row = await this.select(manager, 'info')
+      .andWhere('e.id = :id AND e.createdBy = :applicantId', {
+        id,
+        applicantId,
+      })
+      .setLock('pessimistic_write')
+      .getOne();
+    if (!row || this.toRow(row).definitionId !== row.definitionId)
+      throw crudErrors.notFound();
+    return { id: row.id, definitionId: row.definitionId };
   }
   protected override async beforeAdd(
     data: Partial<FormSubmission>,

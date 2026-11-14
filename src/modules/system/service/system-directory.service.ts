@@ -28,6 +28,25 @@ export class SystemDirectory {
       throw new Error('身份与租户上下文不一致');
   }
 
+  /** 运行期只返回仍启用的同租户成员编号，不泄露账号资料。 */
+  async workflowEnabledUsers(
+    ids: string[],
+    manager: EntityManager,
+  ): Promise<string[]> {
+    if (!ids.length) return [];
+    const rows = await this.repos
+      .for(SystemUser)
+      .query('u', manager)
+      .andWhere('u.id IN (:...ids) AND u.enabled = :enabled', {
+        ids,
+        enabled: true,
+      })
+      .setLock('pessimistic_read')
+      .getMany();
+    const enabled = new Set(rows.map((row) => row.id));
+    return ids.filter((id) => enabled.has(id));
+  }
+
   /** 流程发布校验只返回引用是否有效，不向workflow泄露用户/角色原始数据。 */
   async workflowReferences(
     refs: { users: string[]; roles: string[]; orgs: string[] },

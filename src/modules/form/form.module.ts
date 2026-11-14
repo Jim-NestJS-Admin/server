@@ -11,6 +11,6 @@ import { FormDefinitionController } from './controller/admin/form-definition.con
   imports: [TypeOrmModule.forFeature([FormDefinition, FormSubmission])],
   providers: [FormDefinitionService, FormSubmissionService],
   controllers: [FormDefinitionController, FormSubmissionController],
-  exports: [FormDefinitionService],
+  exports: [FormDefinitionService, FormSubmissionService],
 })
 export class FormModule {}
