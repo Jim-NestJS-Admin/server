@@ -98,6 +98,11 @@ export class WorkflowAttachmentBody extends WorkflowDocumentBody {
   @ApiProperty() @Matches(ID_PATTERN) recordId!: string;
   @ApiProperty() @Matches(ID_PATTERN) fileId!: string;
 }
+export class WorkflowPreviewBody extends WorkflowDocumentBody {
+  @ApiProperty({ type: 'object', additionalProperties: true })
+  @IsObject()
+  values!: Record<string, unknown>;
+}
 export class WorkflowFormView {
   @ApiProperty() id!: string;
   @ApiProperty() definitionId!: string;

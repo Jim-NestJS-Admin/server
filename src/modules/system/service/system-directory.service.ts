@@ -30,6 +30,74 @@ export class SystemDirectory {
       throw new Error('身份与租户上下文不一致');
   }
 
+  /** 审批目录仅开放同租户启用对象的编号/显示名，分页搜索不泄露账号隐私。 */
+  async workflowChoices(
+    kind: 'users' | 'roles' | 'orgs',
+    keyword: string,
+    page: number,
+    size: number,
+    ids?: string[],
+  ) {
+    if (kind === 'orgs') {
+      const rows = (await this.orgs(this.context.current().tenantId)).filter(
+        (row) =>
+          (!ids || ids.includes(row.id)) &&
+          row.name.toLowerCase().includes(keyword.toLowerCase()),
+      );
+      return {
+        list: rows
+          .slice((page - 1) * size, page * size)
+          .map((row) => ({ id: row.id, label: row.name })),
+        total: rows.length,
+      };
+    }
+    if (kind === 'users') {
+      const query = this.repos
+        .for(SystemUser)
+        .query('u')
+        .select(['u.id', 'u.nickname'])
+        .andWhere('u.enabled = :enabled', { enabled: true });
+      if (keyword)
+        query.andWhere('u.nickname LIKE :keyword', { keyword: `%${keyword}%` });
+      if (ids) {
+        if (!ids.length) return { list: [], total: 0 };
+        query.andWhere('u.id IN (:...ids)', { ids });
+      }
+      const [rows, total] = await query
+        .orderBy('u.id', 'ASC')
+        .skip((page - 1) * size)
+        .take(size)
+        .getManyAndCount();
+      return {
+        list: rows.map((row) => ({
+          id: row.id,
+          label: row.nickname || `成员 ${row.id}`,
+        })),
+        total,
+      };
+    }
+    const query = this.repos
+      .for(SystemRole)
+      .query('r')
+      .select(['r.id', 'r.name'])
+      .andWhere('r.enabled = :enabled', { enabled: true });
+    if (keyword)
+      query.andWhere('r.name LIKE :keyword', { keyword: `%${keyword}%` });
+    if (ids) {
+      if (!ids.length) return { list: [], total: 0 };
+      query.andWhere('r.id IN (:...ids)', { ids });
+    }
+    const [rows, total] = await query
+      .orderBy('r.id', 'ASC')
+      .skip((page - 1) * size)
+      .take(size)
+      .getManyAndCount();
+    return {
+      list: rows.map((row) => ({ id: row.id, label: row.name })),
+      total,
+    };
+  }
+
   async workflowIdentity(
     userId: string,
     orgId: string | null,

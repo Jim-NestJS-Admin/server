@@ -12,6 +12,10 @@ import {
 } from '../../dto/workflow.dto.js';
 import { WorkflowDefinition } from '../../entity/workflow-definition.entity.js';
 import { WorkflowDefinitionService } from '../../service/workflow-definition.service.js';
+import {
+  WorkflowAvailableBody,
+  WorkflowAvailableResult,
+} from '../../dto/workflow-available.dto.js';
 
 @CrudController({
   prefix: 'workflow/definition',
@@ -28,6 +32,19 @@ import { WorkflowDefinitionService } from '../../service/workflow-definition.ser
 export class WorkflowDefinitionController extends BaseController<WorkflowDefinition> {
   constructor(private readonly definitions: WorkflowDefinitionService) {
     super();
+  }
+  @Post('available')
+  @HttpCode(200)
+  @Perms('workflow:instance:add')
+  @ApiOperation({
+    operationId: 'workflowDefinitionAvailable',
+    summary:
+      '发起人分页选择已发布流程；指定id时返回固定表单和自选节点，不授予流程管理权限',
+  })
+  @ApiBody({ type: WorkflowAvailableBody })
+  @ApiResult(WorkflowAvailableResult)
+  available(@Body() body: WorkflowAvailableBody) {
+    return this.definitions.availableForStart(body);
   }
   @Post('add')
   @HttpCode(200)

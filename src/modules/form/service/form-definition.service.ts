@@ -22,6 +22,10 @@ export class FormDefinitionService
   extends BaseService<FormDefinition>
   implements OnModuleInit
 {
+  /** 发起审批用的表单结构仍走统一字段裁剪，不把内部实体直接返回前端。 */
+  async forStartView(id: string, manager: EntityManager) {
+    return this.toRow(await this.forSubmission(id, manager));
+  }
   @Inject(CrudRuntime) private readonly runtime!: CrudRuntime;
   onModuleInit() {
     this.runtime.setDynamicFields('form', async (manager) => {

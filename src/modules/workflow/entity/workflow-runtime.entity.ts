@@ -195,7 +195,7 @@ export class WorkflowRecord extends BaseEntity {
   @CrudField({ label: '表单提交记录', edit: 'none', nullable: true })
   @Column({ type: 'bigint', unsigned: true, nullable: true })
   submissionId!: string | null;
-  @CrudField({ label: '附件', edit: 'none', list: false })
+  @CrudField({ label: '附件', edit: 'none' })
   @Column({ type: 'json' })
   attachmentIds!: string[];
   @CrudField({ label: '审批实例', edit: 'none' })

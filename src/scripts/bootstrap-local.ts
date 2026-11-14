@@ -298,7 +298,8 @@ async function seedMenus(
         .filter(
           (c) =>
             c !== p.permission &&
-            p.buttonPrefixes.some((pre) => c.startsWith(`${pre}:`)),
+            (p.buttonPrefixes.some((pre) => c.startsWith(`${pre}:`)) ||
+              p.buttonPermissions?.includes(c)),
         )
         .sort();
       for (const c of own)

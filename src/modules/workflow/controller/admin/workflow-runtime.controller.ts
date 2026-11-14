@@ -23,6 +23,7 @@ import {
   WorkflowDocumentBody,
   WorkflowDocumentResult,
   WorkflowAttachmentBody,
+  WorkflowPreviewBody,
 } from '../../dto/workflow-runtime.dto.js';
 import { WorkflowRuntimeService } from '../../service/workflow-runtime.service.js';
 import {
@@ -81,6 +82,19 @@ export class WorkflowInstanceController extends BaseController<WorkflowInstance>
   @ApiErrors(400, 403, 404)
   document(@Body() body: WorkflowDocumentBody) {
     return this.runtime.documentView(body.id, body.taskId);
+  }
+  @Post('preview')
+  @HttpCode(200)
+  @Perms('workflow:instance:info')
+  @ApiOperation({
+    operationId: 'workflowInstancePreview',
+    summary: '预览节点可编辑字段联动，重新裁剪权限，不保存填写内容',
+  })
+  @ApiBody({ type: WorkflowPreviewBody })
+  @ApiResult(WorkflowDocumentResult)
+  @ApiErrors(400, 403, 404)
+  preview(@Body() body: WorkflowPreviewBody) {
+    return this.runtime.documentView(body.id, body.taskId, body.values);
   }
 
   @Post('withdraw')

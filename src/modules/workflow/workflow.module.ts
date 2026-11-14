@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { WorkflowDirectoryController } from './controller/admin/workflow-directory.controller.js';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FormModule } from '../form/form.module.js';
 import { SystemModule } from '../system/system.module.js';
@@ -43,6 +44,7 @@ import {
     WorkflowRecordService,
   ],
   controllers: [
+    WorkflowDirectoryController,
     WorkflowDefinitionController,
     WorkflowInstanceController,
     WorkflowTaskController,

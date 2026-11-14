@@ -388,7 +388,11 @@ export class WorkflowRuntimeService {
     });
   }
 
-  async documentView(id: string, taskId?: string) {
+  async documentView(
+    id: string,
+    taskId?: string,
+    previewValues?: Record<string, unknown>,
+  ) {
     return this.reading(async (manager) => {
       await this.instances.available(id, manager);
       const userId = this.currentUser();
@@ -441,26 +445,35 @@ export class WorkflowRuntimeService {
             requested[field] = effective;
         }
       const applicant = userId === instance.applicantId && !selected;
-      const form = await this.document(instance, () =>
-        this.submissions.workflowView(
+      const access = {
+        fields: requested,
+        cap,
+        applicant,
+        changes: instance.formChanges,
+        editable: applicant
+          ? instance.status === 'returned'
+          : Boolean(
+              selected &&
+              selected.status === 'pending' &&
+              selected.round === instance.round &&
+              instance.status === 'running',
+            ),
+      };
+      const form = await this.document(instance, async () => {
+        if (previewValues)
+          access.changes = await this.submissions.workflowPatch(
+            instance.submissionId,
+            previewValues,
+            access,
+            manager,
+            false,
+          );
+        return this.submissions.workflowView(
           instance.submissionId,
-          {
-            fields: requested,
-            cap,
-            applicant,
-            changes: instance.formChanges,
-            editable: applicant
-              ? instance.status === 'returned'
-              : Boolean(
-                  selected &&
-                  selected.status === 'pending' &&
-                  selected.round === instance.round &&
-                  instance.status === 'running',
-                ),
-          },
+          access,
           manager,
-        ),
-      );
+        );
+      });
       await this.audit.configuration(
         manager,
         'workflow.document.view',

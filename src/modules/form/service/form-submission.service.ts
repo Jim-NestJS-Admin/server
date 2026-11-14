@@ -21,6 +21,34 @@ import { SystemFieldCatalog } from '../../system/service/system-field.catalog.js
 import { dynamicFieldResource } from '../../../core/field-perm/dynamic-fields.js';
 @Injectable()
 export class FormSubmissionService extends BaseService<FormSubmission> {
+  async mineForWorkflow(body: {
+    definitionId: string;
+    page: number;
+    size: number;
+    keyword: string;
+  }) {
+    return this.crud.dataSource.transaction(async (manager) => {
+      const query = this.select(manager, 'page').andWhere(
+        'e.definitionId = :definitionId AND e.createdBy = :owner',
+        {
+          definitionId: body.definitionId,
+          owner: this.request.current().userId,
+        },
+      );
+      if (body.keyword)
+        query.andWhere('(e.name LIKE :keyword OR e.code LIKE :keyword)', {
+          keyword: `%${body.keyword}%`,
+        });
+      const [rows, total] = await query
+        .orderBy('e.id', 'DESC')
+        .skip((body.page - 1) * body.size)
+        .take(body.size)
+        .getManyAndCount();
+      const list = rows.map((row) => this.toRow(row));
+      await this.withDisplay(list);
+      return { list, total };
+    });
+  }
   @Inject(SystemFieldCatalog)
   private readonly fieldsCatalog!: SystemFieldCatalog;
   @Inject(RequestContext) private readonly request!: RequestContext;
@@ -240,6 +268,7 @@ export class FormSubmissionService extends BaseService<FormSubmission> {
     patch: Record<string, unknown>,
     access: Parameters<FormSubmissionService['workflowView']>[1],
     manager: EntityManager,
+    validateComplete = true,
   ): Promise<Record<string, unknown>> {
     if (!Object.keys(patch).length) return access.changes;
     if (Buffer.byteLength(JSON.stringify(patch)) > 65536)
@@ -266,7 +295,7 @@ export class FormSubmissionService extends BaseService<FormSubmission> {
         ]);
     const { row, definition } = await this.workflowSnapshot(id, manager);
     const values = { ...row.values, ...access.changes, ...patch };
-    validateFormValues(definition, values, true);
+    if (validateComplete) validateFormValues(definition, values, true);
     return Object.fromEntries(
       Object.entries(values).filter(
         ([key, value]) =>
