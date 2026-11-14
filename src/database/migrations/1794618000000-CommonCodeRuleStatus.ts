@@ -18,7 +18,7 @@ export class CommonCodeRuleStatus1794618000000 implements MigrationInterface {
       throw new Error('通用状态字典不是启用的系统字典，停止迁移');
     if (!typeId) {
       const result = await runner.query(
-        "INSERT INTO sys_dict_type (tenant_id,code,name,enabled,builtin,`rank`) VALUES (0,'sys.common_status','通用状态',1,1,0)",
+        "INSERT INTO sys_dict_type (tenant_id,code,name,enabled,builtin,`rank`,version) VALUES (0,'sys.common_status','通用状态',1,1,0,1)",
       );
       typeId = result.insertId;
     }
@@ -34,7 +34,7 @@ export class CommonCodeRuleStatus1794618000000 implements MigrationInterface {
         throw new Error('通用状态项已停用，停止迁移');
       if (!items.length)
         await runner.query(
-          'INSERT INTO sys_dict_item (tenant_id,type_id,value,label,enabled,`rank`,tag_type) VALUES (0,?,?,?,?,?,?)',
+          'INSERT INTO sys_dict_item (tenant_id,type_id,value,label,enabled,`rank`,tag_type,version) VALUES (0,?,?,?,?,?,?,1)',
           [typeId, value, label, 1, rank, style],
         );
       else
