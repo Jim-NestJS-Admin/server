@@ -73,6 +73,7 @@ export class FormDefinitionService extends BaseService<FormDefinition> {
     data: Partial<FormDefinition>,
     tx: CrudTx,
   ) {
+    this.codes.auditAfterCommit(tx.manager, '保存动态表单编码字段');
     const saving = this.saving.getStore();
     if (!saving) throw crudErrors.badRequest('请使用表单创建或修订接口');
     const expected = saving.expected;
@@ -127,6 +128,13 @@ export class FormDefinitionService extends BaseService<FormDefinition> {
     data.revision = expected + 1;
     data.designer = parsed.designer;
     data.fields = parsed.fields;
+  }
+
+  protected override async afterAdd(row: FormDefinition, tx: CrudTx) {
+    this.codes.auditAfterCommit(
+      tx.manager,
+      `保存动态表单编码字段（definitionId=${row.id}，revision=${row.revision}）`,
+    );
   }
 
   async fieldsFor(definitionId: string) {

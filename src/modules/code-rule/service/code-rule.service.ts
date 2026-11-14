@@ -1,5 +1,13 @@
+import { CodeUsageDiagnostics } from './usage-diagnostics.js';
+import { AppConfigService } from '../../../core/config/app-config.service.js';
+import { TenantSource } from '../../../core/tenant/tenant-source.js';
 import { CrudRuntime } from '../../../core/crud/crud.runtime.js';
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  OnApplicationBootstrap,
+} from '@nestjs/common';
 import {
   DataSource,
   EntityManager,
@@ -49,16 +57,32 @@ function databaseFailure(error: unknown): never {
 @Injectable()
 export class CodeRuleService
   extends BaseService<CodeRule>
-  implements OnModuleInit, OnModuleDestroy
+  implements OnModuleInit, OnModuleDestroy, OnApplicationBootstrap
 {
   private readonly writeRules = new AsyncLocalStorage<boolean>();
   private readonly called = new WeakSet<QueryRunner>();
+  private readonly pendingAudit = new WeakMap<QueryRunner, string>();
   private readonly subscriber: EntitySubscriberInterface = {
-    afterTransactionCommit: (e) => {
+    afterTransactionCommit: async (e) => {
       this.called.delete(e.queryRunner);
+      const reason = this.pendingAudit.get(e.queryRunner);
+      this.pendingAudit.delete(e.queryRunner);
+      if (reason) {
+        try {
+          await this.checkBindings(reason, e.manager, true);
+        } catch (error) {
+          this.diagnostics.failure('操作已提交，但编码绑定检查未完成', error, {
+            tenantId: this.context.peek()?.tenantId,
+          });
+        }
+      }
     },
     afterTransactionRollback: (e) => {
       this.called.delete(e.queryRunner);
+      const reason = this.pendingAudit.get(e.queryRunner);
+      this.pendingAudit.delete(e.queryRunner);
+      if (reason)
+        this.diagnostics.rolledBack(reason, this.context.peek()?.tenantId);
     },
   };
   constructor(
@@ -68,12 +92,77 @@ export class CodeRuleService
     private readonly runtime: CrudRuntime,
     readonly usages: CodeUsageRegistry,
     private readonly sequences: CodeSequenceStore,
+    private readonly diagnostics: CodeUsageDiagnostics,
+    private readonly config: AppConfigService,
+    private readonly tenantSource: TenantSource,
   ) {
     super();
   }
   onModuleInit() {
     this.db.subscribers.push(this.subscriber);
     this.runtime.codes = this;
+  }
+  onApplicationBootstrap() {
+    if (this.config.openApiExport || !this.db.isInitialized) return;
+    // 启动检查只读，放到初始化完成后的队列；不阻塞监听，不修改其他租户配置。
+    setImmediate(() => {
+      void this.auditStartup();
+    });
+  }
+  private async auditStartup() {
+    const start = Date.now();
+    let count = 0,
+      failed = 0;
+    this.diagnostics.startup('started', 0, 0, 0);
+    try {
+      const ids = [
+        ...new Set(['0', ...(await this.tenantSource.activeTenantIds())]),
+      ];
+      for (const tenantId of ids) {
+        count++;
+        try {
+          await this.context.run({ tenantId }, () =>
+            this.checkBindings('后端启动/重新加载', undefined, true),
+          );
+        } catch (error) {
+          failed++;
+          this.diagnostics.failure('启动时检查租户编码字段失败', error, {
+            tenantId,
+          });
+        }
+      }
+    } catch (error) {
+      failed++;
+      this.diagnostics.failure('读取租户目录失败，启动检查未完成', error);
+    }
+    this.diagnostics.startup('finished', count, failed, Date.now() - start);
+  }
+  /** 日志只在成功提交后检查当前元数据；失败不会把已提交操作伪报为保存失败。 */
+  auditAfterCommit(manager: EntityManager, reason: string) {
+    if (manager.queryRunner?.isTransactionActive)
+      this.pendingAudit.set(manager.queryRunner, reason);
+  }
+  private async checkBindings(
+    reason: string,
+    manager?: EntityManager,
+    force = false,
+  ) {
+    const ctx = this.context.current();
+    if (ctx.ignoreTenant) return;
+    const usages = await this.usages.catalog(manager);
+    const bindings = await this.repos
+      .for(CodeBinding)
+      .query('b', manager)
+      .getMany();
+    const rules = await this.repos.for(CodeRule).query('r', manager).getMany();
+    this.diagnostics.bindings(
+      ctx.tenantId,
+      reason,
+      usages,
+      bindings,
+      rules,
+      force,
+    );
   }
   onModuleDestroy() {
     const i = this.db.subscribers.indexOf(this.subscriber);
@@ -98,7 +187,12 @@ export class CodeRuleService
             .getMany();
         return fn(tx);
       })
-      .catch(databaseFailure);
+      .catch((error: unknown) => {
+        this.diagnostics.failure('编码规则或绑定保存失败', error, {
+          tenantId: this.context.peek()?.tenantId,
+        });
+        return databaseFailure(error);
+      });
   }
   protected override async beforeAdd(data: Partial<CodeRule>) {
     try {
@@ -114,6 +208,10 @@ export class CodeRuleService
   }
   protected override async afterAdd(row: CodeRule, tx: CrudTx) {
     await this.snapshot(row, tx.manager);
+    this.auditAfterCommit(
+      tx.manager,
+      `保存编码规则（ruleId=${row.id}，revision=${row.revision}）`,
+    );
   }
   protected override async beforeUpdate(
     changes: Partial<CodeRule>,
@@ -166,8 +264,13 @@ export class CodeRuleService
   }
   protected override async afterUpdate(row: CodeRule, tx: CrudTx) {
     await this.snapshot(row, tx.manager);
+    this.auditAfterCommit(
+      tx.manager,
+      `保存编码规则（ruleId=${row.id}，revision=${row.revision}）`,
+    );
   }
   protected override async beforeDelete(rows: CodeRule[], tx: CrudTx) {
+    this.auditAfterCommit(tx.manager, '删除编码规则');
     for (const row of rows) {
       if (
         row.firstBoundAt ||
@@ -217,7 +320,17 @@ export class CodeRuleService
   async usageList() {
     const bindings = await this.repos.for(CodeBinding).query('b').getMany();
     const rules = await this.repos.for(CodeRule).query('r').getMany();
-    return (await this.usages.catalog()).map((u) => {
+    const usages = await this.usages.catalog();
+    const ctx = this.context.current();
+    if (!ctx.ignoreTenant)
+      this.diagnostics.bindings(
+        ctx.tenantId,
+        '读取用途目录',
+        usages,
+        bindings,
+        rules,
+      );
+    return usages.map((u) => {
       const b = bindings.find((b) => b.usageKey === u.key);
       const r = rules.find((r) => r.id === b?.ruleId);
       let issue = '';
@@ -245,6 +358,10 @@ export class CodeRuleService
         .andWhere('b.usageKey = :usageKey', { usageKey })
         .setLock('pessimistic_write')
         .getOne();
+      this.auditAfterCommit(
+        tx.manager,
+        `保存业务字段绑定（usageKey=${usageKey}，ruleId=${ruleId}）`,
+      );
       if (binding?.ruleId === ruleId) return { usageKey, ruleId };
       if (binding && !usage.allowRuleSwitch) conflict('该用途不允许更换规则');
       const switching = Boolean(binding);
@@ -406,6 +523,11 @@ export class CodeRuleService
     try {
       return await this.allocate(manager, requests);
     } catch (error) {
+      this.diagnostics.failure(
+        `业务字段取号失败（${requests.map((request) => request.usageKey).join('、')}）`,
+        error,
+        { tenantId: this.context.peek()?.tenantId },
+      );
       return databaseFailure(error);
     }
   }

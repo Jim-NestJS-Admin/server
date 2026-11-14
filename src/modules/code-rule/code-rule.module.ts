@@ -12,6 +12,7 @@ import {
   CodeSequenceService,
 } from './service/code-rule.service.js';
 import { CODE_USAGES, CodeUsageRegistry } from './service/usage-registry.js';
+import { CodeUsageDiagnostics } from './service/usage-diagnostics.js';
 import { CodeSequenceStore } from './service/code-sequence.store.js';
 import type { CodeUsage } from './service/rule-config.js';
 import {
@@ -37,6 +38,7 @@ export class CodeRuleModule {
       providers: [
         { provide: CODE_USAGES, useValue: options.usages },
         CodeUsageRegistry,
+        CodeUsageDiagnostics,
         CodeSequenceStore,
         CodeRuleService,
         CodeSequenceService,

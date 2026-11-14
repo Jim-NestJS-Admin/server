@@ -4,6 +4,7 @@ import {
   OnModuleInit,
   OnApplicationBootstrap,
 } from '@nestjs/common';
+import { CodeUsageDiagnostics } from './usage-diagnostics.js';
 import { crudErrors } from '../../../core/crud/crud.errors.js';
 import { CrudRuntime } from '../../../core/crud/crud.runtime.js';
 import { fieldUsageKey } from '../../../core/crud/crud-code.js';
@@ -24,7 +25,9 @@ export class CodeUsageRegistry implements OnModuleInit, OnApplicationBootstrap {
     private readonly db: DataSource,
     private readonly runtime: CrudRuntime,
     private readonly config: AppConfigService,
+    private readonly diagnostics: CodeUsageDiagnostics,
   ) {
+    let failures = 0;
     for (const u of usages) {
       if (
         !/^[a-z][a-z0-9_]{1,63}$/.test(u.key) ||
@@ -36,28 +39,49 @@ export class CodeUsageRegistry implements OnModuleInit, OnApplicationBootstrap {
         u.maxLength > 64 ||
         (u.minLength ?? 1) < 1 ||
         (u.minLength ?? 1) > u.maxLength
-      )
-        throw new Error('编码用途注册重复或约束无效');
+      ) {
+        this.diagnostics.invalid(
+          { key: u.key, resource: u.resource, field: u.field },
+          '编码用途注册重复或约束无效',
+        );
+        failures++;
+        continue;
+      }
       this.entries.set(u.key, Object.freeze({ ...u }));
     }
+    if (failures)
+      throw new Error(
+        `编码用途登记失败，共${failures}项，详见registration_failed日志`,
+      );
   }
   onModuleInit() {
     if (this.config.openApiExport) return;
+    const failures: string[] = [];
     for (const u of this.entries.values())
       if (u.entity) {
-        const column = this.db
-          .getMetadata(u.entity)
-          .findColumnWithPropertyName(u.field);
+        const column = this.db.hasMetadata(u.entity)
+          ? this.db.getMetadata(u.entity).findColumnWithPropertyName(u.field)
+          : undefined;
         if (
           !column ||
           !['varchar', 'char'].includes(String(column.type)) ||
           Number(column.length) < u.maxLength
-        )
-          throw new Error(`编码用途${u.key}字段不存在或长度不兼容`);
+        ) {
+          this.diagnostics.invalid(
+            { key: u.key, resource: u.resource, field: u.field },
+            '声明字段不存在或列长度不兼容',
+          );
+          failures.push(u.key);
+        }
       }
+    if (failures.length)
+      throw new Error(
+        `编码字段登记失败：${failures.join('、')}，详见registration_failed日志`,
+      );
   }
   onApplicationBootstrap() {
-    if (!this.config.openApiExport) this.crudUsages();
+    if (!this.config.openApiExport)
+      this.diagnostics.definitions([...this.list(), ...this.crudUsages()]);
   }
   addSource(
     name: string,
@@ -67,7 +91,8 @@ export class CodeUsageRegistry implements OnModuleInit, OnApplicationBootstrap {
     this.sources.set(name, source);
   }
   private crudUsages(): CodeUsage[] {
-    return this.runtime.list().flatMap((r) =>
+    const failures: string[] = [];
+    const usages: CodeUsage[] = this.runtime.list().flatMap((r) =>
       [
         {
           resource: r.prefix,
@@ -84,7 +109,7 @@ export class CodeUsageRegistry implements OnModuleInit, OnApplicationBootstrap {
       ].flatMap((r) =>
         r.fields
           .filter((f) => f.code)
-          .map((f) => {
+          .flatMap((f): CodeUsage[] => {
             const column = this.db
               .getMetadata(r.entity)
               .findColumnWithPropertyName(f.property);
@@ -103,30 +128,46 @@ export class CodeUsageRegistry implements OnModuleInit, OnApplicationBootstrap {
               !column ||
               !['varchar', 'char'].includes(String(column.type)) ||
               column.isNullable ||
+              !Number.isInteger(length) ||
               length < 1 ||
               length > 64 ||
               !unique ||
               !Number.isInteger(f.code!.minLength ?? 1) ||
               (f.code!.minLength ?? 1) < 1 ||
               (f.code!.minLength ?? 1) > length
-            )
-              throw new Error(
-                `${r.resource}.${f.property}自动编码字段必须为1至64位非空文本，并具有租户+字段+activeGuard唯一索引`,
+            ) {
+              const detail =
+                '自动编码字段必须为1至64位非空文本，并具有租户+字段+activeGuard唯一索引';
+              this.diagnostics.invalid(
+                {
+                  key: fieldUsageKey('crud', r.resource, f.property),
+                  resource: r.resource,
+                  field: f.property,
+                },
+                detail,
               );
-            return {
-              key: fieldUsageKey('crud', r.resource, f.property),
-              name: `${r.label} / ${f.label}`,
-              resource: r.resource,
-              field: f.property,
-              maxLength: length,
-              minLength: f.code!.minLength ?? 1,
-              charset: f.code!.charset,
-              uniqueScope: 'tenant' as const,
-              allowRuleSwitch: f.code!.allowRuleSwitch ?? true,
-            };
+              failures.push(`${r.resource}.${f.property}${detail}`);
+              return [];
+            }
+            return [
+              {
+                key: fieldUsageKey('crud', r.resource, f.property),
+                name: `${r.label} / ${f.label}`,
+                resource: r.resource,
+                field: f.property,
+                maxLength: length,
+                minLength: f.code!.minLength ?? 1,
+                charset: f.code!.charset,
+                uniqueScope: 'tenant' as const,
+                allowRuleSwitch: f.code!.allowRuleSwitch ?? true,
+              },
+            ];
           }),
       ),
     );
+    if (failures.length)
+      throw new Error(`编码字段登记失败：${failures.join('；')}`);
+    return usages;
   }
   async catalog(manager?: EntityManager) {
     const entries = [
@@ -134,12 +175,29 @@ export class CodeUsageRegistry implements OnModuleInit, OnApplicationBootstrap {
       ...this.crudUsages(),
       ...(
         await Promise.all(
-          [...this.sources.values()].map((source) => source(manager)),
+          [...this.sources.entries()].map(async ([name, source]) => {
+            try {
+              return await source(manager);
+            } catch (error) {
+              this.diagnostics.failure(`读取用途来源${name}失败`, error);
+              throw error;
+            }
+          }),
         )
       ).flat(),
     ];
-    if (new Set(entries.map((u) => u.key)).size !== entries.length)
+    if (new Set(entries.map((u) => u.key)).size !== entries.length) {
+      const seen = new Set<string>();
+      for (const u of entries) {
+        if (seen.has(u.key))
+          this.diagnostics.invalid(
+            { key: u.key, resource: u.resource, field: u.field },
+            '编码用途重复',
+          );
+        seen.add(u.key);
+      }
       throw new Error('编码用途重复');
+    }
     return entries;
   }
   async resolve(key: string, manager?: EntityManager) {
