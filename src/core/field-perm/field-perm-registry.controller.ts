@@ -91,21 +91,28 @@ export class FieldPermRegistryController {
   })
   @ApiResult(FieldPermRegistryDto)
   @ApiErrors(401, 403, 503)
-  registry(): FieldPermRegistryDto {
+  async registry(): Promise<FieldPermRegistryDto> {
     return {
-      resources: this.crud.list().flatMap((meta) => [
-        {
-          resource: meta.permPrefix,
-          label: meta.label,
-          fields: describe(meta.entity, meta.fields),
-        },
-        // 子表：资源是「主表前缀.子表名」，字段权限按主表那一行的归属判断
-        ...meta.children.map((c) => ({
-          resource: `${meta.permPrefix}.${c.resource}`,
-          label: `${meta.label} · ${c.label}`,
-          fields: describe(c.entity, c.fields, c.foreignKey),
+      resources: [
+        ...this.crud.list().flatMap((meta) => [
+          {
+            resource: meta.permPrefix,
+            label: meta.label,
+            fields: describe(meta.entity, meta.fields),
+          },
+          // 子表：资源是「主表前缀.子表名」，字段权限按主表那一行的归属判断
+          ...meta.children.map((c) => ({
+            resource: `${meta.permPrefix}.${c.resource}`,
+            label: `${meta.label} · ${c.label}`,
+            fields: describe(c.entity, c.fields, c.foreignKey),
+          })),
+        ]),
+        ...(await this.crud.dynamicFields()).map((r) => ({
+          resource: r.resource,
+          label: r.label,
+          fields: r.fields,
         })),
-      ]),
+      ],
       masks: MASK_RULES,
     };
   }

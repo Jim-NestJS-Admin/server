@@ -289,6 +289,10 @@ export class SystemOrgService extends SystemCrudService<SystemOrg> {
     row: SystemOrg | undefined,
     tx: CrudTx,
   ): Promise<void> {
+    if (data.leaderId) {
+      const leader = await this.reference(SystemUser, data.leaderId, tx);
+      if (!leader.enabled) throw crudErrors.badRequest('部门负责人已停用');
+    }
     // 同一租户的树变更先锁定现有节点，避免并发互相移动形成环。
     const rows = await this.repos
       .for(SystemOrg)

@@ -1,4 +1,5 @@
 import { fillCodeFields } from './crud-code.js';
+import { participantField } from '../permission/document-access.js';
 import { exportValue } from './export-value.js';
 import {
   validateDictionaryValues,
@@ -175,7 +176,7 @@ export class BaseService<T extends BaseEntity> {
             this.meta.permPrefix,
             this.meta.entity,
             f,
-            this.meta.dataScope,
+            this.meta.dataScope && !participantField(this.meta.entity),
             null,
           ).state !== 'hidden'),
     );
@@ -1103,7 +1104,7 @@ export class BaseService<T extends BaseEntity> {
             this.meta.permPrefix,
             this.meta.entity,
             field,
-            this.meta.dataScope,
+            this.meta.dataScope && !participantField(this.meta.entity),
             row,
           )
         : { state: 'hidden', mask: null };

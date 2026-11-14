@@ -87,6 +87,7 @@ export function parseWorkflow(
   input: unknown,
   fields: FormFieldDto[],
   delegable: FieldState,
+  fieldLimits?: Record<string, FieldState>,
 ): ParsedWorkflow {
   const seenObjects = new Set<object>();
   const checkJson = (v: unknown, depth: number) => {
@@ -335,11 +336,16 @@ export function parseWorkflow(
                 '请选择有效字段权限',
               );
             const field = fieldMap.get(key)!;
-            const cap = !field.visible
+            let cap = !field.visible
               ? 'hidden'
               : field.generated && delegable === 'editable'
                 ? 'readonly'
                 : delegable;
+            if (
+              fieldLimits?.[key] &&
+              STATE_RANK[fieldLimits[key]!] < STATE_RANK[cap]
+            )
+              cap = fieldLimits[key]!;
             if (STATE_RANK[state as FieldState] > STATE_RANK[cap])
               workflowInvalid(
                 `${p}.fieldPermissions.${key}`,

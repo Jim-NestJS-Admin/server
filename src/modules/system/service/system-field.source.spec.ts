@@ -36,9 +36,10 @@ describe('字段配置数据来源', () => {
       } as unknown as TenantRepositoryFactory,
       { current: () => ({ tenantId: '1' }) } as RequestContext,
       {
-        find: (_r: string, field: string) =>
+        dynamic: async () => [],
+        findWithDynamic: (_r: string, field: string) =>
           field === 'phone' ? {} : undefined,
-      } as SystemFieldCatalog,
+      } as unknown as SystemFieldCatalog,
     );
     expect(await source.loadFieldDefaults('1')).toEqual([
       { resource: 'demo:user', field: 'phone', state: 'masked', mask: 'phone' },

@@ -60,7 +60,18 @@ export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
       'values',
       manager,
     );
-    const parsed = parseWorkflow(designer, form.fields, cap);
+    const limits = await this.fields.delegationMatrix(
+      form.fieldResource,
+      manager,
+    );
+    const parsed = parseWorkflow(
+      designer,
+      form.fields,
+      cap,
+      Object.fromEntries(
+        Object.entries(limits).map(([field, policy]) => [field, policy.cap]),
+      ),
+    );
     if (!(await this.directory.workflowReferences(parsed.references, manager)))
       workflowInvalid(
         'data.designer',

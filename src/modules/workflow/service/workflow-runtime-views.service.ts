@@ -11,12 +11,31 @@ import {
 
 @Injectable()
 export class WorkflowInstanceService extends BaseService<WorkflowInstance> {
+  async shared(id: string, manager: EntityManager) {
+    const row = await this.select(manager, 'info')
+      .andWhere('e.id = :id', { id })
+      .setLock('pessimistic_read')
+      .getOne();
+    if (!row) throw crudErrors.notFound();
+    return row;
+  }
+  async available(id: string, manager: EntityManager) {
+    const row = await this.select(manager, 'info')
+      .andWhere('e.id = :id', { id })
+      .getOne();
+    if (!row) throw crudErrors.notFound();
+    return row;
+  }
   async locked(id: string, manager: EntityManager) {
+    const row = await this.lockedIfPresent(id, manager);
+    if (!row) throw crudErrors.notFound();
+    return row;
+  }
+  async lockedIfPresent(id: string, manager: EntityManager) {
     const row = await this.select(manager, 'info')
       .andWhere('e.id = :id', { id })
       .setLock('pessimistic_write')
       .getOne();
-    if (!row) throw crudErrors.notFound();
     return row;
   }
   async result(id: string, manager: EntityManager) {
@@ -51,4 +70,22 @@ export class WorkflowTaskService extends BaseService<WorkflowTask> {
 }
 
 @Injectable()
-export class WorkflowRecordService extends BaseService<WorkflowRecord> {}
+export class WorkflowRecordService extends BaseService<WorkflowRecord> {
+  async attachment(
+    id: string,
+    instanceId: string,
+    fileId: string,
+    manager: EntityManager,
+  ) {
+    const row = await this.select(manager, 'info')
+      .andWhere('e.id = :id AND e.instanceId = :instanceId', { id, instanceId })
+      .getOne();
+    const visible = row ? this.toRow(row) : null;
+    if (
+      !visible ||
+      !Array.isArray(visible.attachmentIds) ||
+      !visible.attachmentIds.includes(fileId)
+    )
+      throw crudErrors.notFound();
+  }
+}

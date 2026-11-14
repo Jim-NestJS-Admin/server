@@ -5,6 +5,20 @@ import { FileAssetEntity } from '../entity/file-asset.entity.js';
 @Injectable()
 export class FileUsageService {
   constructor(private readonly repos: TenantRepositoryFactory) {}
+  async owned(
+    ids: string[],
+    userId: string,
+    manager: EntityManager,
+  ): Promise<boolean> {
+    if (!ids.length) return true;
+    const rows = await this.repos
+      .for(FileAssetEntity)
+      .query('f', manager)
+      .andWhere('f.id IN (:...ids) AND f.createdBy = :userId', { ids, userId })
+      .setLock('pessimistic_read')
+      .getMany();
+    return rows.length === ids.length;
+  }
   async bytes(manager?: EntityManager): Promise<bigint> {
     const query = this.repos
       .for(FileAssetEntity)

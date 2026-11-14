@@ -1,6 +1,7 @@
 import { FormSubmission1794621600000 } from '../database/migrations/1794621600000-FormSubmission.js';
 import { WorkflowDefinition1794625200000 } from '../database/migrations/1794625200000-WorkflowDefinition.js';
 import { WorkflowRuntime1794628800000 } from '../database/migrations/1794628800000-WorkflowRuntime.js';
+import { WorkflowLifecycle1794632400000 } from '../database/migrations/1794632400000-WorkflowLifecycle.js';
 import { CommonCodeRuleStatus1794618000000 } from '../database/migrations/1794618000000-CommonCodeRuleStatus.js';
 import { DictionaryTags1794614400000 } from '../database/migrations/1794614400000-DictionaryTags.js';
 import { CodegenModuleSpec1794312000000 } from '../database/migrations/1794312000000-CodegenModuleSpec.js';
@@ -115,6 +116,7 @@ async function bootstrapLocal(): Promise<void> {
           FormSubmission1794621600000,
           WorkflowDefinition1794625200000,
           WorkflowRuntime1794628800000,
+          WorkflowLifecycle1794632400000,
         ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,
