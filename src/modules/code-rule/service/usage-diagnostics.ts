@@ -152,11 +152,13 @@ export class CodeUsageDiagnostics {
           : 'changed';
       if (status === 'added') added++;
       else if (status === 'changed') changed++;
+      const { name: usageName, ...definition } = item;
       this.logger.log({
         event: 'code_usage.registered',
         version: APP_VERSION,
         status,
-        ...item,
+        ...definition,
+        usageName,
         detail:
           status === 'added'
             ? '编码字段已登记'
@@ -258,7 +260,7 @@ export class CodeUsageDiagnostics {
           key,
           resource: target?.resource,
           field: target?.field,
-          name: target?.name,
+          usageName: target?.name,
           ruleId: binding?.ruleId ?? null,
           status,
           detail,
