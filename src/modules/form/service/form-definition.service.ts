@@ -142,6 +142,21 @@ export class FormDefinitionService extends BaseService<FormDefinition> {
     return structuredClone(row.fields);
   }
 
+  /** workflow只读取固定表单快照；仍经本服务的数据/字段范围，不跨模块查表。 */
+  async forWorkflow(id: string, manager: EntityManager) {
+    const row = await this.select(manager, 'info')
+      .andWhere('e.id = :id', { id })
+      .getOne();
+    if (!row || !Array.isArray(this.toRow(row).fields))
+      throw crudErrors.notFound();
+    return {
+      id: row.id,
+      code: row.code,
+      revision: row.revision,
+      fields: structuredClone(row.fields),
+    };
+  }
+
   async validateSubmission(definitionId: string, data: unknown) {
     const row = await this.loadVersion(definitionId);
     validateFormValues(row, data);

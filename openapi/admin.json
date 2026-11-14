@@ -468,6 +468,17 @@
         ],
         "type": "object"
       },
+      "CreateWorkflowBody": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/WorkflowDefinitionInput"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
       "CrudSchema": {
         "properties": {
           "actions": {
@@ -2523,6 +2534,21 @@
         ],
         "type": "object"
       },
+      "InspectWorkflowBody": {
+        "properties": {
+          "designer": {
+            "$ref": "#/components/schemas/WorkflowDesignerDto"
+          },
+          "formDefinitionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "formDefinitionId",
+          "designer"
+        ],
+        "type": "object"
+      },
       "LoginDto": {
         "properties": {
           "captchaCode": {
@@ -3759,6 +3785,21 @@
         ],
         "type": "object"
       },
+      "PublishWorkflowBody": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
       "QueryConditionDto": {
         "properties": {
           "field": {
@@ -3875,6 +3916,25 @@
           },
           "definitionId": {
             "description": "作为修订来源的固定表单版本编号",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "definitionId",
+          "baseRevision"
+        ],
+        "type": "object"
+      },
+      "ReviseWorkflowBody": {
+        "properties": {
+          "baseRevision": {
+            "type": "number"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkflowDefinitionInput"
+          },
+          "definitionId": {
             "type": "string"
           }
         },
@@ -10277,6 +10337,440 @@
         "required": [
           "resource",
           "version"
+        ],
+        "type": "object"
+      },
+      "WorkflowDefinition": {
+        "properties": {
+          "bpmn": {
+            "description": "BPMN",
+            "type": "string"
+          },
+          "code": {
+            "description": "流程编码",
+            "type": "string"
+          },
+          "compilerVersion": {
+            "description": "编译器版本",
+            "type": "number"
+          },
+          "createdAt": {
+            "description": "创建时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "description": "创建人",
+            "nullable": true,
+            "type": "string"
+          },
+          "description": {
+            "description": "说明",
+            "type": "string"
+          },
+          "designer": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowDesignerDto"
+              }
+            ],
+            "description": "流程设计"
+          },
+          "digest": {
+            "description": "编译摘要",
+            "type": "string"
+          },
+          "formDefinitionId": {
+            "description": "固定表单版本",
+            "type": "string"
+          },
+          "id": {
+            "description": "编号",
+            "example": "1",
+            "type": "string"
+          },
+          "name": {
+            "description": "流程名称",
+            "type": "string"
+          },
+          "orgId": {
+            "description": "所属组织（新增时取当前组织，数据权限按它过滤）",
+            "nullable": true,
+            "type": "string"
+          },
+          "publishedAt": {
+            "description": "发布时间",
+            "nullable": true,
+            "type": "object"
+          },
+          "publishedBy": {
+            "description": "发布人",
+            "nullable": true,
+            "type": "object"
+          },
+          "revision": {
+            "description": "流程版本",
+            "type": "number"
+          },
+          "status": {
+            "description": "状态",
+            "enum": [
+              "draft",
+              "published"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "description": "修改时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "description": "修改人",
+            "nullable": true,
+            "type": "string"
+          },
+          "version": {
+            "description": "版本号，修改时原样带回",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "orgId",
+          "createdBy",
+          "updatedBy",
+          "createdAt",
+          "updatedAt",
+          "version"
+        ],
+        "type": "object"
+      },
+      "WorkflowDefinitionInfoBody": {
+        "properties": {
+          "id": {
+            "example": "1",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "WorkflowDefinitionInput": {
+        "properties": {
+          "description": {
+            "default": "",
+            "type": "string"
+          },
+          "designer": {
+            "$ref": "#/components/schemas/WorkflowDesignerDto"
+          },
+          "formDefinitionId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "formDefinitionId",
+          "designer"
+        ],
+        "type": "object"
+      },
+      "WorkflowDefinitionPageBody": {
+        "properties": {
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowDefinitionPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：code、name",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowDefinitionPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
+      "WorkflowDefinitionPageEq": {
+        "properties": {
+          "code": {
+            "description": "流程编码",
+            "type": "string"
+          },
+          "formDefinitionId": {
+            "description": "固定表单版本",
+            "type": "string"
+          },
+          "revision": {
+            "description": "流程版本",
+            "type": "number"
+          },
+          "status": {
+            "description": "状态",
+            "enum": [
+              "draft",
+              "published"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "WorkflowDefinitionPageResult": {
+        "properties": {
+          "list": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowDefinitionRow"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "number"
+          },
+          "size": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "list",
+          "total",
+          "page",
+          "size"
+        ],
+        "type": "object"
+      },
+      "WorkflowDefinitionPageSort": {
+        "properties": {
+          "field": {
+            "description": "排序字段",
+            "enum": [
+              "id",
+              "createdAt",
+              "updatedAt",
+              "revision"
+            ],
+            "type": "string"
+          },
+          "order": {
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "order"
+        ],
+        "type": "object"
+      },
+      "WorkflowDefinitionRow": {
+        "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
+          "bpmn": {
+            "description": "BPMN",
+            "type": "string"
+          },
+          "code": {
+            "description": "流程编码",
+            "type": "string"
+          },
+          "compilerVersion": {
+            "description": "编译器版本",
+            "type": "number"
+          },
+          "createdAt": {
+            "description": "创建时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "description": "创建人",
+            "nullable": true,
+            "type": "string"
+          },
+          "description": {
+            "description": "说明",
+            "type": "string"
+          },
+          "designer": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowDesignerDto"
+              }
+            ],
+            "description": "流程设计"
+          },
+          "digest": {
+            "description": "编译摘要",
+            "type": "string"
+          },
+          "formDefinitionId": {
+            "description": "固定表单版本",
+            "type": "string"
+          },
+          "id": {
+            "description": "编号",
+            "example": "1",
+            "type": "string"
+          },
+          "name": {
+            "description": "流程名称",
+            "type": "string"
+          },
+          "orgId": {
+            "description": "所属组织（新增时取当前组织，数据权限按它过滤）",
+            "nullable": true,
+            "type": "string"
+          },
+          "publishedAt": {
+            "description": "发布时间",
+            "nullable": true,
+            "type": "object"
+          },
+          "publishedBy": {
+            "description": "发布人",
+            "nullable": true,
+            "type": "object"
+          },
+          "revision": {
+            "description": "流程版本",
+            "type": "number"
+          },
+          "status": {
+            "description": "状态",
+            "enum": [
+              "draft",
+              "published"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "description": "修改时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "description": "修改人",
+            "nullable": true,
+            "type": "string"
+          },
+          "version": {
+            "description": "版本号，修改时原样带回",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "orgId",
+          "createdBy",
+          "updatedBy",
+          "createdAt",
+          "updatedAt",
+          "version"
+        ],
+        "type": "object"
+      },
+      "WorkflowDesignerDto": {
+        "properties": {
+          "nodes": {
+            "description": "安全流程节点树，结构见docs/contracts/workflow.md；不接收BPMN或脚本",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "schemaVersion": {
+            "enum": [
+              1
+            ],
+            "type": "number"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "nodes"
+        ],
+        "type": "object"
+      },
+      "WorkflowInspection": {
+        "properties": {
+          "bpmn": {
+            "description": "仅由服务端生成的BPMN模板，执行需T38运行时服务",
+            "type": "string"
+          },
+          "designer": {
+            "$ref": "#/components/schemas/WorkflowDesignerDto"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "nodeCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "designer",
+          "nodeCount",
+          "bpmn",
+          "digest"
         ],
         "type": "object"
       },
@@ -23003,6 +23497,568 @@
         ],
         "x-permission": {
           "code": "system:user:update",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/workflow/definition/add": {
+      "post": {
+        "operationId": "workflowDefinitionAdd",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkflowBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowDefinition"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "summary": "创建流程第一版不可变草稿",
+        "tags": [
+          "workflow/definition 流程定义"
+        ],
+        "x-permission": {
+          "code": "workflow:definition:add",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/workflow/definition/info": {
+      "post": {
+        "operationId": "workflowDefinitionInfo",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowDefinitionInfoBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowDefinitionRow"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "summary": "流程定义详情",
+        "tags": [
+          "workflow/definition 流程定义"
+        ],
+        "x-permission": {
+          "code": "workflow:definition:info",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/workflow/definition/inspect": {
+      "post": {
+        "operationId": "workflowDefinitionInspect",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectWorkflowBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowInspection"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "summary": "校验安全流程树及依赖并编译BPMN，不保存或分配编码",
+        "tags": [
+          "workflow/definition 流程定义"
+        ],
+        "x-permission": {
+          "code": "workflow:definition:info",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/workflow/definition/page": {
+      "post": {
+        "operationId": "workflowDefinitionPage",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowDefinitionPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowDefinitionPageResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          }
+        },
+        "summary": "流程定义分页列表",
+        "tags": [
+          "workflow/definition 流程定义"
+        ],
+        "x-permission": {
+          "code": "workflow:definition:page",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/workflow/definition/publish": {
+      "post": {
+        "operationId": "workflowDefinitionPublish",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishWorkflowBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowDefinition"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "summary": "复核依赖并发布固定流程修订，不发起审批",
+        "tags": [
+          "workflow/definition 流程定义"
+        ],
+        "x-permission": {
+          "code": "workflow:definition:publish",
+          "risk": "high"
+        }
+      }
+    },
+    "/admin/workflow/definition/revise": {
+      "post": {
+        "operationId": "workflowDefinitionRevise",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviseWorkflowBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowDefinition"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "summary": "追加流程新版本，不修改旧修订或进行中实例",
+        "tags": [
+          "workflow/definition 流程定义"
+        ],
+        "x-permission": {
+          "code": "workflow:definition:update",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/workflow/definition/schema": {
+      "get": {
+        "operationId": "workflowDefinitionSchema",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CrudSchema"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "流程定义页面描述",
+        "tags": [
+          "workflow/definition 流程定义"
+        ],
+        "x-permission": {
+          "code": "workflow:definition:page",
           "risk": "normal"
         }
       }
