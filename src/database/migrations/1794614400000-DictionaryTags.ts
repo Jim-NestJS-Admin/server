@@ -22,9 +22,10 @@ export class DictionaryTags1794614400000 implements MigrationInterface {
     if (found.length && !found[0].builtin)
       throw new Error('sys.enabled_status已被非系统字典占用，停止迁移');
     let typeId = found[0]?.id;
+    // 原生SQL不会初始化VersionColumn，兼容没有version默认值的新库。
     if (!typeId) {
       const inserted = await runner.query(
-        "INSERT INTO sys_dict_type (tenant_id,code,name,enabled,builtin,`rank`) VALUES (0,'sys.enabled_status','启用停用状态',1,1,0)",
+        "INSERT INTO sys_dict_type (tenant_id,code,name,enabled,builtin,`rank`,version) VALUES (0,'sys.enabled_status','启用停用状态',1,1,0,1)",
       );
       typeId = inserted.insertId;
     }
@@ -33,7 +34,7 @@ export class DictionaryTags1794614400000 implements MigrationInterface {
       ['disabled', '停用', 'info', 20],
     ]) {
       await runner.query(
-        'INSERT INTO sys_dict_item (tenant_id,type_id,value,label,enabled,`rank`,tag_type) SELECT 0,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item WHERE tenant_id=0 AND type_id=? AND value=? AND deleted_at IS NULL)',
+        'INSERT INTO sys_dict_item (tenant_id,type_id,value,label,enabled,`rank`,tag_type,version) SELECT 0,?,?,?,?,?,?,1 WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item WHERE tenant_id=0 AND type_id=? AND value=? AND deleted_at IS NULL)',
         [typeId, value, label, 1, rank, tagType, typeId, value],
       );
     }
