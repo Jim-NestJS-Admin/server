@@ -6,6 +6,11 @@ import { AuthModule } from './core/auth/auth.module.js';
 import { CoreModule } from './core/core.module.js';
 import { TenantCoreModule } from './core/tenant/tenant-core.module.js';
 import { TenantModule } from './modules/tenant/tenant.module.js';
+import { FormModule } from './modules/form/form.module.js';
+import { WorkflowModule } from './modules/workflow/workflow.module.js';
+import { WorkflowDefinition } from './modules/workflow/entity/workflow-definition.entity.js';
+import { CodeRuleModule } from './modules/code-rule/code-rule.module.js';
+import { FormDefinition } from './modules/form/entity/form-definition.entity.js';
 import { TenantDirectoryModule } from './modules/tenant/tenant-directory.module.js';
 import { TenantDirectorySource } from './modules/tenant/service/tenant-directory.source.js';
 import { SystemPlatformAuditSink } from './modules/system-log/service/platform-audit.service.js';
@@ -33,6 +38,36 @@ import {
       imports: [TenantDirectoryModule, SystemLogModule],
     }),
     TenantModule,
+    FormModule,
+    WorkflowModule,
+    CodeRuleModule.forRoot({
+      usages: [
+        {
+          key: 'workflow_definition_code',
+          entity: WorkflowDefinition,
+          name: '流程定义编码',
+          resource: 'workflow/definition',
+          field: 'code',
+          maxLength: 64,
+          minLength: 2,
+          charset: 'lower_slug',
+          uniqueScope: 'tenant',
+          allowRuleSwitch: true,
+        },
+        {
+          key: 'form_definition_code',
+          entity: FormDefinition,
+          name: '表单定义编码',
+          resource: 'form/definition',
+          field: 'code',
+          maxLength: 64,
+          minLength: 2,
+          charset: 'lower_slug',
+          uniqueScope: 'tenant',
+          allowRuleSwitch: true,
+        },
+      ],
+    }),
     FileModule.register({
       store: new LocalBlobStore(resolve(process.cwd(), 'deploy/data/files')),
       policy: {

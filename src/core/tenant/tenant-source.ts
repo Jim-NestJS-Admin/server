@@ -22,6 +22,10 @@ export const DEFAULT_TENANT_CODE = 'default';
  * 实现方要自己缓存，并在租户 / 套餐修改后清掉缓存：认证守卫每个请求都会调 byId 核对租户状态。
  */
 export abstract class TenantSource {
+  /** 只读运维检查使用的未删除租户编号；内置目录只有默认租户。 */
+  async activeTenantIds(): Promise<string[]> {
+    return [DEFAULT_TENANT_ID];
+  }
   /** 按请求主机名（小写，可带端口）找租户；没绑定返回 null */
   abstract byDomain(host: string): Promise<TenantInfo | null>;
   /** 按租户编码找；platform 返回平台（id 0） */

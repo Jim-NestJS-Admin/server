@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { CrudRuntime } from '../../../core/crud/crud.runtime.js';
 import { SYSTEM_FIELDS } from '../../../core/crud/base.entity.js';
 import {
@@ -7,11 +7,39 @@ import {
   type FieldState,
 } from '../../../core/field-perm/field-perm.decorator.js';
 import { crudErrors } from '../../../core/crud/crud.errors.js';
+import { TenantRepositoryFactory } from '../../../core/tenant/tenant-repository.js';
+import { SystemField } from '../entity/system-field.entity.js';
+import type { EntityManager } from 'typeorm';
 
 const SYSTEM = new Set<string>([...SYSTEM_FIELDS, 'version', 'deletedAt']);
 @Injectable()
 export class SystemFieldCatalog {
+  @Inject(TenantRepositoryFactory)
+  private readonly repos!: TenantRepositoryFactory;
   constructor(private readonly runtime: CrudRuntime) {}
+
+  /** 流程字段临时授权只可收紧代码声明，模块配置显式清空上限时拒绝委派。 */
+  async delegationLimit(
+    resource: string,
+    field: string,
+    manager: EntityManager,
+  ): Promise<FieldState> {
+    const code = this.find(resource, field);
+    if (!code?.delegable) return 'hidden';
+    const row = await this.repos
+      .for(SystemField)
+      .query('f', manager)
+      .andWhere(
+        'f.resource = :resource AND f.field = :field AND f.enabled = :enabled',
+        { resource, field, enabled: true },
+      )
+      .setLock('pessimistic_read')
+      .getOne();
+    const limit = row ? (row.delegable ?? 'hidden') : code.delegable;
+    return STATE_RANK[limit] < STATE_RANK[code.delegable]
+      ? limit
+      : code.delegable;
+  }
   find(resource: string, field: string) {
     const meta = this.runtime
       .list()

@@ -28,6 +28,7 @@ export class CrudRuntime {
   ) {}
 
   dictionary?: CrudDictionarySource;
+  codes?: import('./crud-code.js').CrudCodeSource;
 
   private displaySource?: CrudDisplaySource;
 

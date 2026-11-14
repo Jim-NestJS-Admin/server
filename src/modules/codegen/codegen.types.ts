@@ -63,6 +63,7 @@ export interface CodegenField {
   form?: boolean;
   required?: boolean;
   unique?: boolean;
+  codeCharset?: 'upper_alnum' | 'lower_slug' | 'digits' | 'unrestricted';
   component?: (typeof COMPONENTS)[number];
   dict?: string | null;
   fieldPerm?: { default?: string; mask?: string | null } | null;
@@ -149,6 +150,22 @@ export function validateCodegenConfig(raw: unknown): Err[] {
     const names = new Set<string>();
     list.forEach((f: Partial<CodegenField>, i) => {
       const p = `${path}[${i}]`;
+      if (
+        f?.codeCharset !== undefined &&
+        (!['upper_alnum', 'lower_slug', 'digits', 'unrestricted'].includes(
+          f.codeCharset,
+        ) ||
+          f.type !== 'string' ||
+          f.nullable ||
+          !f.unique ||
+          (f.length ?? 255) > 64 ||
+          Object.hasOwn(f, 'defaultValue') ||
+          f.dict)
+      )
+        bad(
+          `${p}.codeCharset`,
+          '自动编码字段要求1至64位非空唯一文本，无默认值及字典',
+        );
       if (!CAMEL.test(f?.name ?? '') || RESERVED.has(f.name!))
         bad(`${p}.name`, '属性名要小驼峰，不能和基类字段、保留字同名');
       else if (names.has(f.name!)) bad(`${p}.name`, '属性名重复');

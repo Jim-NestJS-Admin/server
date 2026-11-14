@@ -1,10 +1,16 @@
+import { FormSubmission1794621600000 } from '../database/migrations/1794621600000-FormSubmission.js';
+import { WorkflowDefinition1794625200000 } from '../database/migrations/1794625200000-WorkflowDefinition.js';
+import { CommonCodeRuleStatus1794618000000 } from '../database/migrations/1794618000000-CommonCodeRuleStatus.js';
+import { DictionaryTags1794614400000 } from '../database/migrations/1794614400000-DictionaryTags.js';
 import { CodegenModuleSpec1794312000000 } from '../database/migrations/1794312000000-CodegenModuleSpec.js';
 import { TenantCatalog1794412800000 } from '../database/migrations/1794412800000-TenantCatalog.js';
 import { PlatformMenus1794412800001 } from '../database/migrations/1794412800001-PlatformMenus.js';
+import { FormDefinition1794470400000 } from '../database/migrations/1794470400000-FormDefinition.js';
 import { TenantSeedService } from '../modules/tenant/service/tenant-seed.service.js';
 import { SharedDictionaries1794279600000 } from '../database/migrations/1794279600000-SharedDictionaries.js';
 import { PLATFORM_TENANT_ID } from '../core/tenant/tenant.constants.js';
 import 'reflect-metadata';
+import { CodeRules1794528000000 } from '../database/migrations/1794528000000-CodeRules.js';
 import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { DataSource } from 'typeorm';
@@ -101,6 +107,12 @@ async function bootstrapLocal(): Promise<void> {
           CodegenModuleSpec1794312000000,
           TenantCatalog1794412800000,
           PlatformMenus1794412800001,
+          FormDefinition1794470400000,
+          CodeRules1794528000000,
+          DictionaryTags1794614400000,
+          CommonCodeRuleStatus1794618000000,
+          FormSubmission1794621600000,
+          WorkflowDefinition1794625200000,
         ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,

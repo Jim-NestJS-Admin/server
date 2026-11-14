@@ -134,6 +134,17 @@ export class IdempotencyLedger {
       if (p?.state === 'inTx')
         // 事务体出错 → 已回滚，记录没留下；事务体完成后才出错 → 提交结果不确定
         p.state = bodyDone ? 'unknown' : before;
+      const driverCode = (e as { driverError?: { code?: string } })?.driverError
+        ?.code;
+      if (
+        driverCode === 'ER_LOCK_DEADLOCK' ||
+        driverCode === 'ER_LOCK_WAIT_TIMEOUT'
+      )
+        throw new BusinessException(
+          ErrorCode.Conflict,
+          '操作发生并发冲突，请使用原请求重试',
+          409,
+        );
       throw e;
     }
   }

@@ -84,7 +84,7 @@ pnpm start:dev          # 开发模式启动，默认端口 3000
 
 | 命令 | 作用 |
 | --- | --- |
-| `pnpm start:dev` | 开发模式启动 |
+| `pnpm start:dev` | 监听源码，自动编译并重启后端，保留终端历史输出 |
 | `pnpm build` / `pnpm start:prod` | 构建 / 运行构建结果 |
 | `pnpm bootstrap:local` | 本地库迁移 + 初始化数据 |
 | `pnpm migration:local` | 只执行迁移 |
@@ -109,7 +109,7 @@ openapi/           # 导出的接口文档
 ## 路线图
 
 - [x] 阶段 1：系统底座（CRUD 框架、权限、组织、系统管理、代码生成器）
-- [ ] 阶段 2：多租户（租户与套餐、平台 / 租户两级管理）
+- [x] 阶段 2：多租户（租户与套餐、平台 / 租户两级管理）
 - [ ] 阶段 3：表单引擎与审批流、企业微信接入
 - [ ] 阶段 4：CMS（多站点多语言内容）与会员
 - [ ] 阶段 5：OAuth2 授权服务与 MCP（AI 按权限操作系统）
@@ -122,3 +122,10 @@ openapi/           # 导出的接口文档
 ## 许可证
 
 [MIT](LICENSE) © 2026-present Jimmy
+
+
+### 编码字段登记与绑定诊断
+
+开发时用`pnpm start:dev`，不要用`node dist/main.js`替代监听模式。每次自动重启会输出`CodeUsageDiagnostics`结构化日志：`registered`/`catalog_checked`说明声明登记与变更，`registration_failed`说明具体声明校验失败，`declaration_missing`说明上次声明本次缺失；`binding_checked`/`bindings_summary`按租户列出有效、待绑定、目标/规则缺失、规则停用及不兼容状态。保存规则、绑定、动态表单设计后，会在事务提交后重新检查并输出；回滚单独标明，诊断失败不影响已提交操作的结果。
+
+这些日志只读诊断，不自动删除或停用绑定。开发环境的`logs/code-usage-manifest.json`仅用于watch重启前后的代码声明差异；不是数据库注册表，`logs/`不纳入Git。直接运行开发命令时查看当前终端；本机由后台watch运行时，当前输出路径见`logs/dev-watch-current.json`，不同启动保留独立的`dev-watch-*.stdout.log`和stderr文件。未绑定是待配置告警，不等于登记失败。完整状态及验收步骤见文档仓库`contracts/code-rule.md`、`acceptance/T45-T46-business-code-fields-20261113.md`。

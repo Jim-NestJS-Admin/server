@@ -63,6 +63,12 @@ export function specSchema(spec: ModuleSpec) {
       });
       return {
         property: f.name,
+        ...(f.codeCharset
+          ? {
+              generated: true,
+              generatedHint: '保存时自动生成，请先绑定编码规则',
+            }
+          : {}),
         label: f.label,
         ...(f.list === false || isParent
           ? { list: false as const }
@@ -103,8 +109,8 @@ export function specSchema(spec: ModuleSpec) {
         label: ch.label,
         name: `${name}${resource[0].toUpperCase()}${resource.slice(1)}`,
         foreignKey: ch.foreignKey,
-        addable: props,
-        updatable: props,
+        addable: ch.fields.filter((f) => !f.codeCharset).map((f) => f.name),
+        updatable: ch.fields.filter((f) => !f.codeCharset).map((f) => f.name),
         readable: [...base.filter((f) => f !== 'version'), ...props],
         min: 0,
         max: 500,
@@ -133,8 +139,8 @@ export function specSchema(spec: ModuleSpec) {
       dataScope: c.options?.dataScope ?? false,
       api,
       deleteMode: c.options?.deleteMode ?? 'soft',
-      addable: props,
-      updatable: props,
+      addable: c.fields.filter((f) => !f.codeCharset).map((f) => f.name),
+      updatable: c.fields.filter((f) => !f.codeCharset).map((f) => f.name),
       readable: [...base, ...props],
       sortable: [
         'id',

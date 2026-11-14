@@ -4,6 +4,7 @@ import {
   ApiPropertyOptional,
   getSchemaPath,
 } from '@nestjs/swagger';
+import { fieldUsageKey } from './crud-code.js';
 import { getMetadataArgsStorage } from 'typeorm';
 import type { DictItem, FormComponent } from './crud-field.decorator.js';
 import {
@@ -123,6 +124,9 @@ function columnArgs(entity: Function, p: string) {
 }
 
 export class CrudSchemaFormItem {
+  @ApiPropertyOptional() generated?: boolean;
+  @ApiPropertyOptional() codeUsageKey?: string;
+  @ApiPropertyOptional() generatedHint?: string;
   @ApiProperty() field: string;
   @ApiProperty() label: string;
   @ApiProperty({
@@ -170,6 +174,10 @@ export class CrudSchemaDictItem {
   })
   value: string | number | boolean;
   @ApiProperty() label: string;
+  @ApiPropertyOptional({
+    enum: ['primary', 'success', 'info', 'warning', 'danger'],
+  })
+  tagType?: DictItem['tagType'];
 }
 
 export class CrudSchemaPageAction {
@@ -329,7 +337,9 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
   ];
 
   const form: CrudSchemaFormItem[] = meta.fields
-    .filter((f) => f.form !== false && (f.edit ?? 'both') !== 'none')
+    .filter(
+      (f) => f.form !== false && (f.generated || (f.edit ?? 'both') !== 'none'),
+    )
     .map((f) => {
       const cfg = f.form || {};
       return {
@@ -344,7 +354,22 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
               : 'input'),
         required: Boolean(cfg.required),
         ...(cfg.placeholder ? { placeholder: cfg.placeholder } : {}),
-        edit: f.edit ?? 'both',
+        edit: f.generated ? 'none' : (f.edit ?? 'both'),
+        ...(f.generated
+          ? {
+              ...(f.code
+                ? {
+                    codeUsageKey: fieldUsageKey(
+                      'crud',
+                      meta.prefix,
+                      f.property,
+                    ),
+                  }
+                : {}),
+              generated: true,
+              generatedHint: f.generatedHint ?? '保存后自动生成',
+            }
+          : {}),
         ...(f.dict || f.dictCode ? { dict: f.property } : {}),
       };
     });
@@ -418,7 +443,10 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
           };
         }),
       form: c.fields
-        .filter((f) => f.form !== false && (f.edit ?? 'both') !== 'none')
+        .filter(
+          (f) =>
+            f.form !== false && (f.generated || (f.edit ?? 'both') !== 'none'),
+        )
         .map((f) => {
           const cfg = f.form || {};
           return {
@@ -428,7 +456,22 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
               cfg.component ?? (f.dict || f.dictCode ? 'select' : 'input'),
             required: Boolean(cfg.required),
             ...(cfg.placeholder ? { placeholder: cfg.placeholder } : {}),
-            edit: f.edit ?? 'both',
+            edit: f.generated ? 'none' : (f.edit ?? 'both'),
+            ...(f.generated
+              ? {
+                  ...(f.code
+                    ? {
+                        codeUsageKey: fieldUsageKey(
+                          'crud',
+                          `${meta.prefix}/${c.resource}`,
+                          f.property,
+                        ),
+                      }
+                    : {}),
+                  generated: true,
+                  generatedHint: f.generatedHint ?? '保存后自动生成',
+                }
+              : {}),
             ...(f.dict || f.dictCode
               ? { dict: `${c.resource}.${f.property}` }
               : {}),

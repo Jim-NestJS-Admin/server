@@ -1,6 +1,7 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
 import { CrudRuntime } from '../../../core/crud/crud.runtime.js';
+import type { DictItem } from '../../../core/crud/crud-field.decorator.js';
 import type { CrudDictionarySource } from '../../../core/crud/crud-dictionary.js';
 import { crudErrors } from '../../../core/crud/crud.errors.js';
 import { RequestContext } from '../../../core/tenant/request-context.js';
@@ -126,10 +127,7 @@ export class SystemDictionaryService
     // 类型版本随项目变更在同一个事务里递增；所有租户的缓存键都会切到新版本，Redis失效失败也不会继续读旧项。
     await this.repos.for(SystemDictType).update([typeId], {}, manager);
   }
-  async options(
-    code: string,
-    manager?: EntityManager,
-  ): Promise<{ value: string; label: string }[]> {
+  async options(code: string, manager?: EntityManager): Promise<DictItem[]> {
     const requester = this.tenant();
     const shared = code.startsWith('sys.');
     const load = async () => {
@@ -144,13 +142,13 @@ export class SystemDictionaryService
       if (!type?.enabled) return [];
       const key = this.redis.tenantKey(
         requester,
-        'dictionary',
+        'dictionary:tags-v1',
         type.id,
         `v${type.version}`,
       );
       if (!manager) {
         const hit = await this.redis.call((r) => r.get(key));
-        if (hit) return JSON.parse(hit) as { value: string; label: string }[];
+        if (hit) return JSON.parse(hit) as DictItem[];
       }
       const rows = await this.repos
         .for(SystemDictItem)
@@ -162,7 +160,11 @@ export class SystemDictionaryService
         .orderBy('i.rank', 'ASC')
         .addOrderBy('i.id', 'ASC')
         .getMany();
-      const items = rows.map((row) => ({ value: row.value, label: row.label }));
+      const items: DictItem[] = rows.map((row) => ({
+        value: row.value,
+        label: row.label,
+        ...(row.tagType ? { tagType: row.tagType } : {}),
+      }));
       if (!manager)
         await this.redis.call((r) =>
           r.set(key, JSON.stringify(items), 'EX', 300),

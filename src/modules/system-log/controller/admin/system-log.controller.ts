@@ -1,6 +1,10 @@
 import { BaseController } from '../../../../core/crud/base.controller.js';
 import { Get, Query } from '@nestjs/common';
-import { ApiOperation, ApiProperty } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiProperty,
+  ApiPropertyOptional,
+} from '@nestjs/swagger';
 import { Matches } from 'class-validator';
 import { LoginOnly } from '../../../../core/permission/perms.decorator.js';
 import { ApiResult } from '../../../../core/swagger/api-result.js';
@@ -22,6 +26,10 @@ class DictionaryQuery {
   @ApiProperty() @Matches(/^[a-z][a-z0-9_.-]{1,63}$/) code: string;
 }
 class DictionaryOption {
+  @ApiPropertyOptional({
+    enum: ['primary', 'success', 'info', 'warning', 'danger'],
+  })
+  tagType?: 'primary' | 'success' | 'info' | 'warning' | 'danger';
   @ApiProperty() value: string;
   @ApiProperty() label: string;
 }

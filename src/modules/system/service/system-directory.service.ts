@@ -10,6 +10,9 @@ import {
 } from '../entity/system.entity.js';
 import type { AuthOrg } from '../../../core/auth/auth-user.store.js';
 import type { RoleGrant } from '../../../core/permission/permission-source.js';
+import type { EntityManager } from 'typeorm';
+import type { Type } from '@nestjs/common';
+import type { BaseEntity } from '../../../core/crud/base.entity.js';
 import { validOrganizations } from './organization-policy.js';
 
 /** 认证和权限只读数据来源，不向外开放用户、角色写接口。 */
@@ -23,6 +26,38 @@ export class SystemDirectory {
   private check(tenantId: string): void {
     if (this.context.current().tenantId !== tenantId)
       throw new Error('身份与租户上下文不一致');
+  }
+
+  /** 流程发布校验只返回引用是否有效，不向workflow泄露用户/角色原始数据。 */
+  async workflowReferences(
+    refs: { users: string[]; roles: string[]; orgs: string[] },
+    manager: EntityManager,
+  ): Promise<boolean> {
+    const references: [Type<BaseEntity>, string[]][] = [
+      [SystemUser, refs.users],
+      [SystemRole, refs.roles],
+    ];
+    for (const [entity, values] of references) {
+      if (!values.length) continue;
+      const rows = await this.repos
+        .for(entity)
+        .query('r', manager)
+        .andWhere('r.id IN (:...ids)', { ids: values })
+        .andWhere('r.enabled = :enabled', { enabled: true })
+        .setLock('pessimistic_read')
+        .getMany();
+      if (rows.length !== values.length) return false;
+    }
+    if (refs.orgs.length) {
+      const rows = await this.repos
+        .for(SystemOrg)
+        .query('o', manager)
+        .setLock('pessimistic_read')
+        .getMany();
+      const valid = new Set(validOrganizations(rows).map((row) => row.id));
+      if (refs.orgs.some((id) => !valid.has(id))) return false;
+    }
+    return true;
   }
 
   async user(tenantId: string, username: string) {

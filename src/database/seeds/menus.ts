@@ -37,6 +37,15 @@ const crud = (title: string, key: string, extra: string[] = []): PageSeed => ({
  */
 export const DEFAULT_MENUS: DirectorySeed[] = [
   {
+    title: '表单与流程',
+    path: '/forms',
+    icon: 'ri:file-list-3-line',
+    pages: [
+      crud('表单定义', 'form/definition'),
+      crud('提交记录', 'form/submission'),
+    ],
+  },
+  {
     title: '平台管理',
     path: '/platform',
     icon: 'ri:global-line',
@@ -71,6 +80,7 @@ export const DEFAULT_MENUS: DirectorySeed[] = [
       crud('字典管理', 'system/dict-type'),
       { ...crud('字典项', 'system/dict-item'), hidden: true },
       crud('系统参数', 'system/parameter'),
+      crud('编码规则', 'system/code-rule', ['system:code-sequence']),
       {
         title: '模块配置',
         path: '/system/page-config',
@@ -121,6 +131,7 @@ const ACTION_TITLES: Record<string, string> = {
   write: '写入文件',
   read: '下载',
   upload: '上传',
+  validate: '校验填写',
   'reset-password': '重置密码',
 };
 

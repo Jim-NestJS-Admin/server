@@ -115,6 +115,7 @@ export class BaseController<T extends BaseEntity> implements OnModuleInit {
       service = new BaseService<T>();
     }
     service.bindCrud({
+      codes: () => this.crudRuntime.codes,
       dataSource: this.crudRuntime.dataSource,
       scope: this.crudRuntime.scope,
       context: this.crudRuntime.context,
