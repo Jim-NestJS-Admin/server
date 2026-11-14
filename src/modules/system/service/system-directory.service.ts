@@ -31,12 +31,22 @@ export class SystemDirectory {
   }
 
   /** 审批目录仅开放同租户启用对象的编号/显示名，分页搜索不泄露账号隐私。 */
+  async workflowOrganizations() {
+    return (await this.orgs(this.context.current().tenantId)).map((org) => ({
+      id: org.id,
+      label: org.name,
+      parentId: org.parentId,
+    }));
+  }
+
   async workflowChoices(
     kind: 'users' | 'roles' | 'orgs',
     keyword: string,
     page: number,
     size: number,
     ids?: string[],
+    orgId?: string,
+    includeChildren = false,
   ) {
     if (kind === 'orgs') {
       const rows = (await this.orgs(this.context.current().tenantId)).filter(
@@ -59,6 +69,51 @@ export class SystemDirectory {
         .andWhere('u.enabled = :enabled', { enabled: true });
       if (keyword)
         query.andWhere('u.nickname LIKE :keyword', { keyword: `%${keyword}%` });
+      if (orgId) {
+        const orgs = await this.workflowOrganizations();
+        if (!orgs.some((org) => org.id === orgId))
+          return { list: [], total: 0 };
+        const orgIds = new Set([orgId]);
+        if (includeChildren) {
+          const children = new Map<string, string[]>();
+          for (const org of orgs) {
+            if (org.parentId)
+              children.set(org.parentId, [
+                ...(children.get(org.parentId) ?? []),
+                org.id,
+              ]);
+          }
+          const pending = [orgId];
+          while (pending.length) {
+            for (const child of children.get(pending.pop()!) ?? []) {
+              if (orgIds.has(child)) continue;
+              orgIds.add(child);
+              pending.push(child);
+            }
+          }
+        }
+        // 组织归属与userOrgs一致：有启用角色的组织授权，不把全局授权当作所有部门成员。
+        // 子查询同样由租户Repository构造，包含租户和软删除限制。
+        const roles = this.repos
+          .for(SystemRole)
+          .query('member_role')
+          .select('member_role.id')
+          .where('member_role.enabled = :memberRoleEnabled', {
+            memberRoleEnabled: true,
+          });
+        const memberships = this.repos
+          .for(SystemUserRole)
+          .query('member_grant')
+          .select('member_grant.userId')
+          .where('member_grant.scopeOrgId IN (:...memberOrgIds)', {
+            memberOrgIds: [...orgIds],
+          })
+          .andWhere(`member_grant.roleId IN (${roles.getQuery()})`)
+          .setParameters(roles.getParameters());
+        query
+          .andWhere(`u.id IN (${memberships.getQuery()})`)
+          .setParameters(memberships.getParameters());
+      }
       if (ids) {
         if (!ids.length) return { list: [], total: 0 };
         query.andWhere('u.id IN (:...ids)', { ids });

@@ -11278,6 +11278,10 @@
             "maxItems": 50,
             "type": "array"
           },
+          "includeChildren": {
+            "default": false,
+            "type": "boolean"
+          },
           "keyword": {
             "default": "",
             "type": "string"
@@ -11288,6 +11292,10 @@
               "roles",
               "orgs"
             ],
+            "type": "string"
+          },
+          "orgId": {
+            "description": "按成员的组织角色归属筛选，仅用于成员目录",
             "type": "string"
           },
           "page": {
@@ -11316,6 +11324,40 @@
         "required": [
           "id",
           "label"
+        ],
+        "type": "object"
+      },
+      "WorkflowDirectoryOrganization": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "parentId": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "parentId"
+        ],
+        "type": "object"
+      },
+      "WorkflowDirectoryOrganizations": {
+        "properties": {
+          "list": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowDirectoryOrganization"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "list"
         ],
         "type": "object"
       },
@@ -25971,6 +26013,52 @@
         ],
         "x-permission": {
           "code": "workflow:definition:page",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/workflow/directory/organizations": {
+      "post": {
+        "operationId": "workflowDirectoryOrganizations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowDirectoryOrganizations"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "成员选择器的同租户启用组织树，只返回编号、名称和父级",
+        "tags": [
+          "WorkflowDirectory"
+        ],
+        "x-permission": {
+          "code": "workflow:directory:page",
           "risk": "normal"
         }
       }

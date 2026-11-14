@@ -10,6 +10,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsBoolean,
   IsArray,
   ArrayMaxSize,
   Matches,
@@ -23,6 +24,16 @@ import { ApiResult } from '../../../../core/swagger/api-result.js';
 import { SystemDirectory } from '../../../system/service/system-directory.service.js';
 
 class WorkflowDirectoryBody {
+  @ApiPropertyOptional({
+    description: '按成员的组织角色归属筛选，仅用于成员目录',
+  })
+  @IsOptional()
+  @Matches(/^[1-9]\d{0,19}$/)
+  orgId?: string;
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  includeChildren: boolean = false;
   @ApiPropertyOptional({ type: [String], maxItems: 50 })
   @IsOptional()
   @IsArray()
@@ -54,10 +65,28 @@ class WorkflowDirectoryResult {
   list!: WorkflowDirectoryOption[];
   @ApiProperty() total!: number;
 }
+class WorkflowDirectoryOrganization extends WorkflowDirectoryOption {
+  @ApiProperty({ type: String, nullable: true }) parentId!: string | null;
+}
+class WorkflowDirectoryOrganizations {
+  @ApiProperty({ type: [WorkflowDirectoryOrganization] })
+  list!: WorkflowDirectoryOrganization[];
+}
 /** 审批选人专用最小目录，不返回账号、联系方式、角色权限或其他业务字段。 */
 @AdminController('workflow/directory')
 export class WorkflowDirectoryController {
   constructor(private readonly directory: SystemDirectory) {}
+  @Post('organizations')
+  @HttpCode(200)
+  @Perms('workflow:directory:page')
+  @ApiOperation({
+    operationId: 'workflowDirectoryOrganizations',
+    summary: '成员选择器的同租户启用组织树，只返回编号、名称和父级',
+  })
+  @ApiResult(WorkflowDirectoryOrganizations)
+  async organizations() {
+    return { list: await this.directory.workflowOrganizations() };
+  }
   @Post('page')
   @HttpCode(200)
   @Perms('workflow:directory:page')
@@ -74,6 +103,8 @@ export class WorkflowDirectoryController {
       body.page,
       body.size,
       body.ids,
+      body.orgId,
+      body.includeChildren,
     );
   }
 }
