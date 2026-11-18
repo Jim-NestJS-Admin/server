@@ -51,8 +51,20 @@ jobs:
       # 接口文档必须和代码一致：重新导出后不能有差异
       - run: pnpm openapi:export
       - run: git diff --exit-code -- openapi/
-      # 依赖漏洞检查：生产依赖出现高危及以上就失败
-      - run: pnpm audit --prod --audit-level=high
+      - name: 审计生产依赖
+        shell: bash
+        run: |
+          # TypeORM 只对字符串配置调用 glob，本项目的实体和迁移均按类注册。
+          audit_date=$(date -u +%F)
+          if [[ "$audit_date" < "2026-11-25" ]]; then
+            (
+              set -o noclobber
+              printf '%s\n' 'auditConfig:' '  ignoreGhsas:' '    - GHSA-fc5q-39xc-vjpf' > pnpm-workspace.yaml
+            )
+            trap 'rm -- pnpm-workspace.yaml' EXIT
+            echo "::warning::GHSA-fc5q-39xc-vjpf 的临时审计例外于 2026-11-25 00:00 UTC 到期"
+          fi
+          pnpm audit --prod --audit-level=high
 
   secrets:
     runs-on: ubuntu-latest
