@@ -153,6 +153,45 @@ export class SystemDirectory {
     };
   }
 
+  async assertIntegrationTargets(
+    orgId: string,
+    roleId: string | null,
+    manager: EntityManager,
+  ) {
+    const org = await this.repos
+      .for(SystemOrg)
+      .query('o', manager)
+      .andWhere('o.id = :id AND o.enabled = :enabled', {
+        id: orgId,
+        enabled: true,
+      })
+      .getOne();
+    if (!org) throw crudErrors.badRequest('同步挂载组织无效');
+    if (roleId) {
+      const role = await this.repos
+        .for(SystemRole)
+        .query('r', manager)
+        .andWhere(
+          'r.id = :id AND r.enabled = :enabled AND r.allPermissions = :superAdmin',
+          { id: roleId, enabled: true, superAdmin: false },
+        )
+        .getOne();
+      if (!role) throw crudErrors.badRequest('默认角色无效或为超级管理员');
+    }
+  }
+
+  async notificationIdentity(userId: string) {
+    const user = await this.repos
+      .for(SystemUser)
+      .query('u')
+      .andWhere('u.id = :userId AND u.enabled = :enabled', {
+        userId,
+        enabled: true,
+      })
+      .getOne();
+    return user ? { userId: user.id, orgId: user.defaultOrgId } : null;
+  }
+
   async workflowIdentity(
     userId: string,
     orgId: string | null,
@@ -325,6 +364,7 @@ export class SystemDirectory {
       .for(SystemUser)
       .query('u')
       .addSelect('u.passwordHash')
+      .addSelect('u.accountType')
       .where('u.username = :username', { username })
       .getOne();
   }
@@ -334,6 +374,7 @@ export class SystemDirectory {
     return this.repos
       .for(SystemUser)
       .query('u')
+      .addSelect('u.accountType')
       .where('u.id = :userId', { userId })
       .getOne();
   }

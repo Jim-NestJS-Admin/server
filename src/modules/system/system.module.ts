@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { SystemOAuthService } from './service/system-oauth.service.js';
+import { SystemIntegrationService } from './service/system-integration.service.js';
 import { TenantDirectoryModule } from '../tenant/tenant-directory.module.js';
 import { PlatformOnlyGuard } from '../tenant/platform-only.guard.js';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -44,6 +46,8 @@ import {
     ]),
   ],
   providers: [
+    SystemOAuthService,
+    SystemIntegrationService,
     PlatformOnlyGuard,
     SystemFieldCatalog,
     SystemFieldOverview,
@@ -69,6 +73,11 @@ import {
     SystemSupervisorController,
     SystemPermissionController,
   ],
-  exports: [SystemDirectory, SystemFieldCatalog],
+  exports: [
+    SystemDirectory,
+    SystemFieldCatalog,
+    SystemIntegrationService,
+    SystemOAuthService,
+  ],
 })
 export class SystemModule {}

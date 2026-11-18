@@ -2,6 +2,8 @@ import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from 'nestjs-pino';
 import { requestIdMiddleware } from './core/context/request-id.js';
+import { OAuthRuntimeService } from './modules/oauth/service/oauth-runtime.service.js';
+import { McpRuntimeService } from './modules/mcp/service/mcp-runtime.service.js';
 import { createValidationPipe } from './core/validation.js';
 import { AppConfigService } from './core/config/app-config.service.js';
 import {
@@ -29,13 +31,20 @@ export function configureApp(app: INestApplication): INestApplication {
   app.use(securityHeaders({ hsts: security.hsts, docsPrefix: 'docs' }));
   app.enableCors(corsDelegate(security.cors));
   app.use(requestIdMiddleware);
+  // 协议库读取原始表单流，必须在Express/Nest请求体解析器之前挂载。
+  app.get(OAuthRuntimeService).mount(app);
   // 请求体上限（T25）：JSON / 表单 1MB；文件上传由文件模块自己的限制控制
   const express = app as NestExpressApplication;
   if (typeof express.useBodyParser === 'function') {
     express.useBodyParser('json', { limit: '1mb' });
+    express.useBodyParser('text', {
+      type: ['application/xml', 'text/xml'],
+      limit: '1mb',
+    });
     express.useBodyParser('urlencoded', { limit: '1mb', extended: true });
   }
   app.useLogger(app.get(Logger));
+  app.get(McpRuntimeService).mount(app);
   app.useGlobalPipes(createValidationPipe());
   return app;
 }

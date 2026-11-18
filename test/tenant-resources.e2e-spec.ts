@@ -357,8 +357,19 @@ describe('T32 现有资源跨租户双向防漏', () => {
         await post(owner, 'system/page-config/save', {
           resource: 'system:user',
           version: 0,
-          config: { list: { pageSize: 30 } },
+          config: { list: { pageSize: 30, tableMode: 'virtual' } },
         }).expect(200);
+        const ownerSchema = (await get(owner, 'system/user/schema').expect(200))
+          .body.data;
+        expect(ownerSchema.defaultTableMode).toBe('normal');
+        expect(ownerSchema.view.list).toMatchObject({
+          pageSize: 30,
+          tableMode: 'virtual',
+        });
+        const attackerSchema = (
+          await get(attacker, 'system/user/schema').expect(200)
+        ).body.data;
+        expect(attackerSchema.view.list.tableMode).toBe('normal');
         expect(
           (
             await get(

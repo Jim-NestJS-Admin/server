@@ -136,7 +136,7 @@ export class TenantPackage extends BaseEntity {
   @Type(() => TenantQuotas)
   @Column({ type: 'json' })
   quotas!: TenantQuotas;
-  @CrudField({ label: '备注', nullable: true })
+  @CrudField({ label: '备注', nullable: true, form: { component: 'textarea' } })
   @IsOptional()
   @IsString()
   @MaxLength(500)
@@ -213,7 +213,7 @@ export class SystemTenant extends BaseEntity {
   @MaxLength(30)
   @Column({ type: 'varchar', length: 30, nullable: true })
   contactPhone!: string | null;
-  @CrudField({ label: '备注', nullable: true })
+  @CrudField({ label: '备注', nullable: true, form: { component: 'textarea' } })
   @IsOptional()
   @IsString()
   @MaxLength(500)

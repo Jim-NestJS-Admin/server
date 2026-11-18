@@ -1,4 +1,5 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
+import { ActionTransaction } from './action-transaction.js';
 import { ClsService } from 'nestjs-cls';
 import {
   Column,
@@ -114,6 +115,7 @@ export class IdempotencyLedger {
   constructor(
     private readonly cls: ClsService,
     private readonly dataSource: DataSource,
+    @Optional() private readonly actions?: ActionTransaction,
   ) {}
 
   /** 开一个写事务；本次请求带了幂等键时，提交前把幂等记录写进同一个事务 */
@@ -121,14 +123,23 @@ export class IdempotencyLedger {
     const p = this.pending();
     const before = p?.state ?? 'none';
     let bodyDone = false;
+    const boundary = this.actions?.current();
+    if (boundary?.manager || boundary?.committed)
+      throw new Error('外部动作只能提交一个业务事务');
     try {
       const out = await this.dataSource.transaction(async (manager) => {
+        if (boundary) {
+          boundary.manager = manager;
+          await boundary.before(manager);
+        }
         const result = await fn(manager);
+        if (boundary) await boundary.after(manager, result);
         await this.recordInTx(manager, result);
         bodyDone = true;
         return result;
       });
       if (p?.state === 'inTx') p.state = 'committed';
+      if (boundary) boundary.committed = true;
       return out;
     } catch (e) {
       if (p?.state === 'inTx')

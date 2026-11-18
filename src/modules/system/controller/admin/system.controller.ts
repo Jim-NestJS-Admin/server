@@ -162,6 +162,7 @@ export class SystemOrgController extends BaseController<SystemOrg> {}
 @CrudController({
   prefix: 'system/menu',
   label: '菜单',
+  defaultTableMode: 'virtual',
   entity: SystemMenu,
   service: SystemMenuService,
   api: ['export', 'page', 'info', 'add', 'update', 'delete', 'tree'],

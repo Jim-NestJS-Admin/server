@@ -38,6 +38,9 @@ export interface SortItem {
   order: 'asc' | 'desc';
 }
 
+export const CRUD_TABLE_MODES = ['normal', 'virtual'] as const;
+export type CrudTableMode = (typeof CRUD_TABLE_MODES)[number];
+
 export interface PageQueryOptions<T> {
   /** 搜索框模糊匹配的字段 */
   keyWords?: (keyof T & string)[];
@@ -98,6 +101,8 @@ export interface CrudControllerOptions<T extends BaseEntity> {
   /** 自定义 Service（继承 BaseService，写钩子或覆盖方法）；不写时框架自动提供 */
   service?: Type<unknown>;
   pageQuery?: PageQueryOptions<T>;
+  /** 列表的默认表格模式，可由模块配置覆盖。 */
+  defaultTableMode?: CrudTableMode;
   /** 删除方式：soft（默认，只打删除标记）或 hard（真删） */
   delete?: 'soft' | 'hard';
   /** 子表：主表和全部子表在同一个事务里一起保存 */
@@ -166,6 +171,7 @@ export interface CrudResourceMeta<T extends BaseEntity = BaseEntity> {
   keyWords: string[];
   fieldEq: string[];
   defaultSort: SortItem[];
+  defaultTableMode?: CrudTableMode;
   maxSize: number;
   children: CrudChildMeta[];
   /** 树形资源配置；不是树时为 null */

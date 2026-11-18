@@ -234,6 +234,7 @@ export class WorkflowTaskController extends BaseController<WorkflowTask> {
   api: ['page', 'info'],
   dataScope: true,
   pageQuery: {
+    keyWords: ['comment'],
     fieldEq: ['instanceId', 'taskId', 'actorId', 'action', 'round'],
     defaultSort: [{ field: 'id', order: 'asc' }],
   },

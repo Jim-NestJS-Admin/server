@@ -43,6 +43,59 @@ const toBool = ({ value }: { value: unknown }) => {
  * 新增配置项时同步写进 .env.example。
  */
 export class EnvironmentVariables {
+  @Transform(toBool) @IsOptional() @IsBoolean() OAUTH_ENABLED?: boolean;
+  @Transform(toBool) @IsOptional() @IsBoolean() MCP_ENABLED?: boolean;
+  @IsOptional() @IsString() MCP_ALLOWED_ORIGINS?: string;
+  @IsOptional() @IsString() OAUTH_ISSUER?: string;
+  @IsOptional() @IsString() OAUTH_JWKS?: string;
+  @IsOptional() @IsString() OAUTH_COOKIE_KEYS?: string;
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @IsOptional()
+  @Matches(/^[a-fA-F0-9]{64}$/)
+  OAUTH_MASTER_KEY?: string;
+  @Transform(toBool) @IsOptional() @IsBoolean() OAUTH_DCR_ENABLED?: boolean;
+  @Transform(toBool) @IsOptional() @IsBoolean() OAUTH_CIMD_ENABLED?: boolean;
+  @IsOptional() @IsString() OAUTH_CIMD_HOSTS?: string;
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @IsOptional()
+  @Matches(/^[1-9]\d{0,19}$/)
+  OAUTH_DCR_TENANT_ID?: string;
+  /** AI专用加密主密钥，不复用登录或企业微信密钥。 */
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @IsOptional()
+  @Matches(/^[a-fA-F0-9]{64}$/)
+  AI_MASTER_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  AI_ANTHROPIC_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  AI_DEFAULT_MODEL?: string;
+
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1)
+  @Max(8192)
+  AI_MAX_OUTPUT_TOKENS: number = 2048;
+
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1000)
+  @Max(120000)
+  AI_TIMEOUT_MS: number = 60000;
+  /** AES-256-GCM 主密钥：64位十六进制，独立于登录签名密钥。 */
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @IsOptional()
+  @Matches(/^[a-fA-F0-9]{64}$/)
+  INTEGRATION_MASTER_KEY?: string;
+
+  /** 首版一套部署只允许接入一个企业，由部署方固定企业ID。 */
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @IsOptional()
+  @Matches(/^[a-zA-Z0-9_-]{2,100}$/)
+  WECOM_CORP_ID?: string;
   @IsEnum(NodeEnv)
   NODE_ENV: NodeEnv = NodeEnv.Development;
 
@@ -302,6 +355,72 @@ export function validateEnv(
   }
   if (env.SWAGGER_ENABLED === undefined) {
     env.SWAGGER_ENABLED = env.NODE_ENV !== NodeEnv.Production;
+  }
+  if (env.MCP_ENABLED && !env.OAUTH_ENABLED && !env.OPENAPI_EXPORT)
+    throw new Error('开启MCP必须先开启OAuth');
+  for (const origin of (env.MCP_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)) {
+    try {
+      const url = new URL(origin);
+      if (
+        url.origin !== origin ||
+        !['https:', 'http:'].includes(url.protocol) ||
+        (env.NODE_ENV === NodeEnv.Production && url.protocol !== 'https:')
+      )
+        throw new Error();
+    } catch {
+      throw new Error(
+        'MCP_ALLOWED_ORIGINS须为逗号分隔的明确来源地址，生产环境须HTTPS',
+      );
+    }
+  }
+  if (env.OAUTH_ENABLED && !env.OPENAPI_EXPORT) {
+    try {
+      const issuer = new URL(env.OAUTH_ISSUER ?? '');
+      if (
+        issuer.pathname !== '/oauth' ||
+        issuer.search ||
+        issuer.hash ||
+        issuer.username ||
+        issuer.password
+      )
+        throw Error();
+      if (
+        issuer.protocol !== 'https:' &&
+        !(
+          env.NODE_ENV !== NodeEnv.Production &&
+          issuer.protocol === 'http:' &&
+          ['localhost', '127.0.0.1', '[::1]'].includes(issuer.hostname)
+        )
+      )
+        throw Error();
+      const jwks = JSON.parse(env.OAUTH_JWKS ?? '') as {
+        keys: { kid?: string; kty?: string; d?: string }[];
+      };
+      if (
+        !jwks.keys?.length ||
+        jwks.keys.some((key) => !key.kid || !key.d || key.kty !== 'RSA')
+      )
+        throw Error();
+      if (
+        !env.OAUTH_MASTER_KEY ||
+        !env.OAUTH_COOKIE_KEYS?.split(',').every((key) => key.length >= 32) ||
+        !env.AUTH_ADMIN_ORIGINS
+      )
+        throw Error();
+      if (env.OAUTH_DCR_ENABLED && !env.OAUTH_DCR_TENANT_ID) throw Error();
+      if (
+        env.OAUTH_CIMD_ENABLED &&
+        (!env.OAUTH_DCR_TENANT_ID || !env.OAUTH_CIMD_HOSTS?.trim())
+      )
+        throw Error();
+    } catch {
+      throw new Error(
+        'OAuth配置无效：请检查固定issuer、非对称JWKS、主密钥、Cookie密钥和后台地址；生产必须HTTPS',
+      );
+    }
   }
   return env;
 }

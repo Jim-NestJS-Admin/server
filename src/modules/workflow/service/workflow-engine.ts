@@ -55,15 +55,14 @@ export async function advanceWorkflow(input: {
   signal?: WorkflowWait;
 }): Promise<WorkflowAdvance> {
   const nodes = runtimeNodes(input.designer);
+  if (![1, 2].includes(input.compilerVersion))
+    throw crudErrors.badRequest('实例编译版本不支持');
   const expected = compileWorkflow(
     input.designer,
     `wf_${input.code}_v${input.revision}`,
+    input.compilerVersion,
   );
-  if (
-    input.compilerVersion !== 1 ||
-    expected.bpmn !== input.bpmn ||
-    expected.digest !== input.digest
-  )
+  if (expected.bpmn !== input.bpmn || expected.digest !== input.digest)
     throw crudErrors.badRequest('实例流程快照校验失败，不能推进');
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
   const entered = new Set<string>();
@@ -269,6 +268,7 @@ export async function advanceWorkflow(input: {
   } catch (error) {
     throw policyFailure ?? error;
   } finally {
-    await engine.stop();
+    // 已结束/出错的execution不再发stop事件，等待它会让HTTP请求和事务永久悬挂。
+    if (engine.execution?.isRunning) await engine.stop();
   }
 }

@@ -39,6 +39,82 @@ const crud = (title: string, key: string, extra: string[] = []): PageSeed => ({
  */
 export const DEFAULT_MENUS: DirectorySeed[] = [
   {
+    title: 'MCP',
+    path: '/automation',
+    icon: 'ri/robot-line',
+    pages: [
+      {
+        title: 'MCP设置',
+        path: '/automation/config',
+        component: 'mcp/config',
+        permission: 'mcp:config:info',
+        buttonPrefixes: ['mcp:config', 'mcp:delegation'],
+        buttonPermissions: ['mcp:use', 'workflow:directory:page'],
+      },
+      {
+        title: '待确认操作',
+        path: '/automation/operations',
+        component: 'mcp/operation',
+        permission: 'mcp:use',
+        buttonPrefixes: [],
+      },
+      { ...crud('MCP调用审计', 'mcp/event'), path: '/automation/event' },
+    ],
+  },
+  {
+    title: '应用与授权',
+    path: '/authorization',
+    icon: 'ri/shield-keyhole-line',
+    pages: [
+      {
+        ...crud('OAuth应用', 'oauth/client'),
+        path: '/authorization/client',
+        buttonPermissions: [
+          'oauth:service-account:add',
+          'workflow:directory:page',
+        ],
+      },
+      { ...crud('我的授权', 'oauth/grant'), path: '/authorization/grant' },
+      { ...crud('授权审计', 'oauth/event'), path: '/authorization/event' },
+    ],
+  },
+  {
+    title: 'AI能力',
+    path: '/ai',
+    icon: 'ri:sparkling-line',
+    pages: [
+      crud('AI草稿与用量', 'ai/task'),
+      crud('提示词模板', 'ai/template'),
+      crud('异常账单核对', 'ai/reconciliation'),
+      {
+        title: 'AI配置',
+        path: '/ai/config',
+        component: 'ai/config',
+        permission: 'ai:config:info',
+        buttonPrefixes: ['ai:config'],
+      },
+    ],
+  },
+  {
+    title: '消息与接入',
+    path: '/connections',
+    icon: 'ri:notification-3-line',
+    pages: [
+      {
+        ...crud('我的消息', 'notify/message'),
+        buttonPermissions: [
+          'workflow:instance:info',
+          'workflow:record:page',
+          'workflow:task:info',
+        ],
+      },
+      {
+        ...crud('企业微信', 'integration/app', ['integration:sync-log']),
+        buttonPermissions: ['workflow:directory:page'],
+      },
+    ],
+  },
+  {
     title: '表单与流程',
     path: '/forms',
     icon: 'ri:file-list-3-line',
@@ -69,7 +145,6 @@ export const DEFAULT_MENUS: DirectorySeed[] = [
     pages: [
       crud('租户管理', 'platform/tenant'),
       crud('套餐管理', 'platform/package'),
-      crud('菜单管理', 'system/menu'),
     ],
   },
   {
@@ -80,6 +155,7 @@ export const DEFAULT_MENUS: DirectorySeed[] = [
       crud('用户管理', 'system/user'),
       crud('组织管理', 'system/org'),
       crud('角色管理', 'system/role'),
+      { ...crud('菜单管理', 'system/menu'), scope: 'platform' },
       { ...crud('角色分配', 'system/user-role'), hidden: true },
       { ...crud('上级关系', 'system/user-supervisor'), hidden: true },
       {

@@ -432,9 +432,24 @@ export function parseWorkflow(
 }
 
 /** 只把已校验的树编译为固定BPMN标签；服务名/表达式模板不接受用户输入。 */
+export const WORKFLOW_COMPILER_VERSION = 2;
+
+/** MySQL JSON会重排对象键；数组顺序仍是流程执行语义，必须保留。 */
+function canonicalJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([key, item]) => [key, canonicalJson(item)]),
+    );
+  return value;
+}
+
 export function compileWorkflow(
   designer: WorkflowDesignerDto,
   processId: string,
+  compilerVersion = WORKFLOW_COMPILER_VERSION,
 ) {
   if (!/^[A-Za-z][A-Za-z0-9_]{0,95}$/.test(processId))
     throw new Error('内部流程标识无效');
@@ -509,7 +524,11 @@ export function compileWorkflow(
   return {
     bpmn,
     digest: createHash('sha256')
-      .update(JSON.stringify(designer))
+      .update(
+        JSON.stringify(
+          compilerVersion === 1 ? designer : canonicalJson(designer),
+        ),
+      )
       .update('\n')
       .update(bpmn)
       .digest('hex'),

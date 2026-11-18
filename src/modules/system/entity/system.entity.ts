@@ -26,6 +26,10 @@ import type {
 @Entity('sys_user')
 @Index(['tenantId', 'username', 'activeGuard'], { unique: true })
 export class SystemUser extends BaseEntity {
+  @Column({ type: 'varchar', length: 16, default: 'human', select: false })
+  accountType!: 'human' | 'service';
+  @Column({ type: 'varchar', length: 200, nullable: true }) integrationSource!:
+    string | null;
   @CrudField({
     label: '账号',
     edit: 'add',
@@ -69,6 +73,8 @@ export class SystemUser extends BaseEntity {
 
 @Entity('sys_org')
 export class SystemOrg extends BaseEntity {
+  @Column({ type: 'varchar', length: 200, nullable: true }) integrationSource!:
+    string | null;
   @ApiProperty({ type: String, nullable: true })
   @CrudField({ label: '部门负责人', nullable: true, display: 'users' })
   @IsOptional()

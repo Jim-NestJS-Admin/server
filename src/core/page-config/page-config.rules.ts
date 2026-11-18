@@ -1,4 +1,8 @@
-import type { CrudResourceMeta } from '../crud/crud.types.js';
+import {
+  CRUD_TABLE_MODES,
+  type CrudResourceMeta,
+  type CrudTableMode,
+} from '../crud/crud.types.js';
 import {
   defaultColumnOrder,
   defaultHiddenColumn,
@@ -23,6 +27,7 @@ export interface PageView {
     filterable: string[];
     defaultSort: { field: string; order: 'asc' | 'desc' }[];
     pageSize: number;
+    tableMode: CrudTableMode;
     tree: boolean;
     toolbar: { key: string; hidden?: boolean }[];
   };
@@ -41,6 +46,8 @@ const obj = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === 'object' && !Array.isArray(v);
 const strList = (v: unknown) =>
   Array.isArray(v) && v.every((x) => typeof x === 'string');
+const isTableMode = (value: unknown): value is CrudTableMode =>
+  CRUD_TABLE_MODES.some((mode) => mode === value);
 
 /** 校验管理员保存的配置：只能用后端已有的字段和白名单，不能新增字段、不能扩大搜索排序 */
 export function validatePageConfig(
@@ -123,6 +130,8 @@ export function validatePageConfig(
         bad('list.pageSize', `每页条数要在 1 到 ${meta.maxSize} 之间`);
       if (list.tree !== undefined && typeof list.tree !== 'boolean')
         bad('list.tree', '必须是 true 或 false');
+      if (list.tableMode !== undefined && !isTableMode(list.tableMode))
+        bad('list.tableMode', '表格模式只能是 normal 或 virtual');
       if (
         list.toolbar !== undefined &&
         (!Array.isArray(list.toolbar) ||
@@ -252,6 +261,9 @@ export function mergeView(
         (s) => meta.sortable.includes(s.field) && queryable(s.field),
       ),
       pageSize: Math.min(admin?.list?.pageSize ?? 20, meta.maxSize),
+      tableMode: isTableMode(admin?.list?.tableMode)
+        ? admin.list.tableMode
+        : (meta.defaultTableMode ?? 'normal'),
       tree: admin?.list?.tree ?? true,
       toolbar: admin?.list?.toolbar ?? [],
     },

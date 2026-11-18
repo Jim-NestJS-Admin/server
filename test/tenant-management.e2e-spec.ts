@@ -361,6 +361,71 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
       tenantUser,
     ).expect(400);
   });
+  it('菜单管理可移动到组织与权限，仍仅在平台菜单中显示', async () => {
+    const organization = await context.run({ tenantId: '0' }, () =>
+      repos
+        .for(SystemMenu)
+        .query('m')
+        .where('m.path = :path', { path: '/system' })
+        .getOneOrFail(),
+    );
+    const platform = (
+      await http('system/menu/add', {
+        data: {
+          type: 'directory',
+          path: '/platform',
+          title: '平台管理',
+          scope: 'platform',
+          rank: 10,
+          hidden: false,
+          keepAlive: false,
+        },
+      }).expect(200)
+    ).body.data;
+    const menu = (
+      await http('system/menu/add', {
+        data: {
+          type: 'page',
+          path: '/system/menu',
+          component: 'system/menu',
+          permission: 'system:menu:page',
+          title: '菜单管理',
+          parentId: platform.id,
+          scope: 'platform',
+          rank: 30,
+          hidden: false,
+          keepAlive: false,
+        },
+      }).expect(200)
+    ).body.data;
+    await http('system/menu/update', {
+      id: menu.id,
+      version: menu.version,
+      data: { parentId: organization.id },
+    }).expect(200);
+    await http('system/menu/update', {
+      id: organization.id,
+      version: organization.version,
+      data: { title: '组织与权限' },
+    }).expect(200);
+    const platformMenu = (await get('session/menu').expect(200)).body.data;
+    expect(platformMenu.menus).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: '/system',
+          children: expect.arrayContaining([
+            expect.objectContaining({ id: menu.id, path: '/system/menu' }),
+          ]),
+        }),
+      ]),
+    );
+    const tenantMenu = (await get('session/menu', '1', tenantUser).expect(200))
+      .body.data;
+    expect(JSON.stringify(tenantMenu.menus)).not.toContain('/system/menu');
+    const packageMenus = (await http('platform/package/menus').expect(200)).body
+      .data;
+    expect(JSON.stringify(packageMenus)).not.toContain('system:menu:page');
+  });
   it('并发新增用户在同事务锁租户后只允许剩余一个名额', async () => {
     const p = await pack({ maxUsers: 2 });
     const t = (await http('platform/tenant/add', tenantBody(p.id)).expect(200))

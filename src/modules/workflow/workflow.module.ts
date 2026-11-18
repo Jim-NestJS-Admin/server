@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { WorkflowOutboxService } from './service/workflow-outbox.service.js';
 import { WorkflowDirectoryController } from './controller/admin/workflow-directory.controller.js';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FormModule } from '../form/form.module.js';
@@ -35,6 +36,7 @@ import {
     ]),
   ],
   providers: [
+    WorkflowOutboxService,
     WorkflowDefinitionService,
     WorkflowPlanner,
     WorkflowTimerService,
@@ -50,6 +52,10 @@ import {
     WorkflowTaskController,
     WorkflowRecordController,
   ],
-  exports: [WorkflowDefinitionService, WorkflowRuntimeService],
+  exports: [
+    WorkflowDefinitionService,
+    WorkflowRuntimeService,
+    WorkflowOutboxService,
+  ],
 })
 export class WorkflowModule {}

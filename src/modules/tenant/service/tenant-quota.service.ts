@@ -65,6 +65,21 @@ export class TenantQuotaService {
     )
       throw crudErrors.badRequest('已达到套餐的用户数上限');
   }
+  /** AI预占事务先锁租户，再锁月度用量；套餐变化立即生效。 */
+  async aiTokenLimit(
+    tenantId: string,
+    manager: EntityManager,
+  ): Promise<number | null> {
+    if (!manager.queryRunner?.isTransactionActive)
+      throw new Error('配额检查必须在事务内');
+    return (await this.quota(tenantId, manager)).aiTokensMonthly ?? null;
+  }
+  async mcpCallLimit(
+    tenantId: string,
+    manager: EntityManager,
+  ): Promise<number | null> {
+    return (await this.quota(tenantId, manager)).mcpCallsMonthly ?? null;
+  }
   async assertStorage(
     tenantId: string,
     addBytes: number,

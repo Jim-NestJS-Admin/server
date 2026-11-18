@@ -21,6 +21,8 @@ import { DatabaseModule } from './database/database.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { EndpointCheck } from './endpoint/endpoint-check.js';
 import { EndpointGuard } from './endpoint/endpoint.guard.js';
+import { InternalAction } from './endpoint/internal-action.js';
+import { ActionRegistry } from './endpoint/action-registry.js';
 import { RateLimitGuard } from './security/rate-limit.js';
 import { IdempotencyInterceptor } from './security/idempotency.interceptor.js';
 import { UserRateLimitInterceptor } from './security/user-rate-limit.js';
@@ -66,6 +68,8 @@ import { TenantRepositoryFactory } from './tenant/tenant-repository.js';
     TenantRepositoryFactory,
     TenantGuardSubscriber,
     EndpointCheck,
+    InternalAction,
+    ActionRegistry,
     // 限流排在认证前面：没登录的请求也计数
     { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: EndpointGuard },
@@ -80,6 +84,8 @@ import { TenantRepositoryFactory } from './tenant/tenant-repository.js';
     HealthService,
     RequestContext,
     TenantRepositoryFactory,
+    InternalAction,
+    ActionRegistry,
   ],
 })
 export class CoreModule {}
