@@ -1,0 +1,31 @@
+{
+  "parentMenuId": null,
+  "page": {
+    "title": "订单测试",
+    "path": "/order/test",
+    "component": "order/test",
+    "permission": "order:test:page"
+  },
+  "buttons": [
+    {
+      "title": "详情",
+      "permission": "order:test:info"
+    },
+    {
+      "title": "新增",
+      "permission": "order:test:add"
+    },
+    {
+      "title": "修改",
+      "permission": "order:test:update"
+    },
+    {
+      "title": "删除",
+      "permission": "order:test:delete"
+    },
+    {
+      "title": "导出",
+      "permission": "order:test:export"
+    }
+  ]
+}

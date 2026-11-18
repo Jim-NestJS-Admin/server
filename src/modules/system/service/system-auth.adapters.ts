@@ -17,7 +17,7 @@ export class SystemAuthUserStore extends AuthUserStore {
     username: string,
   ): Promise<AuthUser | null> {
     const user = await this.directory.user(tenantId, username);
-    return user
+    return user && user.accountType !== 'service'
       ? {
           id: user.id,
           passwordHash: user.passwordHash,
@@ -31,7 +31,7 @@ export class SystemAuthUserStore extends AuthUserStore {
     userId: string,
   ): Promise<AuthProfile | null> {
     const user = await this.directory.profile(tenantId, userId);
-    return user
+    return user && user.accountType !== 'service'
       ? {
           id: user.id,
           username: user.username,

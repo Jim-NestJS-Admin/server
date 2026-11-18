@@ -264,6 +264,7 @@ export function resolveCrudMeta<T extends BaseEntity>(
     keyWords: [...(q.keyWords ?? [])],
     fieldEq: [...(q.fieldEq ?? [])],
     defaultSort,
+    defaultTableMode: options.defaultTableMode,
     maxSize,
     children,
     tree,

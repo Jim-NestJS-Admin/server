@@ -1,4 +1,9 @@
+import { TestModule as OrderTestModule } from './modules/order/test.module.js';
 import { Module } from '@nestjs/common';
+import { McpModule } from './modules/mcp/mcp.module.js';
+import { AiModule } from './modules/ai/ai.module.js';
+import { OAuthModule } from './modules/oauth/oauth.module.js';
+import { NotifyModule } from './modules/notify/notify.module.js';
 import { resolve } from 'node:path';
 import { FileModule } from './modules/file/file.module.js';
 import { LocalBlobStore } from './modules/file/storage/local.store.js';
@@ -40,6 +45,11 @@ import {
     TenantModule,
     FormModule,
     WorkflowModule,
+    NotifyModule,
+    AiModule,
+    OAuthModule,
+    McpModule,
+    OrderTestModule,
     CodeRuleModule.forRoot({
       usages: [
         {

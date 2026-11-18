@@ -20,6 +20,48 @@ export interface AuthConfig {
 /** 带类型的配置读取。业务代码不要直接读 process.env */
 @Injectable()
 export class AppConfigService {
+  get mcpOrigins() {
+    return (this.config.get('MCP_ALLOWED_ORIGINS', { infer: true }) ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+  get mcpEnabled() {
+    return this.config.get('MCP_ENABLED', { infer: true }) ?? false;
+  }
+  get oauth() {
+    return {
+      enabled: this.config.get('OAUTH_ENABLED', { infer: true }) ?? false,
+      issuer: this.config.get('OAUTH_ISSUER', { infer: true }) ?? '',
+      jwks: this.config.get('OAUTH_JWKS', { infer: true }) ?? '',
+      cookieKeys: (
+        this.config.get('OAUTH_COOKIE_KEYS', { infer: true }) ?? ''
+      ).split(','),
+      masterKey: this.config.get('OAUTH_MASTER_KEY', { infer: true }),
+      dcr: this.config.get('OAUTH_DCR_ENABLED', { infer: true }) ?? false,
+      cimd: this.config.get('OAUTH_CIMD_ENABLED', { infer: true }) ?? false,
+      cimdHosts: (this.config.get('OAUTH_CIMD_HOSTS', { infer: true }) ?? '')
+        .split(',')
+        .map((host) => host.trim().toLowerCase())
+        .filter(Boolean),
+      dcrTenantId: this.config.get('OAUTH_DCR_TENANT_ID', { infer: true }),
+    };
+  }
+  get ai() {
+    return {
+      masterKey: this.config.get('AI_MASTER_KEY', { infer: true }),
+      apiKey: this.config.get('AI_ANTHROPIC_API_KEY', { infer: true }),
+      model: this.config.get('AI_DEFAULT_MODEL', { infer: true }) ?? '',
+      maxOutputTokens: this.config.get('AI_MAX_OUTPUT_TOKENS', { infer: true }),
+      timeoutMs: this.config.get('AI_TIMEOUT_MS', { infer: true }),
+    };
+  }
+  get integration() {
+    return {
+      masterKey: this.config.get('INTEGRATION_MASTER_KEY', { infer: true }),
+      corpId: this.config.get('WECOM_CORP_ID', { infer: true }),
+    };
+  }
   constructor(
     private readonly config: ConfigService<EnvironmentVariables, true>,
   ) {}

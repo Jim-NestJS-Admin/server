@@ -1,9 +1,11 @@
-import { Injectable, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Optional, type OnModuleInit } from '@nestjs/common';
+import { ActionTransaction } from '../security/action-transaction.js';
 import {
   DataSource,
   type EntitySubscriberInterface,
   type InsertEvent,
   type UpdateEvent,
+  type RemoveEvent,
 } from 'typeorm';
 import { RequestContext } from './request-context.js';
 
@@ -21,6 +23,7 @@ export class TenantGuardSubscriber
   constructor(
     private readonly dataSource: DataSource,
     private readonly context: RequestContext,
+    @Optional() private readonly actions?: ActionTransaction,
   ) {}
 
   onModuleInit(): void {
@@ -29,6 +32,7 @@ export class TenantGuardSubscriber
   }
 
   beforeInsert(event: InsertEvent<Record<string, unknown>>): void {
+    this.actions?.assertWrite(event.manager);
     if (!event.metadata.findColumnWithPropertyName('tenantId')) return;
     const ctx = this.context.current();
     const row = event.entity;
@@ -42,10 +46,14 @@ export class TenantGuardSubscriber
   }
 
   beforeUpdate(event: UpdateEvent<Record<string, unknown>>): void {
+    this.actions?.assertWrite(event.manager);
     if (!event.metadata.findColumnWithPropertyName('tenantId')) return;
     this.context.current();
     const row = event.entity as Record<string, unknown> | undefined;
     if (row && Object.hasOwn(row, 'tenantId'))
       throw new Error(`不能修改 ${event.metadata.tableName} 的租户`);
+  }
+  beforeRemove(event: RemoveEvent<Record<string, unknown>>): void {
+    this.actions?.assertWrite(event.manager);
   }
 }

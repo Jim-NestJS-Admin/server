@@ -152,6 +152,19 @@ export class WorkflowRuntimeService {
   approve(body: ApproveWorkflowBody) {
     return this.taskAction('approve', body);
   }
+
+  /** 平台回调已验签、绑定身份并通过统一权限服务授权；回执与审批结果同事务提交。 */
+  approveFromPlatform(
+    body: ApproveWorkflowBody,
+    completed: (manager: EntityManager) => Promise<void>,
+  ) {
+    if (
+      this.context.current().endpoint !== 'system' ||
+      !this.context.current().userId
+    )
+      throw crudErrors.notFound();
+    return this.taskAction('approve', body, completed);
+  }
   reject(body: ApproveWorkflowBody) {
     return this.taskAction('reject', body);
   }
@@ -162,6 +175,7 @@ export class WorkflowRuntimeService {
   private taskAction(
     action: 'approve' | 'reject' | 'transfer',
     body: ApproveWorkflowBody | TransferWorkflowBody,
+    completed?: (manager: EntityManager) => Promise<void>,
   ) {
     return this.transaction(async (manager) => {
       const userId = this.currentUser();
@@ -254,6 +268,7 @@ export class WorkflowRuntimeService {
         await this.sync(instance, advanced, manager);
       }
       await this.save(instance, manager);
+      await completed?.(manager);
       return this.instances.result(instance.id, manager);
     });
   }
@@ -556,6 +571,88 @@ export class WorkflowRuntimeService {
       );
       return file;
     });
+  }
+
+  /** 被独立调度器调用，认领后办理仍按task → instance → timer，结果和计时器完成同事务提交。 */
+  async departed(userId: string) {
+    if (
+      this.context.current().endpoint !== 'system' ||
+      this.context.current().userId
+    )
+      throw crudErrors.notFound();
+    const candidates = await this.repos
+      .for(WorkflowTask)
+      .query('t')
+      .andWhere('t.assigneeId = :userId AND t.status = :status', {
+        userId,
+        status: 'pending',
+      })
+      .getMany();
+    for (const candidate of candidates)
+      await this.transaction(async (manager) => {
+        const task = await this.repos
+          .for(WorkflowTask)
+          .query('t', manager)
+          .andWhere('t.id = :id', { id: candidate.id })
+          .setLock('pessimistic_write')
+          .getOne();
+        if (!task || task.status !== 'pending') return;
+        const instance = await this.instances.lockedIfPresent(
+          task.instanceId,
+          manager,
+        );
+        if (!instance || instance.status !== 'running') return;
+        const supervisors = await this.directory.workflowActors(
+          'supervisor',
+          userId,
+          instance.applicantOrgId,
+          [],
+          1,
+          manager,
+        );
+        const target = supervisors.find(
+          (id) => id !== userId && !instance.actors[task.nodeId]?.includes(id),
+        );
+        if (target) {
+          await this.reassign(
+            instance,
+            task,
+            target,
+            null,
+            '离职自动转交上级',
+            [],
+            manager,
+          );
+          await this.save(instance, manager);
+        } else {
+          for (const admin of await this.directory.workflowActors(
+            'administrator',
+            instance.applicantId,
+            instance.applicantOrgId,
+            [],
+            1,
+            manager,
+          )) {
+            const suffix = 'departed:' + userId + ':' + admin;
+            const existing = await this.repos
+              .for(WorkflowOutbox)
+              .query('o', manager)
+              .andWhere('o.eventKey = :eventKey', {
+                eventKey: `task.reminder:${task.id}:r${instance.round}:${suffix}`,
+              })
+              .getOne();
+            if (!existing)
+              await this.event(
+                instance,
+                'task.reminder',
+                task.id,
+                admin,
+                manager,
+                suffix,
+              );
+          }
+        }
+      });
   }
 
   /** 被独立调度器调用，认领后办理仍按task → instance → timer，结果和计时器完成同事务提交。 */

@@ -13,6 +13,7 @@ import { WorkflowDefinition } from '../entity/workflow-definition.entity.js';
 import type { WorkflowDefinitionInput } from '../dto/workflow.dto.js';
 import {
   compileWorkflow,
+  WORKFLOW_COMPILER_VERSION,
   parseWorkflow,
   workflowInvalid,
 } from './workflow-rules.js';
@@ -174,7 +175,11 @@ export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
     Object.assign(
       data,
       compileWorkflow(data.designer, `wf_${data.code}_v${data.revision}`),
-      { compilerVersion: 1, publishedAt: null, publishedBy: null },
+      {
+        compilerVersion: WORKFLOW_COMPILER_VERSION,
+        publishedAt: null,
+        publishedBy: null,
+      },
     );
   }
   async inspect(formDefinitionId: string, designer: unknown) {
@@ -225,7 +230,7 @@ export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
         `wf_${row.code}_v${row.revision}`,
       );
       if (
-        row.compilerVersion !== 1 ||
+        row.compilerVersion !== WORKFLOW_COMPILER_VERSION ||
         compiled.digest !== row.digest ||
         compiled.bpmn !== row.bpmn
       )

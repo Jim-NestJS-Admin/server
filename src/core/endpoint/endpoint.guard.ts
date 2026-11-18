@@ -20,6 +20,7 @@ import {
   PlatformAuditSink,
 } from '../tenant/platform-context.js';
 import { AdminAuth, AdminAuthorizer } from './endpoint-auth.js';
+import { InternalAction } from './internal-action.js';
 import { LOGIN_ONLY_KEY, PERMS_KEY } from '../permission/perms.decorator.js';
 import {
   ANONYMOUS_KEY,
@@ -44,6 +45,7 @@ export class EndpointGuard implements CanActivate {
     private readonly authorizer: AdminAuthorizer,
     // 没装租户模块（单独测试）时只写日志
     @Optional() audit?: PlatformAuditSink,
+    @Optional() private readonly internal?: InternalAction,
   ) {
     this.audit = audit ?? new LoggerPlatformAuditSink();
   }
@@ -91,7 +93,8 @@ export class EndpointGuard implements CanActivate {
           userId: null,
           orgId: null,
         }
-      : await this.adminAuth.authenticate(req);
+      : (this.internal?.principal(req) ??
+        (await this.adminAuth.authenticate(req)));
     this.context.establish(endpoint, principal);
     // 权限码和本次有效角色（T06）。免登录的接口没有用户，不核对
     if (!anonymous) await this.authorizer.authorize(ctx);

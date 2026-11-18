@@ -10,6 +10,7 @@ import { DataScopeCrudScope } from '../permission/data-scope.scope.js';
 import { CrudContextProvider, CrudScope } from './crud-scope.js';
 import { CrudAudit, LoggerCrudAudit } from './crud-audit.js';
 import { CrudRuntime } from './crud.runtime.js';
+import { ActionTransaction } from '../security/action-transaction.js';
 
 /**
  * 通用 CRUD 的运行环境。范围条件是租户 + 数据范围（T06，DataScopeCrudScope），
@@ -21,6 +22,7 @@ import { CrudRuntime } from './crud.runtime.js';
   imports: [TypeOrmModule.forFeature([IdempotencyEntity])],
   providers: [
     IdempotencyLedger,
+    ActionTransaction,
     IdempotencyRunner,
     CrudContextProvider,
     AuthzContext,
@@ -31,6 +33,7 @@ import { CrudRuntime } from './crud.runtime.js';
   exports: [
     CrudRuntime,
     IdempotencyLedger,
+    ActionTransaction,
     IdempotencyRunner,
     CrudScope,
     CrudContextProvider,

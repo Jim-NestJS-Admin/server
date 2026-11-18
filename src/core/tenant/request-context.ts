@@ -77,6 +77,13 @@ export class RequestContext {
     if (!ctx) throw new MissingContextError();
     return ctx;
   }
+  /** 外部授权或嵌套动作必须重新计算授权，不能继承浏览器/上一动作的CLS授权结果。 */
+  async runFresh<R>(
+    principal: Partial<Principal> & { tenantId: string },
+    fn: () => Promise<R>,
+  ): Promise<R> {
+    return this.cls.runWith({}, () => this.run(principal, fn));
+  }
 
   /** 有没有上下文（日志、异常处理这类不能抛错的地方用） */
   peek(): ContextSnapshot | undefined {

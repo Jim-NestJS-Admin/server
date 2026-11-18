@@ -16,6 +16,7 @@ import {
   TenantPackageService,
 } from '../../service/tenant-management.service.js';
 import { PlatformOnlyGuard } from '../../platform-only.guard.js';
+import type { PageView } from '../../../../core/page-config/page-config.rules.js';
 import {
   CreateTenantBody,
   TenantIdBody,
@@ -23,6 +24,15 @@ import {
   PackageMenuItem,
   TenantCreationResult,
 } from '../../dto/tenant.dto.js';
+import type { CrudSchema } from '../../../../core/crud/crud-schema.js';
+
+function useDrawer<T extends CrudSchema>(schema: T): T {
+  for (const key of ['view', 'moduleView'] as const) {
+    const view = schema[key] as PageView | undefined;
+    if (view) schema[key] = { ...view, form: { ...view.form, mode: 'drawer' } };
+  }
+  return schema;
+}
 
 @UseGuards(PlatformOnlyGuard)
 @CrudController({
@@ -57,7 +67,7 @@ export class PlatformTenantController extends BaseController<SystemTenant> {
     const schema = await super.schema();
     schema.api.push('add');
     schema.actions.add = { writable: [...this.service.meta.addable] };
-    return schema;
+    return useDrawer(schema);
   }
   @Post('usage')
   @HttpCode(200)
@@ -86,6 +96,9 @@ export class PlatformTenantController extends BaseController<SystemTenant> {
 export class PlatformPackageController extends BaseController<TenantPackage> {
   constructor(private readonly packages: TenantPackageService) {
     super();
+  }
+  override async schema() {
+    return useDrawer(await super.schema());
   }
   @Post('menus')
   @HttpCode(200)

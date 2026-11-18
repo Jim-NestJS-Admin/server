@@ -445,6 +445,9 @@ describe('通用 CRUD（验收点①）', () => {
       expect(JSON.stringify(row)).not.toContain('INTERNAL_SECRET');
       expect(row).not.toHaveProperty('tenantId');
       expect(row).not.toHaveProperty('deletedAt');
+      // 显示名在系统目录查到对应编号时才返回，只允许框架声明的引用字段。
+      for (const field of Object.keys(row._display ?? {}))
+        expect(['createdBy', 'updatedBy', 'orgId']).toContain(field);
     };
 
     it('新增、修改、详情、分页四个返回路径都不带未声明的内部列', async () => {
@@ -469,7 +472,9 @@ describe('通用 CRUD（验收点①）', () => {
       expect(page.body.data.list).toHaveLength(1);
       hidden(page.body.data.list[0]);
       expect(
-        Object.keys(info.body.data).sort((a, b) => a.localeCompare(b)),
+        Object.keys(info.body.data)
+          .filter((field) => field !== '_display')
+          .sort((a, b) => a.localeCompare(b)),
       ).toEqual([
         'createdAt',
         'createdBy',

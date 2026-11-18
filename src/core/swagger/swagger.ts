@@ -5,6 +5,7 @@ import {
 } from '../crud/crud-query.dto.js';
 import type { INestApplication } from '@nestjs/common';
 import { ModulesContainer } from '@nestjs/core';
+import { OAuthScopesService } from '../../modules/oauth/service/oauth-scopes.service.js';
 import {
   DocumentBuilder,
   SwaggerModule,
@@ -34,7 +35,7 @@ export function buildOpenApiDocument(
     .addBearerAuth()
     .build();
   // 只通过 $ref 引用的模型（高级查询递归分组、字段权限状态）要显式登记
-  return SwaggerModule.createDocument(app, config, {
+  const document = SwaggerModule.createDocument(app, config, {
     ...(excludedModules.length
       ? {
           include: modules
@@ -45,6 +46,14 @@ export function buildOpenApiDocument(
       : {}),
     extraModels: [QueryConditionDto, QueryGroupDto, FieldPermStateDto],
   });
+  if (modules.some((module) => module.metatype.name === 'OAuthModule')) {
+    const scopes = app.get(OAuthScopesService, { strict: false }).list().list;
+    Object.assign(document, {
+      'x-oauth-scopes': scopes,
+      'x-scopes': scopes.map((item) => item.code),
+    });
+  }
+  return document;
 }
 
 export function setupSwagger(app: INestApplication, version: string): void {

@@ -142,6 +142,15 @@ export class SystemUserService extends BaseService<SystemUser> {
   ): Promise<void> {
     if (existing.id === tx.ctx.userId && changes.enabled === false)
       throw crudErrors.badRequest('不能停用当前登录账号');
+    if (
+      existing.integrationSource &&
+      ['nickname', 'defaultOrgId', 'enabled'].some((key) =>
+        Object.hasOwn(changes, key),
+      )
+    )
+      throw crudErrors.badRequest(
+        '同步成员的姓名、部门和启用状态请在企业微信维护',
+      );
     await this.defaultOrg(changes.defaultOrgId, tx);
   }
   override async update(
@@ -162,6 +171,8 @@ export class SystemUserService extends BaseService<SystemUser> {
     rows: SystemUser[],
     tx: CrudTx,
   ): Promise<void> {
+    if (rows.some((row) => row.integrationSource))
+      throw crudErrors.badRequest('同步员工请在企业微信删除');
     if (rows.some((row) => row.id === tx.ctx.userId))
       throw crudErrors.badRequest('不能删除当前登录账号');
     const ids = rows.map((row) => row.id);
@@ -196,10 +207,13 @@ export class SystemUserService extends BaseService<SystemUser> {
     await this.transaction(async (tx) => {
       const user = await this.select(tx.manager, 'update')
         .addSelect('e.passwordHash')
+        .addSelect('e.accountType')
         .andWhere('e.id = :id', { id })
         .setLock('pessimistic_write')
         .getOne();
       if (!user) throw crudErrors.notFound();
+      if (user.accountType === 'service')
+        throw crudErrors.badRequest('服务账号禁止设置交互登录密码');
       if (user.version !== version) throw crudErrors.versionConflict();
       if (
         oldPassword !== undefined &&
@@ -327,12 +341,21 @@ export class SystemOrgService extends SystemCrudService<SystemOrg> {
     row: SystemOrg,
     tx: CrudTx,
   ): Promise<void> {
+    if (
+      row.integrationSource &&
+      ['name', 'parentId', 'enabled'].some((key) => Object.hasOwn(data, key))
+    )
+      throw crudErrors.badRequest(
+        '同步部门的名称、上下级和启用状态请在企业微信维护',
+      );
     await this.validateTree(data, row, tx);
   }
   protected override async beforeDelete(
     rows: SystemOrg[],
     tx: CrudTx,
   ): Promise<void> {
+    if (rows.some((row) => row.integrationSource))
+      throw crudErrors.badRequest('同步部门请在企业微信删除');
     const ids = rows.map((row) => row.id);
     if (
       await this.repos
@@ -363,6 +386,47 @@ export class SystemOrgService extends SystemCrudService<SystemOrg> {
 
 @Injectable()
 export class SystemUserRoleService extends SystemCrudService<SystemUserRole> {
+  /** OAuth自动服务身份复用正常角色委派校验；调用方传入应用事务。 */
+  async replaceServiceRoles(
+    userId: string,
+    orgId: string,
+    roleIds: string[],
+    manager: import('typeorm').EntityManager,
+  ) {
+    const user = await this.repos
+      .for(SystemUser)
+      .query('u', manager)
+      .addSelect('u.accountType')
+      .andWhere('u.id=:id', { id: userId })
+      .setLock('pessimistic_write')
+      .getOne();
+    if (!user?.enabled || user.accountType !== 'service')
+      throw crudErrors.badRequest('只能配置有效服务身份');
+    const tx: CrudTx = {
+      manager,
+      ctx: this.crud.context.current(),
+      meta: this.meta,
+    };
+    const old = await this.repos
+      .for(SystemUserRole)
+      .query('g', manager)
+      .andWhere('g.userId=:userId', { userId })
+      .setLock('pessimistic_write')
+      .getMany();
+    await this.repos.for(SystemUserRole).remove(
+      old.map((row) => row.id),
+      manager,
+    );
+    const permissions = new Set<string>();
+    for (const roleId of [...roleIds].sort()) {
+      const value = { userId, roleId, scopeOrgId: orgId };
+      await this.validateGrant(value, tx);
+      const role = await this.reference(SystemRole, roleId, tx);
+      for (const permission of role.permissions) permissions.add(permission);
+      await this.repos.for(SystemUserRole).insert(value, manager);
+    }
+    return [...permissions];
+  }
   private async validateGrant(
     data: Partial<SystemUserRole>,
     tx: CrudTx,
@@ -415,6 +479,23 @@ export class SystemUserRoleService extends SystemCrudService<SystemUserRole> {
       if ((await this.reference(SystemRole, row.roleId, tx)).allPermissions)
         throw crudErrors.badRequest('不能删除内置超级管理员分配');
   }
+}
+
+function menuScopeFits(
+  parent: Partial<SystemMenu>,
+  child: Partial<SystemMenu>,
+) {
+  return (
+    parent.scope === child.scope ||
+    (parent.type === 'directory' &&
+      parent.path === '/system' &&
+      parent.scope === 'tenant' &&
+      child.type === 'page' &&
+      child.path === '/system/menu' &&
+      child.component === 'system/menu' &&
+      child.permission === 'system:menu:page' &&
+      child.scope === 'platform')
+  );
 }
 
 @Injectable()
@@ -472,10 +553,10 @@ export class SystemMenuService extends SystemCrudService<SystemMenu> {
     let current = data.parentId ? map.get(data.parentId) : undefined;
     if (data.parentId && (!current || current.type === 'button'))
       throw crudErrors.badRequest('上级菜单不存在或为按钮');
-    if (current && current.scope !== data.scope)
+    if (current && !menuScopeFits(current, data))
       throw crudErrors.badRequest('菜单范围必须与上级一致');
     if (
-      rows.some((row) => row.parentId === data.id && row.scope !== data.scope)
+      rows.some((row) => row.parentId === data.id && !menuScopeFits(data, row))
     )
       throw crudErrors.badRequest(
         '菜单范围必须与现有下级一致，请先调整下级归属',

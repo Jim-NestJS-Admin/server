@@ -9,8 +9,10 @@ import { getMetadataArgsStorage } from 'typeorm';
 import type { DictItem, FormComponent } from './crud-field.decorator.js';
 import {
   CRUD_APIS,
+  CRUD_TABLE_MODES,
   type CrudApi,
   type CrudResourceMeta,
+  type CrudTableMode,
   type SortItem,
 } from './crud.types.js';
 
@@ -265,6 +267,12 @@ export class CrudSchema {
   dictionaries: Record<string, DictItem[]>;
   @ApiProperty({ type: CrudSchemaActions }) actions: CrudSchemaActions;
   @ApiProperty({ type: [CrudSchemaSort] }) defaultSort: SortItem[];
+  @ApiPropertyOptional({
+    enum: [...CRUD_TABLE_MODES],
+    default: 'normal',
+    description: '代码默认的表格模式，生效值在 view.list.tableMode',
+  })
+  defaultTableMode?: CrudTableMode;
   @ApiProperty() maxSize: number;
   @ApiProperty({
     type: [CrudSchemaChild],
@@ -494,6 +502,7 @@ export function buildCrudSchema(meta: CrudResourceMeta): CrudSchema {
     dictionaries,
     actions,
     defaultSort: meta.defaultSort,
+    defaultTableMode: meta.defaultTableMode ?? 'normal',
     maxSize: meta.maxSize,
     children,
     tree: meta.tree ? { ...meta.tree } : null,

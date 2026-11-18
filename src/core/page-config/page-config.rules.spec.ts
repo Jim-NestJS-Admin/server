@@ -14,6 +14,32 @@ const meta = {
 } as unknown as CrudResourceMeta;
 
 describe('在线页面配置规则（T23）', () => {
+  it('表格模式沿用代码默认，模块覆盖支持两种模式，拒绝未知值', () => {
+    const oldConfig = { list: { pageSize: 40 } };
+    const view = (resource: CrudResourceMeta, config = oldConfig) =>
+      mergeView(resource, config, null, () => 'editable', true).list;
+    const menu: CrudResourceMeta = { ...meta, defaultTableMode: 'virtual' };
+    expect(view(meta)).toMatchObject({ tableMode: 'normal', pageSize: 40 });
+    expect(view(menu)).toMatchObject({ tableMode: 'virtual', pageSize: 40 });
+    expect(
+      mergeView(
+        menu,
+        { list: { tableMode: 'normal' } },
+        null,
+        () => 'editable',
+        true,
+      ).list.tableMode,
+    ).toBe('normal');
+    expect(
+      validatePageConfig(meta, { list: { tableMode: 'virtual' } }),
+    ).toEqual([]);
+    expect(
+      validatePageConfig(meta, { list: { tableMode: 'automatic' } }).map(
+        (error) => error.field,
+      ),
+    ).toEqual(['list.tableMode']);
+  });
+
   it('保存校验：不能新增后端没有的字段、不能扩大搜索排序白名单', () => {
     const errs = validatePageConfig(meta, {
       list: {

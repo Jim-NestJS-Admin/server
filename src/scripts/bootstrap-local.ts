@@ -1,3 +1,4 @@
+import { CreateOrderTest1814906215522 } from '../database/migrations/1814906215522-CreateOrderTest.js';
 import { FormSubmission1794621600000 } from '../database/migrations/1794621600000-FormSubmission.js';
 import { WorkflowDefinition1794625200000 } from '../database/migrations/1794625200000-WorkflowDefinition.js';
 import { WorkflowRuntime1794628800000 } from '../database/migrations/1794628800000-WorkflowRuntime.js';
@@ -8,6 +9,13 @@ import { CodegenModuleSpec1794312000000 } from '../database/migrations/179431200
 import { TenantCatalog1794412800000 } from '../database/migrations/1794412800000-TenantCatalog.js';
 import { PlatformMenus1794412800001 } from '../database/migrations/1794412800001-PlatformMenus.js';
 import { FormDefinition1794470400000 } from '../database/migrations/1794470400000-FormDefinition.js';
+import { NotifyIntegration1794715200000 } from '../database/migrations/1794715200000-NotifyIntegration.js';
+import { AiFoundation1794722400000 } from '../database/migrations/1794722400000-AiFoundation.js';
+import { AiReconciliation1794726000000 } from '../database/migrations/1794726000000-AiReconciliation.js';
+import { OAuthFoundation1794729600000 } from '../database/migrations/1794729600000-OAuthFoundation.js';
+import { OAuthScopes1794733200000 } from '../database/migrations/1794733200000-OAuthScopes.js';
+import { OAuthTokens1794736800000 } from '../database/migrations/1794736800000-OAuthTokens.js';
+import { McpFoundation1794740400000 } from '../database/migrations/1794740400000-McpFoundation.js';
 import { TenantSeedService } from '../modules/tenant/service/tenant-seed.service.js';
 import { SharedDictionaries1794279600000 } from '../database/migrations/1794279600000-SharedDictionaries.js';
 import { PLATFORM_TENANT_ID } from '../core/tenant/tenant.constants.js';
@@ -117,6 +125,14 @@ async function bootstrapLocal(): Promise<void> {
           WorkflowDefinition1794625200000,
           WorkflowRuntime1794628800000,
           WorkflowLifecycle1794632400000,
+          NotifyIntegration1794715200000,
+          AiFoundation1794722400000,
+          AiReconciliation1794726000000,
+          OAuthFoundation1794729600000,
+          OAuthScopes1794733200000,
+          OAuthTokens1794736800000,
+          McpFoundation1794740400000,
+          CreateOrderTest1814906215522,
         ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,
@@ -185,7 +201,8 @@ type Repos = TenantRepositoryFactory;
 
 /**
  * 菜单：目录按路径、页面按路径、按钮按「上级 + 权限码」判断是否已有，只补缺的，不改已有菜单
- * （管理员可能已经调整过名称、排序、图标）。权限码没在后端声明的页面跳过。
+ * （管理员可能已经调整过名称、排序、图标）。菜单管理从旧默认分组原地移动。
+ * 权限码没在后端声明的页面跳过。
  */
 async function seedMenus(
   manager: EntityManager,
@@ -210,6 +227,17 @@ async function seedMenus(
   ): Promise<string> => {
     const hit = byPath.get(values.path);
     if (hit) {
+      if (
+        hit.path === '/system/menu' &&
+        hit.type === 'page' &&
+        hit.component === 'system/menu' &&
+        hit.permission === 'system:menu:page' &&
+        hit.scope === 'platform' &&
+        hit.parentId === byPath.get('/platform')?.id &&
+        values.parentId === byPath.get('/system')?.id
+      ) {
+        await repo.update([hit.id], { parentId: values.parentId }, manager);
+      }
       stats.kept++;
       return hit.id;
     }
