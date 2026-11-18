@@ -19,6 +19,7 @@ import { CaptchaProvider } from '../src/core/auth/captcha/captcha.provider.js';
 import { PasswordHasher } from '../src/core/auth/password.js';
 import { SessionService } from '../src/core/auth/session.service.js';
 import { AppConfigService } from '../src/core/config/app-config.service.js';
+import { PermissionSource } from '../src/core/permission/permission-source.js';
 import { RedisService } from '../src/core/redis/redis.service.js';
 import { clearTestRedis, rawRedis } from './support/test-redis.js';
 
@@ -149,6 +150,13 @@ describe('后台登录认证（T05）', () => {
       .useClass(BuiltinTenantSource)
       .overrideProvider(AuthUserStore)
       .useClass(FakeUserStore)
+      // 模拟用户的编号可能与其他套件写入的真实用户重合，认证用例固定为无角色。
+      .overrideProvider(PermissionSource)
+      .useValue({
+        loadGrants: async () => [],
+        loadOrgs: async () => [],
+        loadMenus: async () => [],
+      } satisfies PermissionSource)
       .compile();
     app = moduleRef.createNestApplication();
     configureApp(app);
