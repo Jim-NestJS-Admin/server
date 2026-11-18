@@ -38,6 +38,9 @@ importers:
       bcryptjs:
         specifier: 3.0.3
         version: 3.0.3
+      bpmn-engine:
+        specifier: 26.0.6
+        version: 26.0.6(bpmn-elements@18.1.2)(bpmn-moddle@10.3.1)(debug@4.4.3)(moddle-context-serializer@7.0.0(bpmn-moddle@10.3.1))(smqp@15.0.0)
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1
@@ -152,6 +155,10 @@ importers:
         version: 4.1.12(@types/node@24.19.2)(@vitest/coverage-v8@4.1.12)(vite@8.3.5(@types/node@24.19.2))
 
 packages:
+
+  '@0dep/piso@6.0.1':
+    resolution: {integrity: sha512-bUjJkEXx/wUnqRahoCta2RlsrxhR0L9zmCKkg1UuoSa3jmRaFFrgnHr7Xdew6WY8XW2d6RtAFdAxsIYryorItw==}
+    engines: {node: '>=14'}
 
   '@angular-devkit/core@22.2.3':
     resolution: {integrity: sha512-bi1oBjJeg1XCgRrBYSuJikaJV4sO/mcnyFE/0a1H646yHhQpVYoU/M2Vh69Qv8h+YoMfC7RuSxT4LZHaubhhLw==}
@@ -1145,6 +1152,22 @@ packages:
   bowser@2.15.0:
     resolution: {integrity: sha512-xic6KSZglg/I4ymp45fdM4GWfYpBK79Fxd/TOvJktlaPgQqqDxvmGwOPZl2V0dyeS3Lj5c180bLhXF43iyAjZQ==}
 
+  bpmn-elements@18.1.2:
+    resolution: {integrity: sha512-Xr1r1A3EW8Tp1kapcdHMNknD58fd8/1yUa6O1Iqb7GBM3EqiR9GO7mRjVCcKaxrcEcfWO8A63/Ge2hPo3NgPsQ==}
+
+  bpmn-engine@26.0.6:
+    resolution: {integrity: sha512-cbSBkwGRroZOQ14BbU65bRIEdtJV6oHU3CRVpZZTLA4JMsPxQ0VFFWkUdSO5TK/JVuLJ+WXNUoXg6FOoNjLVtg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      bpmn-elements: '>=18.0.25'
+      bpmn-moddle: '>=9'
+      debug: '>=4'
+      moddle-context-serializer: '>=6'
+      smqp: '>=15'
+
+  bpmn-moddle@10.3.1:
+    resolution: {integrity: sha512-xjJ8GzseRkjjM0MX/rODVB6iv+rhGLt8FCHJIovLAjJsDEAUjITfyiJZYczJ4pp3wmesbY3sQR7eRT+q5uroVA==}
+
   brace-expansion@1.1.21:
     resolution: {integrity: sha512-9zeA+KLZNNzglF2TPKRQEDyx6Yby7daAkuy8MiPzpXPsYDWi/DRM8jmwUDxokQjYqBpv5DgPiwD4h4ZZSy1Ujw==}
 
@@ -2130,6 +2153,9 @@ packages:
     resolution: {integrity: sha512-VP79XUPxV2CigYP3jWwAUFSku2aKqBH7uTAapFWCBqutsbmDo96KY5o8uh6U+/YSIn5OxJnXp73beVkpqMIGhA==}
     engines: {node: '>=18'}
 
+  min-dash@5.1.0:
+    resolution: {integrity: sha512-HAvN6XzmCQj+js43G9sJRRw8kj/7DvoxN7qhoIN9Xo5ZN1NMljtpyKs/NunXmw0QSWwlgZzNv6tLeEa4xaZ0tg==}
+
   minimatch@10.2.6:
     resolution: {integrity: sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==}
     engines: {node: 18 || 20 || >=22}
@@ -2147,6 +2173,21 @@ packages:
   mkdirp@0.5.6:
     resolution: {integrity: sha512-FP+p8RB8OWpF3YZBCrP5gtADmtXApB5AMLn+vdyA+PyxCjrCs00mjyUozssO33cwDeT3wNGdLxJ5M//YqtHAJw==}
     hasBin: true
+
+  moddle-context-serializer@7.0.0:
+    resolution: {integrity: sha512-7CAlL43krUUI3RB6BF0kcBaaKYaAgU0CYxL2VyXV6dYYgG8NhLNF5IheDAuxWngQu4NW+qSx33oQr8+aQ5rLxw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      bpmn-moddle: '>=6'
+
+  moddle-xml@12.3.2:
+    resolution: {integrity: sha512-fo6DSZdLr7Lr4ydgpHbEQEXu63QxxRPNmu5k2n3B/+oRTT9ybBLrcxo/hIK6Bo16ORVtw8FoZbwRCwZRr5l19g==}
+    engines: {node: '>= 18'}
+    peerDependencies:
+      moddle: '>= 6.2.0'
+
+  moddle@8.2.1:
+    resolution: {integrity: sha512-20qzO/ZpMGO9j9gdQgXk9bfGxb9wA3JKnGth/21YZKODLrZE4RW/uVMIL5pTskYm34Z61DucBEPkq93qByNsBQ==}
 
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
@@ -2468,6 +2509,10 @@ packages:
     resolution: {integrity: sha512-42tBVwLWnaQvW5zc4HbZrTuWccECCZfBi92FDuwtqxasH+JbPB3/FOKb1m222K42R4WxuxzzMsTswfzgtSu64Q==}
     engines: {node: '>=11.0.0'}
 
+  saxen@11.2.0:
+    resolution: {integrity: sha512-2bG564AAJcm/3vyZC0Uhs/mACrH+4AHMaKHKAB2M5xMqomUZa27FQ7MYaQGFKVcJk/MVzSEQ34A8QZWW+eiWEw==}
+    engines: {node: '>= 20.12'}
+
   saxes@5.0.1:
     resolution: {integrity: sha512-5LBh1Tls8c9xgGjw3QrMwETmTMVk0oFgvrFSvWx62llR2hcEInrKNZ2GZCCuuy2lvWrdl5jhbpeqc5hRYKFOcw==}
     engines: {node: '>=10'}
@@ -2539,6 +2584,10 @@ packages:
   skin-tone@2.0.0:
     resolution: {integrity: sha512-kUMbT1oBJCpgrnKoSr0o6wPtvRWT9W9UKvGLwfJYO2WuahZRHOpEyL1ckyMGgMWh0UdpmaoFqKKD29WTomNEGA==}
     engines: {node: '>=8'}
+
+  smqp@15.0.0:
+    resolution: {integrity: sha512-C/jnHLiWCsTOJeK73rccPAnSUh8+eVdFIlbOaH6lfrjLDWeJgbG+KfLGANxCH3iPg9iCRyBK8xihVLUoYnAvqw==}
+    engines: {node: '>=18'}
 
   sonic-boom@4.2.1:
     resolution: {integrity: sha512-w6AxtubXa2wTXAUsZMMWERrsIRAdrK0Sc+FUytWvYAhBJLyuI4llrMIC1DtlNSdI99EI86KZum2MMq3EAZlF9Q==}
@@ -3036,6 +3085,8 @@ packages:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
 snapshots:
+
+  '@0dep/piso@6.0.1': {}
 
   '@angular-devkit/core@22.2.3(chokidar@5.0.0)':
     dependencies:
@@ -4078,6 +4129,25 @@ snapshots:
 
   bowser@2.15.0: {}
 
+  bpmn-elements@18.1.2:
+    dependencies:
+      '@0dep/piso': 6.0.1
+      smqp: 15.0.0
+
+  bpmn-engine@26.0.6(bpmn-elements@18.1.2)(bpmn-moddle@10.3.1)(debug@4.4.3)(moddle-context-serializer@7.0.0(bpmn-moddle@10.3.1))(smqp@15.0.0):
+    dependencies:
+      bpmn-elements: 18.1.2
+      bpmn-moddle: 10.3.1
+      debug: 4.4.3
+      moddle-context-serializer: 7.0.0(bpmn-moddle@10.3.1)
+      smqp: 15.0.0
+
+  bpmn-moddle@10.3.1:
+    dependencies:
+      min-dash: 5.1.0
+      moddle: 8.2.1
+      moddle-xml: 12.3.2(moddle@8.2.1)
+
   brace-expansion@1.1.21:
     dependencies:
       balanced-match: 1.0.2
@@ -5068,6 +5138,8 @@ snapshots:
 
   mimic-function@5.0.1: {}
 
+  min-dash@5.1.0: {}
+
   minimatch@10.2.6:
     dependencies:
       brace-expansion: 5.0.12
@@ -5085,6 +5157,20 @@ snapshots:
   mkdirp@0.5.6:
     dependencies:
       minimist: 1.2.8
+
+  moddle-context-serializer@7.0.0(bpmn-moddle@10.3.1):
+    dependencies:
+      bpmn-moddle: 10.3.1
+
+  moddle-xml@12.3.2(moddle@8.2.1):
+    dependencies:
+      min-dash: 5.1.0
+      moddle: 8.2.1
+      saxen: 11.2.0
+
+  moddle@8.2.1:
+    dependencies:
+      min-dash: 5.1.0
 
   ms@2.1.3: {}
 
@@ -5480,6 +5566,8 @@ snapshots:
 
   sax@1.6.1: {}
 
+  saxen@11.2.0: {}
+
   saxes@5.0.1:
     dependencies:
       xmlchars: 2.2.0
@@ -5580,6 +5668,8 @@ snapshots:
   skin-tone@2.0.0:
     dependencies:
       unicode-emoji-modifier-base: 1.0.0
+
+  smqp@15.0.0: {}
 
   sonic-boom@4.2.1:
     dependencies:

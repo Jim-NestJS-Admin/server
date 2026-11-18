@@ -11,6 +11,8 @@ export interface PageSeed {
   permission: string;
   /** 这些前缀下的其他权限码作为页面上的按钮，如 system:user */
   buttonPrefixes: string[];
+  /** 跨资源的最小依赖按钮，不扩成整个资源的管理权限。 */
+  buttonPermissions?: string[];
   icon?: string;
   hidden?: boolean;
 }
@@ -43,6 +45,20 @@ export const DEFAULT_MENUS: DirectorySeed[] = [
     pages: [
       crud('表单定义', 'form/definition'),
       crud('提交记录', 'form/submission'),
+      crud('流程管理', 'workflow/definition', ['workflow:directory']),
+      {
+        ...crud('审批工作台', 'workflow/instance', [
+          'workflow:task',
+          'workflow:record',
+          'workflow:directory',
+        ]),
+        component: 'workflow/workbench',
+        buttonPermissions: [
+          'form:submission:add',
+          'form:submission:page',
+          'file:asset:upload',
+        ],
+      },
     ],
   },
   {
@@ -132,6 +148,13 @@ const ACTION_TITLES: Record<string, string> = {
   read: '下载',
   upload: '上传',
   validate: '校验填写',
+  publish: '发布流程',
+  approve: '同意',
+  reject: '驳回',
+  transfer: '转交',
+  withdraw: '撤回',
+  resubmit: '重新提交',
+  urge: '催办',
   'reset-password': '重置密码',
 };
 

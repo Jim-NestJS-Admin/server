@@ -26,22 +26,36 @@ export class SystemFieldSource extends FieldPermSource {
   }
   async loadFieldDefaults(tenantId: string): Promise<FieldRule[]> {
     this.tenant(tenantId);
+    const dynamic = await this.catalog.dynamic();
     const rows = await this.repos
       .for(SystemField)
       .query('f')
       .where('f.enabled = :enabled', { enabled: true })
       .getMany();
-    return rows
-      .filter((row) => this.catalog.find(row.resource, row.field))
-      .map((row) => ({
-        resource: row.resource,
-        field: row.field,
-        state: row.state,
-        mask: row.mask,
-      }));
+    return [
+      ...dynamic.flatMap((resource) =>
+        resource.fields.map((field) => ({
+          resource: resource.resource,
+          field: field.field,
+          state: field.default,
+          mask: field.mask,
+        })),
+      ),
+      ...rows
+        .filter((row) =>
+          this.catalog.findWithDynamic(row.resource, row.field, dynamic),
+        )
+        .map((row) => ({
+          resource: row.resource,
+          field: row.field,
+          state: row.state,
+          mask: row.mask,
+        })),
+    ];
   }
   async loadRoleFields(tenantId: string): Promise<RoleFieldRule[]> {
     this.tenant(tenantId);
+    const dynamic = await this.catalog.dynamic();
     const roles = await this.repos
       .for(SystemRole)
       .query('r')
@@ -52,7 +66,8 @@ export class SystemFieldSource extends FieldPermSource {
     return rows
       .filter(
         (row) =>
-          ids.has(row.roleId) && this.catalog.find(row.resource, row.field),
+          ids.has(row.roleId) &&
+          this.catalog.findWithDynamic(row.resource, row.field, dynamic),
       )
       .map((row) => ({
         roleId: row.roleId,

@@ -16,6 +16,19 @@ export class SystemFieldOverview {
     private readonly catalog: SystemFieldCatalog,
   ) {}
   async read(roleId?: string): Promise<FieldConfigurationOverview> {
+    const dynamic = await this.catalog.dynamic();
+    const resources = [
+      ...this.runtime.list().map((meta) => ({
+        permPrefix: meta.permPrefix,
+        label: meta.label,
+        fields: meta.fields,
+      })),
+      ...dynamic.map((r) => ({
+        permPrefix: r.resource,
+        label: r.label,
+        fields: r.fields.map((f) => ({ property: f.field, label: f.label })),
+      })),
+    ];
     if (roleId) {
       const role = await this.repos
         .for(SystemRole)
@@ -41,9 +54,13 @@ export class SystemFieldOverview {
       roles.map((row) => [byKey(row.resource, row.field), row]),
     );
     return {
-      fields: this.runtime.list().flatMap((meta) =>
+      fields: resources.flatMap((meta) =>
         meta.fields.flatMap((field) => {
-          const code = this.catalog.find(meta.permPrefix, field.property);
+          const code = this.catalog.findWithDynamic(
+            meta.permPrefix,
+            field.property,
+            dynamic,
+          );
           if (!code) return [];
           const stored = defaultMap.get(byKey(meta.permPrefix, field.property));
           const effective = stored?.enabled ? stored : undefined;

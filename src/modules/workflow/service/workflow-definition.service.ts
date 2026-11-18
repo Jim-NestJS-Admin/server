@@ -19,6 +19,61 @@ import {
 
 @Injectable()
 export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
+  /** 发起人仅取得已发布流程的选择摘要；不开放管理接口、BPMN或条件/人员配置。 */
+  async availableForStart(body: {
+    id?: string;
+    keyword: string;
+    page: number;
+    size: number;
+  }) {
+    return this.crud.dataSource.transaction(async (manager) => {
+      const query = this.select(manager, 'info').andWhere(
+        'e.status = :status',
+        { status: 'published' },
+      );
+      if (body.id) query.andWhere('e.id = :id', { id: body.id });
+      if (body.keyword)
+        query.andWhere('(e.name LIKE :keyword OR e.code LIKE :keyword)', {
+          keyword: `%${body.keyword}%`,
+        });
+      const [rows, total] = await query
+        .orderBy('e.revision', 'DESC')
+        .skip((body.page - 1) * body.size)
+        .take(body.size)
+        .getManyAndCount();
+      const list = await Promise.all(
+        rows.map(async (row) => {
+          const visible = this.toRow(row);
+          const selections = (
+            nodes: typeof row.designer.nodes,
+          ): { id: string; name: string }[] =>
+            nodes.flatMap((node) => [
+              ...(node.actor?.type === 'self_select'
+                ? [{ id: node.id, name: node.name }]
+                : []),
+              ...selections(node.branches?.flatMap((b) => b.nodes) ?? []),
+            ]);
+          return {
+            id: row.id,
+            name: visible.name,
+            code: visible.code,
+            revision: visible.revision,
+            formDefinitionId: row.formDefinitionId,
+            selections: selections(row.designer.nodes),
+            ...(body.id
+              ? {
+                  form: await this.forms.forStartView(
+                    row.formDefinitionId,
+                    manager,
+                  ),
+                }
+              : {}),
+          };
+        }),
+      );
+      return { list, total };
+    });
+  }
   private readonly saving = new AsyncLocalStorage<{
     expected: number;
     code?: string;
@@ -60,7 +115,18 @@ export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
       'values',
       manager,
     );
-    const parsed = parseWorkflow(designer, form.fields, cap);
+    const limits = await this.fields.delegationMatrix(
+      form.fieldResource,
+      manager,
+    );
+    const parsed = parseWorkflow(
+      designer,
+      form.fields,
+      cap,
+      Object.fromEntries(
+        Object.entries(limits).map(([field, policy]) => [field, policy.cap]),
+      ),
+    );
     if (!(await this.directory.workflowReferences(parsed.references, manager)))
       workflowInvalid(
         'data.designer',

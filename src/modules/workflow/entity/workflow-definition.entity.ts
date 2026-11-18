@@ -1,6 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Column, Entity, Index } from 'typeorm';
-import { IsObject, IsString, Matches, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsObject,
+  IsString,
+  Matches,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { BaseEntity, CrudField } from '../../../core/crud/index.js';
 import { WorkflowDesignerDto } from '../dto/workflow.dto.js';
 
@@ -29,6 +37,8 @@ export class WorkflowDefinition extends BaseEntity {
   description!: string;
   @CrudField({ label: '流程版本', edit: 'none', list: { sortable: true } })
   @Column({ type: 'int', unsigned: true })
+  @IsInt({ message: '流程版本必须是整数' })
+  @Min(1, { message: '流程版本至少为1' })
   revision!: number;
   @CrudField({ label: '固定表单版本', edit: 'add' })
   @Matches(/^[1-9]\d{0,19}$/)
@@ -48,6 +58,7 @@ export class WorkflowDefinition extends BaseEntity {
     ],
   })
   @Column({ length: 16, default: 'draft' })
+  @IsIn(['draft', 'published'], { message: '请选择草稿或已发布状态' })
   status!: 'draft' | 'published';
   @CrudField({ label: 'BPMN', edit: 'none', list: false, form: false })
   @Column({ type: 'longtext' })

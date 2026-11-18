@@ -6,11 +6,15 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FormDefinition } from './entity/form-definition.entity.js';
 import { FormDefinitionService } from './service/form-definition.service.js';
 import { FormDefinitionController } from './controller/admin/form-definition.controller.js';
+import { SystemModule } from '../system/system.module.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([FormDefinition, FormSubmission])],
+  imports: [
+    SystemModule,
+    TypeOrmModule.forFeature([FormDefinition, FormSubmission]),
+  ],
   providers: [FormDefinitionService, FormSubmissionService],
   controllers: [FormDefinitionController, FormSubmissionController],
-  exports: [FormDefinitionService],
+  exports: [FormDefinitionService, FormSubmissionService],
 })
 export class FormModule {}
