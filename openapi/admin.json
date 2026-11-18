@@ -6867,40 +6867,31 @@
       },
       "PageConfigCatalogDto": {
         "properties": {
-          "groups": {
+          "menus": {
             "items": {
-              "$ref": "#/components/schemas/PageConfigMenuGroupDto"
+              "$ref": "#/components/schemas/PageConfigMenuNodeDto"
             },
             "type": "array"
           }
         },
         "required": [
-          "groups"
+          "menus"
         ],
         "type": "object"
       },
-      "PageConfigMenuGroupDto": {
+      "PageConfigMenuNodeDto": {
         "properties": {
-          "pages": {
+          "children": {
             "items": {
-              "$ref": "#/components/schemas/PageConfigMenuItemDto"
+              "$ref": "#/components/schemas/PageConfigMenuNodeDto"
             },
             "type": "array"
           },
-          "title": {
-            "description": "菜单目录路径，顶层页面为空",
+          "id": {
             "type": "string"
-          }
-        },
-        "required": [
-          "title",
-          "pages"
-        ],
-        "type": "object"
-      },
-      "PageConfigMenuItemDto": {
-        "properties": {
+          },
           "resource": {
+            "description": "页面对应的 CRUD 资源",
             "type": "string"
           },
           "selectable": {
@@ -6912,9 +6903,8 @@
           }
         },
         "required": [
-          "resource",
-          "title",
-          "selectable"
+          "id",
+          "title"
         ],
         "type": "object"
       },

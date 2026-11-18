@@ -29,9 +29,12 @@ export abstract class PageViewSource {
   }>;
 }
 
-interface PageConfigMenuGroup {
+interface PageConfigMenuNode {
+  id: string;
   title: string;
-  pages: { resource: string; title: string; selectable: boolean }[];
+  resource?: string;
+  selectable?: boolean;
+  children?: PageConfigMenuNode[];
 }
 
 /**
@@ -52,7 +55,7 @@ export class PageConfigService extends PageViewSource {
     super();
   }
 
-  async catalog(): Promise<{ groups: PageConfigMenuGroup[] }> {
+  async catalog(): Promise<{ menus: PageConfigMenuNode[] }> {
     const byComponent = new Map(
       this.crud
         .list()
@@ -67,33 +70,23 @@ export class PageConfigService extends PageViewSource {
       ),
       this.permissions.permissions(),
     ]);
-    const groups: PageConfigMenuGroup[] = [];
     const granted = new Set(codes);
     const seen = new Set<string>();
-    const collect = (items: MenuItem[], parents: string[]) => {
-      let group: PageConfigMenuGroup | undefined;
-      for (const item of items) {
+    const collect = (items: MenuItem[]): PageConfigMenuNode[] =>
+      items.flatMap((item): PageConfigMenuNode[] => {
+        const base = { id: item.id, title: item.title };
         if (item.type === 'directory') {
-          collect(item.children ?? [], [...parents, item.title]);
-          group = undefined;
-          continue;
+          const children = collect(item.children ?? []);
+          return children.length ? [{ ...base, children }] : [];
         }
         const resource = byComponent.get(item.component ?? '');
-        if (!resource || seen.has(resource)) continue;
+        if (!resource || seen.has(resource)) return [];
         seen.add(resource);
-        if (!group) {
-          group = { title: parents.join(' / '), pages: [] };
-          groups.push(group);
-        }
-        group.pages.push({
-          resource,
-          title: item.title,
-          selectable: granted.has(`${resource}:page`),
-        });
-      }
-    };
-    collect(menus, []);
-    return { groups };
+        return [
+          { ...base, resource, selectable: granted.has(`${resource}:page`) },
+        ];
+      });
+    return { menus: collect(menus) };
   }
 
   meta(resource: string): CrudResourceMeta {

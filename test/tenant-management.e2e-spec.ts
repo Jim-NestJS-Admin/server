@@ -368,12 +368,13 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
       title: string,
       rank: number,
       hidden = false,
+      directory = parentId,
     ) =>
       context.run({ tenantId: '0' }, () =>
         repos.for(SystemMenu).insert({
           scope: 'tenant',
           type: 'page',
-          parentId,
+          parentId: directory,
           path: `/${component}`,
           component,
           title,
@@ -385,7 +386,23 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
           hidden,
         }),
       );
-    const rolePage = await addPage('system/role', '角色管理', 20);
+    const directory = await context.run({ tenantId: '0' }, () =>
+      repos.for(SystemMenu).insert({
+        scope: 'tenant',
+        type: 'directory',
+        parentId,
+        path: '/access',
+        title: '角色 / 权限',
+        rank: 20,
+      }),
+    );
+    const rolePage = await addPage(
+      'system/role',
+      '角色管理',
+      10,
+      false,
+      directory,
+    );
     const orgPage = await addPage('system/org', '组织管理', 10);
     const workbench = await addPage('workflow/workbench', '审批工作台', 30);
     const hidden = await addPage('system/user-role', '角色分配', 40, true);
@@ -396,18 +413,47 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
     await http('platform/package/update', {
       id: pkg.id,
       version: pkg.version,
-      data: { menuIds: [...allMenus, rolePage, orgPage, workbench, hidden] },
+      data: {
+        menuIds: [...allMenus, directory, rolePage, orgPage, workbench, hidden],
+      },
     }).expect(200);
 
     const catalog = 'system/page-config/catalog';
-    const pages = [
-      { resource: 'system:user', title: '用户', selectable: true },
-      { resource: 'system:org', title: '组织管理', selectable: true },
-      { resource: 'system:role', title: '角色管理', selectable: true },
+    const menuTree = (readAll: boolean) => [
+      {
+        id: parentId,
+        title: '系统',
+        children: [
+          {
+            id: allMenus[1],
+            resource: 'system:user',
+            title: '用户',
+            selectable: true,
+          },
+          {
+            id: orgPage,
+            resource: 'system:org',
+            title: '组织管理',
+            selectable: readAll,
+          },
+          {
+            id: directory,
+            title: '角色 / 权限',
+            children: [
+              {
+                id: rolePage,
+                resource: 'system:role',
+                title: '角色管理',
+                selectable: readAll,
+              },
+            ],
+          },
+        ],
+      },
     ];
     expect((await get(catalog, '1', tenantUser).expect(200)).body.data).toEqual(
       {
-        groups: [{ title: '系统', pages }],
+        menus: menuTree(true),
       },
     );
 
@@ -448,15 +494,7 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
       tenantUser,
     ).expect(200);
     expect((await get(catalog, '1', user.id).expect(200)).body.data).toEqual({
-      groups: [
-        {
-          title: '系统',
-          pages: pages.map((page) => ({
-            ...page,
-            selectable: page.resource === 'system:user',
-          })),
-        },
-      ],
+      menus: menuTree(false),
     });
     await get('system/org/schema', '1', user.id).expect(403);
   });
