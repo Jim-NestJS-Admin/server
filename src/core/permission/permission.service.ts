@@ -375,7 +375,19 @@ export class PermissionService {
   }> {
     const { codes, version } = await this.permissions();
     const has = new Set(codes);
-    const all = await this.menusFor(this.context.current().tenantId);
+    const menus = await this.menuTreeFor(
+      this.context.current().tenantId,
+      (m) => !m.permission || has.has(m.permission),
+    );
+    return { menus, permissions: codes, authVersion: version };
+  }
+
+  /** 按侧栏顺序组装套餐菜单，由调用方决定纳入哪些页面。 */
+  async menuTreeFor(
+    tenantId: string,
+    includePage: (menu: MenuNode) => boolean,
+  ): Promise<MenuItem[]> {
+    const all = await this.menusFor(tenantId);
     const byParent = new Map<string | null, MenuNode[]>();
     for (const m of all)
       if (m.type !== 'button')
@@ -397,7 +409,7 @@ export class PermissionService {
           const children = build(m.id, depth + 1);
           if (children.length)
             out.push({ ...base, type: 'directory', children });
-        } else if (!m.permission || has.has(m.permission)) {
+        } else if (includePage(m)) {
           out.push({
             ...base,
             type: 'page',
@@ -410,6 +422,6 @@ export class PermissionService {
       }
       return out;
     };
-    return { menus: build(null, 0), permissions: codes, authVersion: version };
+    return build(null, 0);
   }
 }

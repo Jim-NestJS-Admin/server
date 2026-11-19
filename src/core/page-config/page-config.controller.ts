@@ -66,12 +66,40 @@ class RestoreBody extends HistoryInfoBody {
   @ApiProperty() @Type(() => Number) @IsInt() @Min(0) version!: number;
 }
 
+class PageConfigMenuNodeDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() title!: string;
+  @ApiPropertyOptional({ description: '页面对应的 CRUD 资源' })
+  resource?: string;
+  @ApiPropertyOptional({ description: '当前角色能否读取该资源的页面描述' })
+  selectable?: boolean;
+  @ApiPropertyOptional({ type: () => [PageConfigMenuNodeDto] })
+  children?: PageConfigMenuNodeDto[];
+}
+
+class PageConfigCatalogDto {
+  @ApiProperty({ type: [PageConfigMenuNodeDto] })
+  menus!: PageConfigMenuNodeDto[];
+}
+
 /** 在线页面配置（T23）：只改显示；权限码只给管理员 */
 @ApiTags('system 模块配置')
 @ApiBearerAuth()
 @AdminController('system/page-config')
 export class PageConfigController {
   constructor(private readonly configs: PageConfigService) {}
+
+  @Get('catalog')
+  @Perms('system:page-config:info')
+  @ApiOperation({
+    operationId: 'systemPageConfigCatalog',
+    summary: '当前租户的模块配置目录',
+  })
+  @ApiResult(PageConfigCatalogDto)
+  @ApiErrors(403, 503)
+  catalog(): Promise<PageConfigCatalogDto> {
+    return this.configs.catalog();
+  }
 
   @Get()
   @Perms('system:page-config:info')

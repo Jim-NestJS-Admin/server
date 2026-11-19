@@ -361,6 +361,143 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
       tenantUser,
     ).expect(400);
   });
+  it('模块配置按套餐菜单分组排序，角色缺少读取权限时仍能看到对应目录项', async () => {
+    const parentId = allMenus[0];
+    const addPage = (
+      component: string,
+      title: string,
+      rank: number,
+      hidden = false,
+      directory = parentId,
+    ) =>
+      context.run({ tenantId: '0' }, () =>
+        repos.for(SystemMenu).insert({
+          scope: 'tenant',
+          type: 'page',
+          parentId: directory,
+          path: `/${component}`,
+          component,
+          title,
+          permission:
+            component === 'workflow/workbench'
+              ? 'workflow:instance:page'
+              : `${component.replaceAll('/', ':')}:page`,
+          rank,
+          hidden,
+        }),
+      );
+    const directory = await context.run({ tenantId: '0' }, () =>
+      repos.for(SystemMenu).insert({
+        scope: 'tenant',
+        type: 'directory',
+        parentId,
+        path: '/access',
+        title: '角色 / 权限',
+        rank: 20,
+      }),
+    );
+    const rolePage = await addPage(
+      'system/role',
+      '角色管理',
+      10,
+      false,
+      directory,
+    );
+    const orgPage = await addPage('system/org', '组织管理', 10);
+    const workbench = await addPage('workflow/workbench', '审批工作台', 30);
+    const hidden = await addPage('system/user-role', '角色分配', 40, true);
+    await addPage('system/parameter', '未开通的系统参数', 50);
+    const pkg = (
+      await http('platform/package/info', { id: allPackage }).expect(200)
+    ).body.data;
+    await http('platform/package/update', {
+      id: pkg.id,
+      version: pkg.version,
+      data: {
+        menuIds: [...allMenus, directory, rolePage, orgPage, workbench, hidden],
+      },
+    }).expect(200);
+
+    const catalog = 'system/page-config/catalog';
+    const menuTree = (readAll: boolean) => [
+      {
+        id: parentId,
+        title: '系统',
+        children: [
+          {
+            id: allMenus[1],
+            resource: 'system:user',
+            title: '用户',
+            selectable: true,
+          },
+          {
+            id: orgPage,
+            resource: 'system:org',
+            title: '组织管理',
+            selectable: readAll,
+          },
+          {
+            id: directory,
+            title: '角色 / 权限',
+            children: [
+              {
+                id: rolePage,
+                resource: 'system:role',
+                title: '角色管理',
+                selectable: readAll,
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    expect((await get(catalog, '1', tenantUser).expect(200)).body.data).toEqual(
+      {
+        menus: menuTree(true),
+      },
+    );
+
+    const user = (
+      await http(
+        'system/user/create',
+        {
+          username: 'config-editor',
+          nickname: '配置管理员',
+          password: 'StrongPassword8',
+        },
+        '1',
+        tenantUser,
+      ).expect(200)
+    ).body.data;
+    await get(catalog, '1', user.id).expect(403);
+    const role = (
+      await http(
+        'system/role/add',
+        {
+          data: {
+            code: 'config-editor',
+            name: '配置管理员',
+            enabled: true,
+            permissions: ['system:page-config:info', 'system:user:page'],
+            dataScope: 'all',
+            customOrgIds: [],
+          },
+        },
+        '1',
+        tenantUser,
+      ).expect(200)
+    ).body.data;
+    await http(
+      'system/user-role/add',
+      { data: { userId: user.id, roleId: role.id } },
+      '1',
+      tenantUser,
+    ).expect(200);
+    expect((await get(catalog, '1', user.id).expect(200)).body.data).toEqual({
+      menus: menuTree(false),
+    });
+    await get('system/org/schema', '1', user.id).expect(403);
+  });
   it('菜单管理可移动到组织与权限，仍仅在平台菜单中显示', async () => {
     const organization = await context.run({ tenantId: '0' }, () =>
       repos

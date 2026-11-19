@@ -13,6 +13,8 @@ export interface ViewColumn {
   width?: number;
   hidden?: boolean;
   fixed?: 'left' | 'right';
+  align?: 'left' | 'center';
+  headerAlign?: 'left' | 'center';
 }
 export interface ViewFormItem {
   field: string;
@@ -91,6 +93,13 @@ export function validatePageConfig(
               bad(`${p}.fixed`, '只能是 left 或 right');
             if (c.hidden !== undefined && typeof c.hidden !== 'boolean')
               bad(`${p}.hidden`, '必须是 true 或 false');
+            for (const key of ['align', 'headerAlign'] as const)
+              if (
+                c[key] !== undefined &&
+                c[key] !== 'left' &&
+                c[key] !== 'center'
+              )
+                bad(`${p}.${key}`, '只能是 left 或 center');
           });
       }
       const subset = (key: string, allowed: string[]) => {
@@ -233,11 +242,14 @@ export function mergeView(
         )
       : {};
   const columns: ViewColumn[] = fields.filter(visible).map((field) => {
+    const adminColumn = adminCols.get(field);
     const merged = {
       // 代码默认：系统字段（编号、版本号等）默认隐藏，管理员和用户的设置覆盖它
       ...(defaultHiddenColumn(meta, field) ? { hidden: true } : {}),
-      ...pick(adminCols.get(field)),
+      ...pick(adminColumn),
       ...pick(userCols.get(field)),
+      align: adminColumn?.align,
+      headerAlign: adminColumn?.headerAlign,
     };
     return Object.fromEntries(
       Object.entries({ field, ...merged }).filter(([, v]) => v !== undefined),

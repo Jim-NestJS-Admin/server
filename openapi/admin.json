@@ -6865,6 +6865,49 @@
         ],
         "type": "object"
       },
+      "PageConfigCatalogDto": {
+        "properties": {
+          "menus": {
+            "items": {
+              "$ref": "#/components/schemas/PageConfigMenuNodeDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "menus"
+        ],
+        "type": "object"
+      },
+      "PageConfigMenuNodeDto": {
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/PageConfigMenuNodeDto"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "resource": {
+            "description": "页面对应的 CRUD 资源",
+            "type": "string"
+          },
+          "selectable": {
+            "description": "当前角色能否读取该资源的页面描述",
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "type": "object"
+      },
       "PermissionItem": {
         "properties": {
           "code": {
@@ -30000,6 +30043,77 @@
           }
         ],
         "summary": "模块显示配置",
+        "tags": [
+          "system 模块配置"
+        ],
+        "x-permission": {
+          "code": "system:page-config:info",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/system/page-config/catalog": {
+      "get": {
+        "operationId": "systemPageConfigCatalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PageConfigCatalogDto"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "5003：服务暂不可用"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "当前租户的模块配置目录",
         "tags": [
           "system 模块配置"
         ],
