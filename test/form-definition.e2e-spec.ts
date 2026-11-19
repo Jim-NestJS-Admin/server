@@ -11,6 +11,7 @@ import { PermissionSource } from '../src/core/permission/permission-source.js';
 import { RequestContext } from '../src/core/tenant/request-context.js';
 import { FormDefinitionService } from '../src/modules/form/service/form-definition.service.js';
 import { FormDefinition1794470400000 } from '../src/database/migrations/1794470400000-FormDefinition.js';
+import { FormVersionArchive1814906215523 } from '../src/database/migrations/1814906215523-FormVersionArchive.js';
 import { buildOpenApiDocument } from '../src/core/swagger/swagger.js';
 import { createTestModule } from './support/test-auth.js';
 import { assertTestDatabase } from './support/test-database.js';
@@ -141,6 +142,7 @@ describe('T35 表单版本、校验与租户边界', () => {
     try {
       await migration.down(runner);
       await migration.up(runner);
+      await new FormVersionArchive1814906215523().up(runner);
       const table = await runner.getTable('form_definition');
       expect(
         table?.columns.find((c) => c.name === 'active_guard')?.asExpression,
@@ -154,6 +156,67 @@ describe('T35 表单版本、校验与租户边界', () => {
     } finally {
       await runner.release();
     }
+  });
+
+  it('未使用的旧版本可以归档和恢复，归档第一版后仍能从第二版创建第三版', async () => {
+    const first = await add();
+    const identity = { id: first.id, version: 1 };
+    await post('set-archived', { ...identity, archived: true }).expect(400);
+    const second = (
+      await post('revise', { data: data(), baseRevision: 1 }).expect(200)
+    ).body.data;
+    await post(
+      'set-archived',
+      { ...identity, archived: true },
+      '1',
+      '3',
+    ).expect(403);
+    await post('set-archived', { ...identity, archived: true }, '2').expect(
+      404,
+    );
+    await post('set-archived', { ...identity, archived: true }).expect(200);
+    const active = (await post('page', {}).expect(200)).body.data.list;
+    expect(active.map((row: { id: string }) => row.id)).toEqual([second.id]);
+    const archived = (
+      await post('page', { eq: { archived: true } }).expect(200)
+    ).body.data.list;
+    expect(archived).toMatchObject([
+      { id: first.id, version: 2, archived: true },
+    ]);
+    await post('validate', { definitionId: first.id, data: {} }).expect(404);
+    const third = await post('revise', {
+      definitionId: second.id,
+      data: data(),
+      baseRevision: 2,
+    }).expect(200);
+    expect(third.body.data).toMatchObject({
+      code: first.code,
+      revision: 3,
+      archived: false,
+    });
+    await post('set-archived', { ...identity, archived: false }).expect(409);
+    await post('set-archived', {
+      id: first.id,
+      version: 2,
+      archived: false,
+    }).expect(200);
+    expect((await post('page', {}).expect(200)).body.data.total).toBe(3);
+  });
+
+  it('已有提交记录的旧版本不能归档', async () => {
+    const first = await add();
+    await post('revise', { data: data(), baseRevision: 1 }).expect(200);
+    await request(app.getHttpServer())
+      .post('/admin/form/submission/add')
+      .set('x-test-user', '1')
+      .set('x-test-tenant', '1')
+      .send({ data: { definitionId: first.id, values: { reason: '测试' } } })
+      .expect(200);
+    await post('set-archived', {
+      id: first.id,
+      version: 1,
+      archived: true,
+    }).expect(400);
   });
 
   it('创建快照、解析字段并拒绝额外系统字段和伪造字段清单', async () => {

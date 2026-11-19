@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { EntityManager } from 'typeorm';
 import { BaseService } from '../../../core/crud/base.service.js';
@@ -10,6 +10,7 @@ import { SystemDirectory } from '../../system/service/system-directory.service.j
 import { SystemFieldCatalog } from '../../system/service/system-field.catalog.js';
 import { CodeRuleService } from '../../code-rule/service/code-rule.service.js';
 import { WorkflowDefinition } from '../entity/workflow-definition.entity.js';
+import { WorkflowInstance } from '../entity/workflow-runtime.entity.js';
 import type { WorkflowDefinitionInput } from '../dto/workflow.dto.js';
 import {
   compileWorkflow,
@@ -19,7 +20,27 @@ import {
 } from './workflow-rules.js';
 
 @Injectable()
-export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
+export class WorkflowDefinitionService
+  extends BaseService<WorkflowDefinition>
+  implements OnModuleInit
+{
+  onModuleInit() {
+    this.forms.registerWorkflowReferences(async (id, manager) => {
+      for (const repository of [
+        this.repos.for(WorkflowDefinition),
+        this.repos.for(WorkflowInstance),
+      ]) {
+        const row = await repository
+          .query('w', manager)
+          .withDeleted()
+          .andWhere('w.formDefinitionId = :id', { id })
+          .setLock('pessimistic_read')
+          .getOne();
+        if (row) return true;
+      }
+      return false;
+    });
+  }
   /** 发起人仅取得已发布流程的选择摘要；不开放管理接口、BPMN或条件/人员配置。 */
   async availableForStart(body: {
     id?: string;

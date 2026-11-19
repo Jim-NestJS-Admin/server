@@ -2568,6 +2568,10 @@
       },
       "FormDefinition": {
         "properties": {
+          "archived": {
+            "description": "已归档",
+            "type": "boolean"
+          },
           "code": {
             "description": "表单编码",
             "type": "string"
@@ -2714,6 +2718,10 @@
       },
       "FormDefinitionPageEq": {
         "properties": {
+          "archived": {
+            "description": "已归档",
+            "type": "boolean"
+          },
           "code": {
             "description": "表单编码",
             "type": "string"
@@ -2798,6 +2806,10 @@
             },
             "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
             "type": "object"
+          },
+          "archived": {
+            "description": "已归档",
+            "type": "boolean"
           },
           "code": {
             "description": "表单编码",
@@ -8162,6 +8174,25 @@
         },
         "required": [
           "spec"
+        ],
+        "type": "object"
+      },
+      "SetFormVersionArchivedBody": {
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "archived"
         ],
         "type": "object"
       },
@@ -20412,6 +20443,102 @@
         ],
         "x-permission": {
           "code": "form:definition:page",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/form/definition/set-archived": {
+      "post": {
+        "operationId": "formDefinitionSetArchived",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetFormVersionArchivedBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SetFormVersionArchivedBody"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "summary": "归档未使用的旧表单版本，或恢复归档版本",
+        "tags": [
+          "form/definition 表单定义"
+        ],
+        "x-permission": {
+          "code": "form:definition:update",
           "risk": "normal"
         }
       }
