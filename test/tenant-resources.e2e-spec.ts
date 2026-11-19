@@ -354,10 +354,22 @@ describe('T32 现有资源跨租户双向防漏', () => {
       });
 
       it('模块配置、历史内容、字段默认与角色字段权限的编号不能跨租户使用', async () => {
+        const usernameColumn = {
+          field: 'username',
+          width: 160,
+          align: 'center',
+          headerAlign: 'left',
+        };
         await post(owner, 'system/page-config/save', {
           resource: 'system:user',
           version: 0,
-          config: { list: { pageSize: 30, tableMode: 'virtual' } },
+          config: {
+            list: {
+              pageSize: 30,
+              tableMode: 'virtual',
+              columns: [usernameColumn],
+            },
+          },
         }).expect(200);
         const ownerSchema = (await get(owner, 'system/user/schema').expect(200))
           .body.data;
@@ -365,11 +377,15 @@ describe('T32 现有资源跨租户双向防漏', () => {
         expect(ownerSchema.view.list).toMatchObject({
           pageSize: 30,
           tableMode: 'virtual',
+          columns: expect.arrayContaining([usernameColumn]),
         });
         const attackerSchema = (
           await get(attacker, 'system/user/schema').expect(200)
         ).body.data;
         expect(attackerSchema.view.list.tableMode).toBe('normal');
+        expect(attackerSchema.view.list.columns).not.toContainEqual(
+          usernameColumn,
+        );
         expect(
           (
             await get(

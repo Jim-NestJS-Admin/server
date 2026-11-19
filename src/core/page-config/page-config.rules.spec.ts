@@ -14,6 +14,38 @@ const meta = {
 } as unknown as CrudResourceMeta;
 
 describe('在线页面配置规则（T23）', () => {
+  it('管理员可独立设置内容与表头对齐，用户列偏好只覆盖原有显示属性', () => {
+    const config = {
+      list: {
+        columns: [{ field: 'name', align: 'center', headerAlign: 'left' }],
+      },
+    } as const;
+    const saved = { list: { columns: [...config.list.columns] } };
+    expect(validatePageConfig(meta, saved)).toEqual([]);
+    expect(
+      mergeView(
+        meta,
+        saved,
+        {
+          columns: [
+            { field: 'name', width: 160, align: 'left', headerAlign: 'center' },
+          ],
+        },
+        () => 'editable',
+        true,
+      ).list.columns[0],
+    ).toEqual({
+      field: 'name',
+      width: 160,
+      align: 'center',
+      headerAlign: 'left',
+    });
+    expect(
+      validatePageConfig(meta, {
+        list: { columns: [{ field: 'name', align: 'bad', headerAlign: true }] },
+      }).map((item) => item.field),
+    ).toEqual(['list.columns[0].align', 'list.columns[0].headerAlign']);
+  });
   it('表格模式沿用代码默认，模块覆盖支持两种模式，拒绝未知值', () => {
     const oldConfig = { list: { pageSize: 40 } };
     const view = (resource: CrudResourceMeta, config = oldConfig) =>
