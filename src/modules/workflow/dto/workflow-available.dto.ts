@@ -30,6 +30,7 @@ export class WorkflowSelection {
 export class WorkflowAvailableRow {
   @ApiProperty() id!: string;
   @ApiPropertyOptional() name?: string;
+  @ApiPropertyOptional() category?: string;
   @ApiPropertyOptional() code?: string;
   @ApiPropertyOptional() revision?: number;
   @ApiProperty() formDefinitionId!: string;

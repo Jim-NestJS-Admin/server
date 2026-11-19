@@ -54,10 +54,20 @@ export class WorkflowDefinitionService
         { status: 'published' },
       );
       if (body.id) query.andWhere('e.id = :id', { id: body.id });
+      else {
+        const latest = this.select(manager, 'info')
+          .select('MAX(e.id)')
+          .andWhere('e.status = :status')
+          .groupBy('e.code');
+        query.andWhere(`e.id IN (${latest.getQuery()})`);
+      }
       if (body.keyword)
-        query.andWhere('(e.name LIKE :keyword OR e.code LIKE :keyword)', {
-          keyword: `%${body.keyword}%`,
-        });
+        query.andWhere(
+          '(e.name LIKE :keyword OR e.category LIKE :keyword OR e.code LIKE :keyword)',
+          {
+            keyword: `%${body.keyword}%`,
+          },
+        );
       const [rows, total] = await query
         .orderBy('e.revision', 'DESC')
         .skip((body.page - 1) * body.size)
@@ -78,6 +88,7 @@ export class WorkflowDefinitionService
           return {
             id: row.id,
             name: visible.name,
+            category: visible.category,
             code: visible.code,
             revision: visible.revision,
             formDefinitionId: row.formDefinitionId,
@@ -164,6 +175,7 @@ export class WorkflowDefinitionService
     if (!saving) throw crudErrors.badRequest('请使用流程创建或修订接口');
     if (!data.name || !data.formDefinitionId || !data.designer)
       throw crudErrors.badRequest('缺少可写的流程名称、表单版本或流程设计');
+    data.category = data.category?.trim() ?? '';
     const parsed = await this.prepare(
       data.formDefinitionId,
       data.designer,

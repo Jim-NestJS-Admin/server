@@ -6,7 +6,7 @@ import {
   type TableIndexOptions,
 } from 'typeorm';
 
-function baseColumns(): TableColumnOptions[] {
+export function baseColumns(): TableColumnOptions[] {
   return [
     {
       name: 'id',

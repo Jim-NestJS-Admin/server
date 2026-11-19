@@ -30,9 +30,11 @@ import {
   WorkflowOutbox,
 } from '../entity/workflow-runtime.entity.js';
 import { WorkflowTimer } from '../entity/workflow-timer.entity.js';
+import { WorkflowApplicationDraft } from '../entity/workflow-application-draft.entity.js';
 import type { WorkflowNode } from '../dto/workflow.dto.js';
 import type {
   StartWorkflowBody,
+  ApplicationInput,
   ApproveWorkflowBody,
   TransferWorkflowBody,
   WorkflowInstanceActionBody,
@@ -68,85 +70,219 @@ export class WorkflowRuntimeService {
 
   /** 业务模块可传入固定业务版本引用；HTTP只接收正式表单提交，不接受客户端自报业务归属。 */
   start(body: StartWorkflowBody, business?: { type: string; id: string }) {
+    return this.transaction((manager) =>
+      this.startInTx(body, manager, business),
+    );
+  }
+
+  private ownedDrafts(manager: EntityManager) {
+    return this.repos
+      .for(WorkflowApplicationDraft)
+      .query('d', manager)
+      .andWhere('d.createdBy = :owner AND d.orgId <=> :org', {
+        owner: this.currentUser(),
+        org: this.context.current().orgId,
+      });
+  }
+
+  async applicationDrafts(page: number) {
+    const [rows, total] = await this.ownedDrafts(this.db.manager)
+      .select(['d.id', 'd.name', 'd.updatedAt'])
+      .andWhere('d.instanceId IS NULL')
+      .orderBy('d.updatedAt', 'DESC')
+      .addOrderBy('d.id', 'DESC')
+      .skip((page - 1) * 20)
+      .take(20)
+      .getManyAndCount();
+    return {
+      list: rows.map(({ id, name, updatedAt }) => ({ id, name, updatedAt })),
+      total,
+    };
+  }
+
+  async applicationDraft(id: string) {
+    const row = await this.ownedDrafts(this.db.manager)
+      .andWhere('d.id = :id AND d.instanceId IS NULL', { id })
+      .getOne();
+    if (!row) throw crudErrors.notFound();
+    return this.draftView(row);
+  }
+
+  private draftView({
+    id,
+    version,
+    definitionId,
+    name,
+    values,
+    selections,
+  }: WorkflowApplicationDraft) {
+    return { id, version, definitionId, name, values, selections };
+  }
+
+  private checkApplication(body: ApplicationInput) {
+    if (Boolean(body.draftId) !== Boolean(body.version))
+      throw crudErrors.badRequest('请提供草稿及其版本');
+    if (
+      Buffer.byteLength(JSON.stringify([body.values, body.selections])) > 65536
+    )
+      throw crudErrors.badRequest('填写内容最多64KiB');
+  }
+
+  private async lockApplicationDraft(
+    body: ApplicationInput,
+    manager: EntityManager,
+  ) {
+    if (!body.draftId) return;
+    const row = await this.ownedDrafts(manager)
+      .andWhere('d.id = :id', { id: body.draftId })
+      .setLock('pessimistic_write')
+      .getOne();
+    if (!row || row.definitionId !== body.definitionId)
+      throw crudErrors.notFound();
+    if (!row.instanceId && row.version !== body.version)
+      throw crudErrors.versionConflict();
+    return row;
+  }
+
+  saveApplicationDraft(body: ApplicationInput) {
+    this.checkApplication(body);
     return this.transaction(async (manager) => {
-      const userId = this.currentUser();
-      const ctx = this.context.current();
-      const identity = await this.directory.workflowIdentity(
-        userId,
-        ctx.orgId,
-        manager,
-      );
-      if (!identity) throw crudErrors.notFound();
+      const existing = await this.lockApplicationDraft(body, manager);
+      if (existing?.instanceId) throw this.conflict('草稿已经发起审批');
       const definition = await this.definitions.publishedVersion(
         body.definitionId,
         manager,
       );
-      const submission = await this.submissions.forWorkflow(
-        body.submissionId,
-        userId,
-        manager,
-      );
-      if (submission.definitionId !== definition.formDefinitionId)
-        throw crudErrors.badRequest('提交记录与流程绑定的表单版本不一致');
-      const businessType = business?.type ?? 'form/submission';
-      const businessId = business?.id ?? submission.id;
-      if (
-        !/^[a-z][a-z0-9/-]{1,63}$/.test(businessType) ||
-        !businessId ||
-        businessId.length > 64
-      )
-        throw crudErrors.badRequest('业务版本引用无效');
-      const existing = await this.repos
-        .for(WorkflowInstance)
-        .query('i', manager)
-        .andWhere(
-          '(i.originSubmissionId = :id OR (i.businessType = :businessType AND i.businessId = :businessId))',
-          { id: submission.id, businessType, businessId },
-        )
-        .setLock('pessimistic_read')
-        .getOne();
-      if (existing)
-        throw this.conflict('该提交或业务版本已经发起审批，请查看原申请');
-      const snapshot: Partial<WorkflowInstance> = {
+      const repo = this.repos.for(WorkflowApplicationDraft);
+      const data = {
         definitionId: definition.id,
-        originSubmissionId: submission.id,
-        submissionId: submission.id,
-        formDefinitionId: definition.formDefinitionId,
-        code: definition.code,
         name: definition.name,
-        revision: definition.revision,
-        applicantId: userId,
-        applicantOrgId: ctx.orgId,
-        applicantRoles: identity.roleIds,
+        values: body.values,
         selections: body.selections ?? {},
-        actors: {},
-        designer: definition.designer,
-        bpmn: definition.bpmn,
-        digest: definition.digest,
-        compilerVersion: definition.compilerVersion,
-        round: 1,
-        viewerIds: [userId],
-        decisions: {},
-        formChanges: {},
-        businessType,
-        businessId,
-        status: 'running',
-        endedAt: null,
       };
-      const instance = Object.assign(new WorkflowInstance(), snapshot);
-      const advanced = await this.advance(instance, manager);
-      instance.engineState = advanced.state;
-      instance.status = advanced.ended ? 'approved' : 'running';
-      instance.endedAt = advanced.ended ? new Date() : null;
-      const id = await this.repos
-        .for(WorkflowInstance)
-        .insert(instance, manager);
-      instance.id = id;
-      await this.record(instance, 'start', userId, null, '', [], manager);
-      await this.sync(instance, advanced, manager);
-      await this.save(instance, manager);
-      return this.instances.result(id, manager);
+      const id = existing?.id ?? (await repo.insert(data, manager));
+      if (existing) await repo.update([id], data, manager);
+      const row = await this.ownedDrafts(manager)
+        .andWhere('d.id = :id', { id })
+        .getOneOrFail();
+      return this.draftView(row);
     });
+  }
+
+  startApplication(body: ApplicationInput) {
+    this.checkApplication(body);
+    return this.transaction(async (manager) => {
+      const draft = await this.lockApplicationDraft(body, manager);
+      if (draft?.instanceId)
+        return this.instances.result(draft.instanceId, manager);
+      const result = await this.startInTx(
+        body,
+        manager,
+        undefined,
+        body.values,
+      );
+      if (draft)
+        await this.repos.for(WorkflowApplicationDraft).update(
+          [draft.id],
+          {
+            instanceId: result.id,
+            values: {},
+            selections: {},
+          },
+          manager,
+        );
+      return result;
+    });
+  }
+
+  private async startInTx(
+    body: Omit<StartWorkflowBody, 'submissionId'> & { submissionId?: string },
+    manager: EntityManager,
+    business?: { type: string; id: string },
+    values?: Record<string, unknown>,
+  ) {
+    const userId = this.currentUser();
+    const ctx = this.context.current();
+    const identity = await this.directory.workflowIdentity(
+      userId,
+      ctx.orgId,
+      manager,
+    );
+    if (!identity) throw crudErrors.notFound();
+    const definition = await this.definitions.publishedVersion(
+      body.definitionId,
+      manager,
+    );
+    const submission = body.submissionId
+      ? await this.submissions.forWorkflow(body.submissionId, userId, manager)
+      : {
+          id: (
+            await this.submissions.createForWorkflow(
+              definition.formDefinitionId,
+              values ?? {},
+              manager,
+            )
+          ).id,
+          definitionId: definition.formDefinitionId,
+        };
+    if (submission.definitionId !== definition.formDefinitionId)
+      throw crudErrors.badRequest('提交记录与流程绑定的表单版本不一致');
+    const businessType = business?.type ?? 'form/submission';
+    const businessId = business?.id ?? submission.id;
+    if (
+      !/^[a-z][a-z0-9/-]{1,63}$/.test(businessType) ||
+      !businessId ||
+      businessId.length > 64
+    )
+      throw crudErrors.badRequest('业务版本引用无效');
+    const existing = await this.repos
+      .for(WorkflowInstance)
+      .query('i', manager)
+      .andWhere(
+        '(i.originSubmissionId = :id OR (i.businessType = :businessType AND i.businessId = :businessId))',
+        { id: submission.id, businessType, businessId },
+      )
+      .setLock('pessimistic_read')
+      .getOne();
+    if (existing)
+      throw this.conflict('该提交或业务版本已经发起审批，请查看原申请');
+    const snapshot: Partial<WorkflowInstance> = {
+      definitionId: definition.id,
+      originSubmissionId: submission.id,
+      submissionId: submission.id,
+      formDefinitionId: definition.formDefinitionId,
+      code: definition.code,
+      name: definition.name,
+      revision: definition.revision,
+      applicantId: userId,
+      applicantOrgId: ctx.orgId,
+      applicantRoles: identity.roleIds,
+      selections: body.selections ?? {},
+      actors: {},
+      designer: definition.designer,
+      bpmn: definition.bpmn,
+      digest: definition.digest,
+      compilerVersion: definition.compilerVersion,
+      round: 1,
+      viewerIds: [userId],
+      decisions: {},
+      formChanges: {},
+      businessType,
+      businessId,
+      status: 'running',
+      endedAt: null,
+    };
+    const instance = Object.assign(new WorkflowInstance(), snapshot);
+    const advanced = await this.advance(instance, manager);
+    instance.engineState = advanced.state;
+    instance.status = advanced.ended ? 'approved' : 'running';
+    instance.endedAt = advanced.ended ? new Date() : null;
+    const id = await this.repos.for(WorkflowInstance).insert(instance, manager);
+    instance.id = id;
+    await this.record(instance, 'start', userId, null, '', [], manager);
+    await this.sync(instance, advanced, manager);
+    await this.save(instance, manager);
+    return this.instances.result(id, manager);
   }
 
   approve(body: ApproveWorkflowBody) {

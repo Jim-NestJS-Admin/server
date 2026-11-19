@@ -129,6 +129,18 @@ export class FormSubmissionService extends BaseService<FormSubmission> {
     return out;
   }
   /** 发起审批仅能引用本人且仍在本次数据范围内的提交，不向workflow复制填写内容。 */
+  async createForWorkflow(
+    definitionId: string,
+    values: Record<string, unknown>,
+    manager: EntityManager,
+  ) {
+    return this.addWithTransaction(
+      { definitionId, values: structuredClone(values) },
+      undefined,
+      manager,
+    );
+  }
+
   async forWorkflow(id: string, applicantId: string, manager: EntityManager) {
     const row = await this.select(manager, 'info')
       .andWhere('e.id = :id AND e.createdBy = :applicantId', {

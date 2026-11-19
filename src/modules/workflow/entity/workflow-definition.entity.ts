@@ -30,6 +30,11 @@ export class WorkflowDefinition extends BaseEntity {
   @Matches(/\S/)
   @Column({ length: 100 })
   name!: string;
+  @CrudField({ label: '事项分组', edit: 'add' })
+  @IsString()
+  @MaxLength(50)
+  @Column({ length: 50, default: '' })
+  category!: string;
   @CrudField({ label: '说明', edit: 'add' })
   @IsString()
   @MaxLength(500)

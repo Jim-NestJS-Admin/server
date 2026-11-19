@@ -440,6 +440,14 @@ export class BaseService<T extends BaseEntity> {
 
   /** 新增；有子表时 children 里每个子表只有 added，主表和子表在同一个事务里写入 */
   async add(data: Partial<T>, children?: unknown): Promise<CrudRow<T>> {
+    return this.addWithTransaction(data, children);
+  }
+
+  protected async addWithTransaction(
+    data: Partial<T>,
+    children?: unknown,
+    manager?: EntityManager,
+  ): Promise<CrudRow<T>> {
     this.assertNotChild();
     const plans = await planChildren(
       this.meta as CrudResourceMeta,
@@ -447,7 +455,7 @@ export class BaseService<T extends BaseEntity> {
       'add',
       this.crud.dataSource,
     );
-    return this.transaction(async (tx) => {
+    const save = async (tx: CrudTx) => {
       const values = this.pick(data, this.meta.addable);
       this.dropChildNotEditable(plans, {
         orgId: tx.ctx.orgId,
@@ -496,6 +504,16 @@ export class BaseService<T extends BaseEntity> {
       if (!row) throw new Error(`新增后读不到数据：${this.meta.prefix} ${id}`);
       await this.afterAdd(row, tx);
       return this.toDetail(tx.manager, row, tx.ctx.tenantId);
+    };
+    if (!manager) return this.transaction(save);
+    const ctx = this.crud.context.current();
+    if (!manager.queryRunner?.isTransactionActive || ctx.ignoreTenant)
+      throw new Error('新增必须使用当前租户的活动事务');
+    return save({
+      manager,
+      ctx,
+      meta: this.meta,
+      dictionary: this.crud.dictionary?.(),
     });
   }
 

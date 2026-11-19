@@ -1,3 +1,4 @@
+import { CodeRuleService } from '../src/modules/code-rule/service/code-rule.service.js';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { randomUUID, createHash } from 'node:crypto';
@@ -553,137 +554,250 @@ describe('T48–T50 AI与OAuth真实身份定向验证', () => {
     expect(miss.body.data.total).toBe(0);
   });
 
-  it('表单保存→提交→流程发布→发起→同意→站内消息，旧待办不能再办理', async () => {
+  it('初始化编码→分组发布→保存草稿→发起→站内信送达→并行审批办结', async () => {
     const token = tokens[0];
-    for (const [usageKey, literal] of [
-      ['form_definition_code', 'form_'],
-      ['workflow_definition_code', 'wf_'],
-    ]) {
-      const rule = await post('system/code-rule/add', token, {
+    const defaults = app.get(CodeRuleService);
+    await context.run({ tenantId: tenants[0] }, () =>
+      defaults.ensureDocumentDefaults(),
+    );
+    await context.run({ tenantId: tenants[0] }, () =>
+      defaults.ensureDocumentDefaults(),
+    );
+    const form = (
+      await post('form/definition/add', token, {
         data: {
-          code: `smoke_${literal}`,
-          name: '冒烟编码',
-          description: '',
-          timezone: 'Asia/Shanghai',
-          resetPeriod: 'never',
-          segments: [
-            { type: 'literal', value: literal },
-            { type: 'sequence', width: 6 },
-          ],
-          start: '1',
-          status: '1',
+          name: '冒烟表单',
+          designer: {
+            schemaVersion: 1,
+            rule: [
+              {
+                type: 'input',
+                field: 'reason',
+                title: '原因',
+                $required: true,
+              },
+            ],
+          },
         },
-      }).expect(200);
-      await post('system/code-rule/binding/set', token, {
-        usageKey,
-        ruleId: rule.body.data.id,
-      }).expect(200);
-    }
-    const form = await post('form/definition/add', token, {
-      data: {
-        name: '冒烟表单',
-        designer: {
-          schemaVersion: 1,
-          rule: [
-            { type: 'input', field: 'reason', title: '原因', $required: true },
-          ],
-        },
+      }).expect(200)
+    ).body.data;
+    expect(form.code).toBe('form_000001');
+    await post('form/definition/info', tokens[1], { id: form.id }).expect(404);
+    const approval = (id: string, user: string) => ({
+      id,
+      name: id,
+      type: 'approve',
+      actor: { type: 'users', ids: [user] },
+      mode: 'all',
+      empty: 'stop',
+      skipRepeated: false,
+      rejectTo: 'applicant',
+      fieldPermissions: { reason: 'readonly' },
+    });
+    const definitionData = (secondUser: string) => ({
+      name: '冒烟审批',
+      category: '人事',
+      description: '',
+      formDefinitionId: form.id,
+      designer: {
+        schemaVersion: 1,
+        nodes: [
+          {
+            id: 'parallel',
+            name: '并行审批',
+            type: 'parallel',
+            branches: [
+              {
+                id: 'branch_a',
+                name: '分支A',
+                nodes: [approval('approve_a', peerId)],
+              },
+              {
+                id: 'branch_b',
+                name: '分支B',
+                nodes: [approval('approve_b', secondUser)],
+              },
+            ],
+          },
+        ],
       },
-    }).expect(200);
-    const formId = form.body.data.id as string;
-    await post('form/definition/info', tokens[1], { id: formId }).expect(404);
-    const submission = await post('form/submission/add', token, {
-      data: { definitionId: formId, values: { reason: '独立测试库最短闭环' } },
-    }).expect(200);
-    const definition = await post('workflow/definition/add', token, {
-      data: {
-        name: '冒烟审批',
-        description: '',
-        formDefinitionId: formId,
-        designer: {
-          schemaVersion: 1,
-          nodes: [
-            {
-              id: 'approval',
-              name: '本人审批',
-              type: 'approve',
-              actor: { type: 'applicant' },
-              mode: 'all',
-              empty: 'stop',
-              skipRepeated: false,
-              rejectTo: 'applicant',
-              fieldPermissions: { reason: 'readonly' },
-            },
-          ],
-        },
-      },
-    }).expect(200);
+    });
+    await post('workflow/definition/add', token, {
+      data: definitionData(peerId),
+    }).expect(400);
+    const definition = (
+      await post('workflow/definition/add', token, {
+        data: definitionData(users[0]!),
+      }).expect(200)
+    ).body.data;
+    expect(definition.code).toBe('wf_000001');
+    expect(
+      (await post('workflow/definition/available', token, {}).expect(200)).body
+        .data.total,
+    ).toBe(0);
     await post('workflow/definition/publish', token, {
-      id: definition.body.data.id,
-      version: definition.body.data.version,
-    })
-      .expect((response) => {
-        if (response.body.code !== 1000)
-          throw new Error('流程发布响应：' + JSON.stringify(response.body));
-      })
-      .expect(200);
-    const started = await post('workflow/instance/start', token, {
-      definitionId: definition.body.data.id,
-      submissionId: submission.body.data.id,
+      id: definition.id,
+      version: definition.version,
     }).expect(200);
-    const instanceId = started.body.data.id as string;
-    const tasks = await post('workflow/task/page', token, {
-      eq: { instanceId, status: 'pending', kind: 'approve' },
-    }).expect(200);
-    expect(tasks.body.data.list).toHaveLength(1);
-    const task = tasks.body.data.list[0] as { id: string; version: number };
-    await post('workflow/instance/document', tokens[1], {
-      id: instanceId,
+    expect(
+      (await post('workflow/definition/available', token, {}).expect(200)).body
+        .data.list,
+    ).toMatchObject([
+      { id: definition.id, name: '冒烟审批', category: '人事' },
+    ]);
+    expect(
+      (
+        await post('workflow/definition/available', tokens[1], {
+          id: definition.id,
+        }).expect(200)
+      ).body.data.total,
+    ).toBe(0);
+    const payload = {
+      definitionId: definition.id,
+      values: { reason: '独立测试库最短闭环' },
+    };
+    const base = { definitionId: definition.id, values: {} };
+    await post('workflow/instance/start-application', token, base).expect(400);
+    const draft = (
+      await post('workflow/instance/draft-save', token, base).expect(200)
+    ).body.data;
+    expect(
+      (await post('workflow/instance/draft-page', token, {}).expect(200)).body
+        .data.list,
+    ).toMatchObject([{ id: draft.id }]);
+    await post('workflow/instance/draft-info', peerToken, {
+      id: draft.id,
     }).expect(404);
-    const approved = await post('workflow/task/approve', token, {
-      id: task.id,
-      version: task.version,
-      comment: '冒烟同意',
-    }).expect(200);
-    expect(approved.body.data.status).toBe('approved');
-    await post('workflow/task/approve', token, {
-      id: task.id,
-      version: task.version,
-    }).expect(409);
-    // 后台调度在test模式禁用；定向运行真实消费函数，不等待墙上时间。
+    await post('workflow/instance/draft-info', tokens[1], {
+      id: draft.id,
+    }).expect(404);
+    expect(
+      (
+        await post('workflow/instance/draft-info', token, {
+          id: draft.id,
+        }).expect(200)
+      ).body.data.values,
+    ).toEqual({});
+    expect(
+      (await post('workflow/instance/page', token, {}).expect(200)).body.data
+        .total,
+    ).toBe(0);
+    expect(
+      (await post('form/submission/page', token, {}).expect(200)).body.data
+        .total,
+    ).toBe(0);
+    expect(
+      (await post('notify/message/page', token, {}).expect(200)).body.data
+        .total,
+    ).toBe(0);
+    const draftPayload = {
+      ...payload,
+      draftId: draft.id,
+      version: draft.version,
+    };
+    const instance = (
+      await post(
+        'workflow/instance/start-application',
+        token,
+        draftPayload,
+      ).expect(200)
+    ).body.data;
+    const instanceId = instance.id as string;
+    expect(
+      (
+        await post(
+          'workflow/instance/start-application',
+          token,
+          draftPayload,
+        ).expect(200)
+      ).body.data.id,
+    ).toBe(instanceId);
+    expect(
+      (await post('workflow/instance/draft-page', token, {}).expect(200)).body
+        .data.total,
+    ).toBe(0);
+    expect(
+      (await post('form/submission/page', token, {}).expect(200)).body.data
+        .total,
+    ).toBe(1);
+
     const worker = app.get(NotifyWorkerService) as unknown as {
       consume(): Promise<void>;
     };
     await context.run({ tenantId: tenants[0] }, () => worker.consume());
     await context.run({ tenantId: tenants[0] }, () => worker.consume());
-    const messages = await post('notify/message/page', token, {
-      eq: { instanceId },
-    })
-      .expect((response) => {
-        if (response.body.code !== 1000)
-          throw new Error('消息列表响应：' + JSON.stringify(response.body));
-      })
-      .expect(200);
+    const tasks = [];
+    for (const assigneeToken of [peerToken, token]) {
+      const inbox = (
+        await post('notify/message/page', assigneeToken, {
+          eq: { instanceId },
+        }).expect(200)
+      ).body.data.list;
+      expect(inbox).toHaveLength(1);
+      expect(inbox[0]).toMatchObject({ event: 'task.created', instanceId });
+      const pending = (
+        await post('workflow/task/page', assigneeToken, {
+          eq: { instanceId, status: 'pending', kind: 'approve' },
+        }).expect(200)
+      ).body.data.list;
+      const task = pending.find(
+        (row: { id: string }) => row.id === inbox[0].taskId,
+      );
+      expect(task).toBeDefined();
+      await post('workflow/instance/document', assigneeToken, {
+        id: instanceId,
+        taskId: task.id,
+      }).expect(200);
+      tasks.push(task);
+    }
+    await post('workflow/instance/document', tokens[1], {
+      id: instanceId,
+    }).expect(404);
+    const first = await post('workflow/task/approve', peerToken, {
+      id: tasks[0].id,
+      version: tasks[0].version,
+    }).expect(200);
+    expect(first.body.data.status).toBe('running');
+    const approved = await post('workflow/task/approve', token, {
+      id: tasks[1].id,
+      version: tasks[1].version,
+    }).expect(200);
+    expect(approved.body.data.status).toBe('approved');
+    await post('workflow/task/approve', token, {
+      id: tasks[1].id,
+      version: tasks[1].version,
+    }).expect(409);
+    await context.run({ tenantId: tenants[0] }, () => worker.consume());
+    const messages = (
+      await post('notify/message/page', token, { eq: { instanceId } }).expect(
+        200,
+      )
+    ).body.data.list;
     expect(
-      messages.body.data.list.filter(
+      messages.filter(
         (m: { event: string }) => m.event === 'instance.approved',
       ),
     ).toHaveLength(1);
-    expect(messages.body.data.list[0]).not.toHaveProperty('values');
-    const searchedMessages = await post('notify/message/page', token, {
-      keyword: messages.body.data.list[0].title,
-      eq: { instanceId, readAt: null },
-    }).expect(200);
-    expect(searchedMessages.body.data.total).toBeGreaterThan(0);
+    expect(messages[0]).not.toHaveProperty('values');
     expect(
-      searchedMessages.body.data.list.every(
-        (message: { title: string; readAt: string | null }) =>
-          message.title.includes(messages.body.data.list[0].title) &&
-          message.readAt === null,
-      ),
-    ).toBe(true);
-    const other = await post('notify/message/page', tokens[1], {}).expect(200);
-    expect(other.body.data.list).toHaveLength(0);
+      (await post('notify/message/page', tokens[1], {}).expect(200)).body.data
+        .total,
+    ).toBe(0);
+
+    const key = randomUUID();
+    const direct = () =>
+      post('workflow/instance/start-application', token, payload).set(
+        'Idempotency-Key',
+        key,
+      );
+    const directResult = await direct().expect(200);
+    expect((await direct().expect(200)).body.data.id).toBe(
+      directResult.body.data.id,
+    );
+    expect(
+      (await post('form/submission/page', token, {}).expect(200)).body.data
+        .total,
+    ).toBe(2);
   }, 60000);
 
   it('AI配置不回传密钥，模板版本不可变，非法变量拒绝', async () => {

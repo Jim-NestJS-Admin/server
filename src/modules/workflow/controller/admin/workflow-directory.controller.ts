@@ -59,6 +59,7 @@ class WorkflowDirectoryBody {
 class WorkflowDirectoryOption {
   @ApiProperty() id!: string;
   @ApiProperty() label!: string;
+  @ApiPropertyOptional() avatar?: string;
 }
 class WorkflowDirectoryResult {
   @ApiProperty({ type: [WorkflowDirectoryOption] })

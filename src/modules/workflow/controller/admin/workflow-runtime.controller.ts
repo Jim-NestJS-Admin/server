@@ -16,6 +16,10 @@ import {
 } from '../../entity/workflow-runtime.entity.js';
 import {
   StartWorkflowBody,
+  ApplicationInput,
+  ApplicationDraftRow,
+  ApplicationDraftPageBody,
+  ApplicationDraftPage,
   ApproveWorkflowBody,
   TransferWorkflowBody,
   WorkflowInstanceActionBody,
@@ -69,6 +73,56 @@ export class WorkflowInstanceController extends BaseController<WorkflowInstance>
   @ApiErrors(400, 403, 404, 409)
   start(@Body() body: StartWorkflowBody) {
     return this.runtime.start(body);
+  }
+  @Post('start-application')
+  @HttpCode(200)
+  @Perms('workflow:instance:add')
+  @ApiOperation({
+    operationId: 'workflowInstanceStartApplication',
+    summary: '一次提交表单并发起审批',
+  })
+  @ApiResult(WorkflowInstance)
+  @ApiErrors(400, 403, 404, 409)
+  startApplication(@Body() body: ApplicationInput) {
+    return this.runtime.startApplication(body);
+  }
+
+  @Post('draft-save')
+  @HttpCode(200)
+  @Perms('workflow:instance:add')
+  @ApiOperation({
+    operationId: 'workflowInstanceDraftSave',
+    summary: '保存本人申请草稿',
+  })
+  @ApiResult(ApplicationDraftRow)
+  @ApiErrors(400, 403, 404, 409)
+  draftSave(@Body() body: ApplicationInput) {
+    return this.runtime.saveApplicationDraft(body);
+  }
+
+  @Post('draft-page')
+  @HttpCode(200)
+  @Perms('workflow:instance:add')
+  @ApiOperation({
+    operationId: 'workflowInstanceDraftPage',
+    summary: '列出本人申请草稿',
+  })
+  @ApiResult(ApplicationDraftPage)
+  draftPage(@Body() body: ApplicationDraftPageBody) {
+    return this.runtime.applicationDrafts(body.page);
+  }
+
+  @Post('draft-info')
+  @HttpCode(200)
+  @Perms('workflow:instance:add')
+  @ApiOperation({
+    operationId: 'workflowInstanceDraftInfo',
+    summary: '继续填写本人申请草稿',
+  })
+  @ApiResult(ApplicationDraftRow)
+  @ApiErrors(404)
+  draftInfo(@Body() body: WorkflowDocumentBody) {
+    return this.runtime.applicationDraft(body.id);
   }
   @Post('document')
   @HttpCode(200)

@@ -65,7 +65,7 @@ export class SystemDirectory {
       const query = this.repos
         .for(SystemUser)
         .query('u')
-        .select(['u.id', 'u.nickname'])
+        .select(['u.id', 'u.nickname', 'u.avatar'])
         .andWhere('u.enabled = :enabled', { enabled: true });
       if (keyword)
         query.andWhere('u.nickname LIKE :keyword', { keyword: `%${keyword}%` });
@@ -127,6 +127,7 @@ export class SystemDirectory {
         list: rows.map((row) => ({
           id: row.id,
           label: row.nickname || `成员 ${row.id}`,
+          ...(row.avatar ? { avatar: row.avatar } : {}),
         })),
         total,
       };
