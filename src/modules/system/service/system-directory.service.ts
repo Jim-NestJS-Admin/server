@@ -327,6 +327,28 @@ export class SystemDirectory {
     return ids.filter((id) => enabled.has(id));
   }
 
+  /** 仅解析由当前流程授权并计算出的成员编号，返回画布所需的显示资料。 */
+  async workflowMemberSummaries(ids: string[], manager: EntityManager) {
+    if (!ids.length)
+      return new Map<string, { id: string; name: string; avatar?: string }>();
+    const rows = await this.repos
+      .for(SystemUser)
+      .query('u', manager)
+      .select(['u.id', 'u.nickname', 'u.avatar'])
+      .andWhere('u.id IN (:...ids)', { ids })
+      .getMany();
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        {
+          id: row.id,
+          name: row.nickname || `成员 ${row.id}`,
+          ...(row.avatar ? { avatar: row.avatar } : {}),
+        },
+      ]),
+    );
+  }
+
   /** 流程发布校验只返回引用是否有效，不向workflow泄露用户/角色原始数据。 */
   async workflowReferences(
     refs: { users: string[]; roles: string[]; orgs: string[] },

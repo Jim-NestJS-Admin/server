@@ -31,7 +31,6 @@ import {
 } from '../entity/workflow-runtime.entity.js';
 import { WorkflowTimer } from '../entity/workflow-timer.entity.js';
 import { WorkflowApplicationDraft } from '../entity/workflow-application-draft.entity.js';
-import type { WorkflowNode } from '../dto/workflow.dto.js';
 import type {
   StartWorkflowBody,
   ApplicationInput,
@@ -45,7 +44,11 @@ import {
   type WorkflowAdvance,
   type WorkflowWait,
 } from './workflow-engine.js';
-import { WorkflowPlanner, runtimeNodes } from './workflow-plan.js';
+import {
+  WorkflowPlanner,
+  runtimeNodes,
+  workflowProgress,
+} from './workflow-plan.js';
 import { workflowFailure } from './workflow-failure.js';
 
 @Injectable()
@@ -640,50 +643,48 @@ export class WorkflowRuntimeService {
           id,
           round: instance.round,
         })
+        .orderBy('t.id', 'ASC')
         .getMany();
-      const progress = (nodes: WorkflowNode[]): object[] =>
-        nodes.map((node) => {
-          const descendants = runtimeNodes({
-            schemaVersion: 1,
-            nodes: [node],
-          }).map((n) => n.id);
-          const related = allTasks.filter((t) =>
-            descendants.includes(t.nodeId),
-          );
-          const status = related.some((t) => t.status === 'pending')
-            ? 'pending'
-            : related.some((t) => t.status === 'rejected')
-              ? 'returned'
-              : related.some((t) => t.status === 'cancelled')
-                ? 'cancelled'
-                : node.type === 'condition' &&
-                    Object.hasOwn(instance.decisions, node.id)
-                  ? 'taken'
-                  : node.type === 'copy' &&
-                      Object.hasOwn(instance.actors, node.id)
-                    ? 'copied'
-                    : descendants.some((id) =>
-                          Object.hasOwn(instance.actors, id),
-                        )
-                      ? 'approved'
-                      : 'waiting';
-          return {
-            id: node.id,
-            name: node.name,
-            type: node.type,
-            status,
-            chosenBranch: instance.decisions[node.id],
-            branches: node.branches?.map((b) => ({
-              id: b.id,
-              name: b.name,
-              nodes: progress(b.nodes),
-            })),
-          };
-        });
+      const members = await this.directory.workflowMemberSummaries(
+        [...new Set(allTasks.map((task) => task.assigneeId))],
+        manager,
+      );
+      const progress = workflowProgress(instance.designer.nodes, (node) => {
+        const descendants = runtimeNodes({
+          schemaVersion: 1,
+          nodes: [node],
+        }).map((n) => n.id);
+        const related = allTasks.filter((t) => descendants.includes(t.nodeId));
+        const status = related.some((t) => t.status === 'pending')
+          ? 'pending'
+          : related.some((t) => t.status === 'rejected')
+            ? 'returned'
+            : related.some((t) => t.status === 'cancelled')
+              ? 'cancelled'
+              : node.type === 'condition' &&
+                  Object.hasOwn(instance.decisions, node.id)
+                ? 'taken'
+                : node.type === 'copy' &&
+                    Object.hasOwn(instance.actors, node.id)
+                  ? 'copied'
+                  : descendants.some((id) => Object.hasOwn(instance.actors, id))
+                    ? 'approved'
+                    : 'waiting';
+        const direct = related.filter((task) => task.nodeId === node.id);
+        return {
+          status,
+          chosenBranch: instance.decisions[node.id],
+          members:
+            node.actor &&
+            [...new Set(direct.map((task) => task.assigneeId))].map(
+              (id) => members.get(id) ?? { id, name: '成员不可用' },
+            ),
+        };
+      });
       return {
         instance: visible,
         form,
-        progress: progress(instance.designer.nodes),
+        progress,
       };
     });
   }

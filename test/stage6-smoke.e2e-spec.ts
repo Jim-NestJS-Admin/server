@@ -26,6 +26,8 @@ import {
   SystemUser,
   SystemRole,
   SystemUserRole,
+  SystemUserSupervisor,
+  SystemOrg,
   SystemMenu,
 } from '../src/modules/system/entity/system.entity.js';
 import { PermissionRegistry } from '../src/core/permission/permission-registry.js';
@@ -799,6 +801,138 @@ describe('T48–T50 AI与OAuth真实身份定向验证', () => {
         .total,
     ).toBe(2);
   }, 60000);
+
+  it('按发起人预览负责人和上级，发起后展示实际待办和审批意见', async () => {
+    const token = tokens[0];
+    await context.run({ tenantId: tenants[0] }, () =>
+      db.transaction(async (manager) => {
+        await repos
+          .for(SystemOrg)
+          .update([orgs[0]!], { leaderId: peerId }, manager);
+        await repos
+          .for(SystemUserSupervisor)
+          .insert({ userId: users[0]!, supervisorId: peerId }, manager);
+      }),
+    );
+    await context.run({ tenantId: tenants[0] }, () =>
+      app.get(CodeRuleService).ensureDocumentDefaults(),
+    );
+    const form = (
+      await post('form/definition/add', token, {
+        data: {
+          name: '审批预览表单',
+          designer: {
+            schemaVersion: 1,
+            rule: [
+              {
+                type: 'input',
+                field: 'reason',
+                title: '原因',
+                $required: true,
+              },
+            ],
+          },
+        },
+      }).expect(200)
+    ).body.data;
+    const definition = (
+      await post('workflow/definition/add', token, {
+        data: {
+          name: '预览负责人和上级',
+          category: '人事',
+          formDefinitionId: form.id,
+          designer: {
+            schemaVersion: 1,
+            nodes: [
+              {
+                id: 'lead',
+                name: '部门复核',
+                actor: { type: 'department_leader', level: 1 },
+              },
+              {
+                id: 'superior',
+                name: '上级审批',
+                actor: { type: 'supervisor', level: 1 },
+              },
+            ].map((node) => ({
+              ...node,
+              type: 'approve',
+              mode: 'all',
+              empty: 'stop',
+              skipRepeated: false,
+              rejectTo: 'applicant',
+            })),
+          },
+        },
+      }).expect(200)
+    ).body.data;
+    await post('workflow/definition/publish', token, {
+      id: definition.id,
+      version: definition.version,
+    }).expect(200);
+    const preview = (
+      await post('workflow/definition/available', token, {
+        id: definition.id,
+      }).expect(200)
+    ).body.data.list[0];
+    expect(preview).not.toHaveProperty('designer');
+    expect(preview.progress).toMatchObject([
+      {
+        id: 'lead',
+        actorType: 'department_leader',
+        members: [{ id: peerId, name: '同组织测试成员' }],
+      },
+      {
+        id: 'superior',
+        actorType: 'supervisor',
+        members: [{ id: peerId, name: '同组织测试成员' }],
+      },
+    ]);
+    const peerPreview = (
+      await post('workflow/definition/available', peerToken, {
+        id: definition.id,
+      }).expect(200)
+    ).body.data.list[0];
+    expect(peerPreview.progress[1].members).toEqual([]);
+    const instance = (
+      await post('workflow/instance/start-application', token, {
+        definitionId: definition.id,
+        values: { reason: '预览和正式派单一致' },
+      }).expect(200)
+    ).body.data;
+    const document = async () =>
+      (
+        await post('workflow/instance/document', token, {
+          id: instance.id,
+        }).expect(200)
+      ).body.data;
+    expect((await document()).progress).toMatchObject([
+      { id: 'lead', status: 'pending', members: [{ id: peerId }] },
+      { id: 'superior', status: 'waiting', members: [] },
+    ]);
+    const pending = (
+      await post('workflow/task/page', peerToken, {
+        eq: { instanceId: instance.id, status: 'pending' },
+      }).expect(200)
+    ).body.data.list[0];
+    await post('workflow/task/approve', peerToken, {
+      id: pending.id,
+      version: pending.version,
+      comment: '已核对，同意',
+    }).expect(200);
+    expect((await document()).progress).toMatchObject([
+      { id: 'lead', status: 'approved' },
+      { id: 'superior', status: 'pending', members: [{ id: peerId }] },
+    ]);
+    const records = (
+      await post('workflow/record/page', token, {
+        eq: { instanceId: instance.id },
+      }).expect(200)
+    ).body.data.list;
+    expect(records).toContainEqual(
+      expect.objectContaining({ comment: '已核对，同意' }),
+    );
+  });
 
   it('AI配置不回传密钥，模板版本不可变，非法变量拒绝', async () => {
     await post('ai/config/save', tokens[0], {

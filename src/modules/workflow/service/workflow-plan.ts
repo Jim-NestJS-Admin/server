@@ -7,6 +7,7 @@ import type {
   WorkflowNode,
   WorkflowCondition,
 } from '../dto/workflow.dto.js';
+import type { WorkflowProgressNode } from '../dto/workflow-runtime.dto.js';
 
 export function runtimeNodes(designer: WorkflowDesignerDto): WorkflowNode[] {
   return designer.nodes.flatMap((n) => [
@@ -15,6 +16,28 @@ export function runtimeNodes(designer: WorkflowDesignerDto): WorkflowNode[] {
       runtimeNodes({ schemaVersion: 1, nodes: b.nodes }),
     ) ?? []),
   ]);
+}
+
+export function workflowProgress(
+  nodes: WorkflowNode[],
+  describe: (
+    node: WorkflowNode,
+  ) => Pick<WorkflowProgressNode, 'status' | 'members' | 'chosenBranch'>,
+): WorkflowProgressNode[] {
+  return nodes.map((node) => ({
+    id: node.id,
+    name: node.name,
+    type: node.type,
+    actorType: node.actor?.type,
+    actorLevel: node.actor?.level,
+    mode: node.mode,
+    ...describe(node),
+    branches: node.branches?.map((branch) => ({
+      id: branch.id,
+      name: branch.name,
+      nodes: workflowProgress(branch.nodes, describe),
+    })),
+  }));
 }
 export function matchesCondition(
   condition: WorkflowCondition,
@@ -105,6 +128,7 @@ export class WorkflowPlanner {
       actors: Record<string, string[]>;
     },
     manager: EntityManager,
+    mode: 'start' | 'preview' = 'start',
   ) {
     const nodes = runtimeNodes(input.designer);
     const selectable = new Set(
@@ -115,7 +139,7 @@ export class WorkflowPlanner {
     for (const ids of Object.values(input.selections))
       if (
         !Array.isArray(ids) ||
-        ids.length < 1 ||
+        (mode === 'start' && ids.length < 1) ||
         ids.length > 50 ||
         ids.some(
           (id) => typeof id !== 'string' || !/^[1-9]\d{0,19}$/.test(id),
@@ -139,10 +163,15 @@ export class WorkflowPlanner {
             : actor.type === 'applicant'
               ? [input.applicantId]
               : input.selections[node.id];
+        if (mode === 'preview' && !selected?.length) continue;
         if (!selected)
           throw crudErrors.badRequest(`请为“${node.name}”选择办理人`);
         ids = await this.directory.workflowEnabledUsers(selected, manager);
-        if (actor.type === 'self_select' && ids.length !== selected.length)
+        if (
+          mode === 'start' &&
+          actor.type === 'self_select' &&
+          ids.length !== selected.length
+        )
           throw crudErrors.badRequest(
             `“${node.name}”选择了已停用或不存在的成员`,
           );

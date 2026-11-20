@@ -177,11 +177,16 @@ export class WorkflowProgressBranch {
   @ApiProperty({ type: () => [WorkflowProgressNode] })
   nodes!: WorkflowProgressNode[];
 }
+export class WorkflowGraphMember {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiPropertyOptional() avatar?: string;
+}
 export class WorkflowProgressNode {
   @ApiProperty() id!: string;
   @ApiProperty() name!: string;
   @ApiProperty({ enum: ['approve', 'copy', 'condition', 'parallel'] })
-  type!: string;
+  type!: 'approve' | 'copy' | 'condition' | 'parallel';
   @ApiProperty({
     enum: [
       'waiting',
@@ -193,7 +198,29 @@ export class WorkflowProgressNode {
       'taken',
     ],
   })
-  status!: string;
+  status!:
+    | 'waiting'
+    | 'pending'
+    | 'approved'
+    | 'cancelled'
+    | 'returned'
+    | 'copied'
+    | 'taken';
+  @ApiPropertyOptional({
+    enum: [
+      'users',
+      'roles',
+      'department_leader',
+      'supervisor',
+      'self_select',
+      'applicant',
+    ],
+  })
+  actorType?: string;
+  @ApiPropertyOptional() actorLevel?: number;
+  @ApiPropertyOptional({ enum: ['all', 'any', 'sequential'] }) mode?: string;
+  @ApiPropertyOptional({ type: [WorkflowGraphMember] })
+  members?: WorkflowGraphMember[];
   @ApiPropertyOptional() chosenBranch?: string;
   @ApiPropertyOptional({ type: () => [WorkflowProgressBranch] })
   branches?: WorkflowProgressBranch[];

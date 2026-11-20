@@ -14768,6 +14768,15 @@
             "default": 1,
             "type": "number"
           },
+          "selections": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
           "size": {
             "default": 20,
             "type": "number"
@@ -14812,6 +14821,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "progress": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowProgressNode"
+            },
+            "type": "array"
           },
           "revision": {
             "type": "number"
@@ -15583,6 +15598,24 @@
         ],
         "type": "object"
       },
+      "WorkflowGraphMember": {
+        "properties": {
+          "avatar": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
       "WorkflowInspection": {
         "properties": {
           "bpmn": {
@@ -16123,6 +16156,20 @@
       },
       "WorkflowProgressNode": {
         "properties": {
+          "actorLevel": {
+            "type": "number"
+          },
+          "actorType": {
+            "enum": [
+              "users",
+              "roles",
+              "department_leader",
+              "supervisor",
+              "self_select",
+              "applicant"
+            ],
+            "type": "string"
+          },
           "branches": {
             "items": {
               "$ref": "#/components/schemas/WorkflowProgressBranch"
@@ -16133,6 +16180,20 @@
             "type": "string"
           },
           "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowGraphMember"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "enum": [
+              "all",
+              "any",
+              "sequential"
+            ],
             "type": "string"
           },
           "name": {

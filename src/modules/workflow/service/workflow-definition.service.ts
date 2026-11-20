@@ -12,6 +12,8 @@ import { CodeRuleService } from '../../code-rule/service/code-rule.service.js';
 import { WorkflowDefinition } from '../entity/workflow-definition.entity.js';
 import { WorkflowInstance } from '../entity/workflow-runtime.entity.js';
 import type { WorkflowDefinitionInput } from '../dto/workflow.dto.js';
+import type { WorkflowAvailableBody } from '../dto/workflow-available.dto.js';
+import { WorkflowPlanner, workflowProgress } from './workflow-plan.js';
 import {
   compileWorkflow,
   WORKFLOW_COMPILER_VERSION,
@@ -42,12 +44,7 @@ export class WorkflowDefinitionService
     });
   }
   /** 发起人仅取得已发布流程的选择摘要；不开放管理接口、BPMN或条件/人员配置。 */
-  async availableForStart(body: {
-    id?: string;
-    keyword: string;
-    page: number;
-    size: number;
-  }) {
+  async availableForStart(body: WorkflowAvailableBody) {
     return this.crud.dataSource.transaction(async (manager) => {
       const query = this.select(manager, 'info').andWhere(
         'e.status = :status',
@@ -99,6 +96,11 @@ export class WorkflowDefinitionService
                     row.formDefinitionId,
                     manager,
                   ),
+                  progress: await this.previewForApplicant(
+                    row,
+                    body.selections ?? {},
+                    manager,
+                  ),
                 }
               : {}),
           };
@@ -106,6 +108,39 @@ export class WorkflowDefinitionService
       );
       return { list, total };
     });
+  }
+  private async previewForApplicant(
+    row: WorkflowDefinition,
+    selections: Record<string, string[]>,
+    manager: EntityManager,
+  ) {
+    const { userId, orgId } = this.crud.context.current();
+    if (
+      !userId ||
+      !(await this.directory.workflowIdentity(userId, orgId, manager))
+    )
+      throw crudErrors.notFound();
+    const actors = await this.planner.plan(
+      {
+        designer: row.designer,
+        applicantId: userId,
+        applicantOrgId: orgId,
+        selections,
+        actors: {},
+      },
+      manager,
+      'preview',
+    );
+    const members = await this.directory.workflowMemberSummaries(
+      [...new Set(Object.values(actors).flat())],
+      manager,
+    );
+    return workflowProgress(row.designer.nodes, (node) => ({
+      status: 'waiting',
+      members: actors[node.id]?.map(
+        (id) => members.get(id) ?? { id, name: '成员不可用' },
+      ),
+    }));
   }
   private readonly saving = new AsyncLocalStorage<{
     expected: number;
@@ -117,6 +152,7 @@ export class WorkflowDefinitionService
     private readonly fields: SystemFieldCatalog,
     private readonly codes: CodeRuleService,
     private readonly repos: TenantRepositoryFactory,
+    private readonly planner: WorkflowPlanner,
   ) {
     super();
   }
