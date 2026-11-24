@@ -10,6 +10,7 @@ import {
 } from '../src/modules/mcp/entity/mcp.entity.js';
 import { OAuthClient } from '../src/modules/oauth/entity/oauth.entity.js';
 import { NotifyMessage } from '../src/modules/notify/entity/notify.entity.js';
+import { WorkflowOutbox } from '../src/modules/workflow/entity/workflow-runtime.entity.js';
 import { OAuthMetadataFetcher } from '../src/modules/oauth/service/oauth-metadata-fetcher.js';
 import { ConfigService } from '@nestjs/config';
 import { AuthUserStore } from '../src/core/auth/auth-user.store.js';
@@ -725,9 +726,33 @@ describe('T48–T50 AI与OAuth真实身份定向验证', () => {
 
     const worker = app.get(NotifyWorkerService) as unknown as {
       consume(): Promise<void>;
+      scan(): Promise<void>;
     };
-    await context.run({ tenantId: tenants[0] }, () => worker.consume());
-    await context.run({ tenantId: tenants[0] }, () => worker.consume());
+    const platformKey = `fixture-platform-${randomUUID()}`;
+    await context.run({ tenantId: '0' }, () =>
+      repos.for(WorkflowOutbox).insert({
+        eventKey: platformKey,
+        event: 'task.created',
+        instanceId,
+        taskId: null,
+        recipientId: peerId,
+        status: 'pending',
+      }),
+    );
+    await worker.scan();
+    await worker.scan();
+    const platformMessages = await context.run({ tenantId: '0' }, () =>
+      repos
+        .for(NotifyMessage)
+        .query('m')
+        .andWhere('m.eventKey = :key', { key: platformKey })
+        .getMany(),
+    );
+    expect(platformMessages).toHaveLength(1);
+    expect(platformMessages[0]).toMatchObject({
+      recipientId: peerId,
+      readAt: null,
+    });
     const tasks = [];
     for (const assigneeToken of [peerToken, token]) {
       const inbox = (
@@ -750,6 +775,29 @@ describe('T48–T50 AI与OAuth真实身份定向验证', () => {
         id: instanceId,
         taskId: task.id,
       }).expect(200);
+      const unread = async () =>
+        Number(
+          (
+            await http()
+              .get('/admin/notify/message/unread')
+              .set('Authorization', `Bearer ${assigneeToken}`)
+              .expect(200)
+          ).body.data.count,
+        );
+      const beforeRead = await unread();
+      await post('notify/message/read', assigneeToken, {
+        id: inbox[0].id,
+      }).expect(200);
+      expect(await unread()).toBe(beforeRead - 1);
+      expect(
+        (
+          await post('workflow/task/page', assigneeToken, {
+            page: 1,
+            size: 1,
+            eq: { instanceId, status: 'pending', kind: 'approve' },
+          }).expect(200)
+        ).body.data.total,
+      ).toBe(1);
       tasks.push(task);
     }
     await post('workflow/instance/document', tokens[1], {
@@ -760,6 +808,15 @@ describe('T48–T50 AI与OAuth真实身份定向验证', () => {
       version: tasks[0].version,
     }).expect(200);
     expect(first.body.data.status).toBe('running');
+    expect(
+      (
+        await post('workflow/task/page', peerToken, {
+          page: 1,
+          size: 1,
+          eq: { instanceId, status: 'pending', kind: 'approve' },
+        }).expect(200)
+      ).body.data.total,
+    ).toBe(0);
     const approved = await post('workflow/task/approve', token, {
       id: tasks[1].id,
       version: tasks[1].version,

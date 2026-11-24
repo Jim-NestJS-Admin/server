@@ -10,6 +10,7 @@ import { DataSource } from 'typeorm';
 import { AppConfigService } from '../../../core/config/app-config.service.js';
 import { RequestContext } from '../../../core/tenant/request-context.js';
 import { TenantSource } from '../../../core/tenant/tenant-source.js';
+import { PLATFORM_TENANT_ID } from '../../../core/tenant/tenant.constants.js';
 import { TenantRepositoryFactory } from '../../../core/tenant/tenant-repository.js';
 import { PermissionService } from '../../../core/permission/permission.service.js';
 import { BusinessException } from '../../../core/exceptions/business.exception.js';
@@ -81,7 +82,11 @@ export class NotifyWorkerService
   }
 
   private async scan() {
-    for (const tenantId of await this.tenants.activeTenantIds()) {
+    const tenantIds = new Set([
+      PLATFORM_TENANT_ID,
+      ...(await this.tenants.activeTenantIds()),
+    ]);
+    for (const tenantId of tenantIds) {
       if (this.stopping) break;
       if (!(await this.tenants.byId(tenantId))?.enabled) continue;
       await this.context.run({ tenantId }, async () => {
