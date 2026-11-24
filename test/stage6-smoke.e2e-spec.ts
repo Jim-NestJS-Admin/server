@@ -932,6 +932,69 @@ describe('T48–T50 AI与OAuth真实身份定向验证', () => {
     expect(records).toContainEqual(
       expect.objectContaining({ comment: '已核对，同意' }),
     );
+
+    const passwordHash = await app
+      .get(SystemTenantService)
+      .passwordHash(password);
+    await context.run({ tenantId: tenants[0] }, () =>
+      db.transaction(async (manager) => {
+        const role = await repos
+          .for(SystemRole)
+          .query('r', manager)
+          .andWhere('r.allPermissions = :all', { all: true })
+          .getOneOrFail();
+        const userId = await repos.for(SystemUser).insert(
+          {
+            username: 'global-applicant',
+            nickname: '全局授权申请人',
+            passwordHash,
+            enabled: true,
+            defaultOrgId: orgs[0],
+            avatar: null,
+            locale: 'zh-CN',
+          },
+          manager,
+        );
+        await repos
+          .for(SystemUserRole)
+          .insert({ userId, roleId: role.id, scopeOrgId: null }, manager);
+        await repos
+          .for(SystemUserSupervisor)
+          .insert({ userId, supervisorId: peerId }, manager);
+      }),
+    );
+    const globalToken = await login(0, 'global-applicant');
+    const profile = await http()
+      .get('/admin/session/profile')
+      .set('Authorization', `Bearer ${globalToken}`)
+      .expect(200);
+    expect(profile.body.data.currentOrg).toBeNull();
+    const globalPreview = await post(
+      'workflow/definition/available',
+      globalToken,
+      { id: definition.id },
+    ).expect(200);
+    expect(globalPreview.body.data.list[0].progress[0].members).toMatchObject([
+      { id: peerId },
+    ]);
+    const globalInstance = await post(
+      'workflow/instance/start-application',
+      globalToken,
+      {
+        definitionId: definition.id,
+        values: { reason: '无当前组织时使用默认组织负责人' },
+      },
+    ).expect(200);
+    const globalDocument = await post(
+      'workflow/instance/document',
+      globalToken,
+      { id: globalInstance.body.data.id },
+    ).expect(200);
+    expect(globalDocument.body.data.progress[0]).toMatchObject({
+      id: 'lead',
+      status: 'pending',
+      members: [{ id: peerId }],
+    });
   });
 
   it('AI配置不回传密钥，模板版本不可变，非法变量拒绝', async () => {

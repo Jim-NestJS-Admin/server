@@ -250,6 +250,20 @@ export class SystemDirectory {
   ): Promise<string[]> {
     let candidates: string[] = [];
     if (type === 'department_leader') {
+      // 默认组织只用于解析部门负责人，不改变当前组织或授权范围。
+      const departmentId =
+        orgId ??
+        (
+          await this.repos
+            .for(SystemUser)
+            .query('u', manager)
+            .andWhere('u.id = :applicantId AND u.enabled = :enabled', {
+              applicantId,
+              enabled: true,
+            })
+            .setLock('pessimistic_read')
+            .getOne()
+        )?.defaultOrgId;
       const orgs = validOrganizations(
         await this.repos
           .for(SystemOrg)
@@ -257,7 +271,7 @@ export class SystemDirectory {
           .setLock('pessimistic_read')
           .getMany(),
       );
-      let org = orgs.find((o) => o.id === orgId);
+      let org = orgs.find((o) => o.id === departmentId);
       for (let n = 1; n < level && org; n++)
         org = orgs.find((o) => o.id === org!.parentId);
       candidates = org?.leaderId ? [org.leaderId] : [];
