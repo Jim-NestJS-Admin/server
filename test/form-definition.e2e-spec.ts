@@ -261,6 +261,78 @@ describe('T35 表单版本、校验与租户边界', () => {
     }).expect(400);
   });
 
+  it('提交详情使用固定版本的单选、多选与联动标签，保留原值', async () => {
+    const options = [
+      { label: '事假', value: '1' },
+      { label: '病假', value: '2' },
+    ];
+    const design = {
+      ...data(),
+      designer: {
+        schemaVersion: 1,
+        rule: [
+          { type: 'select', field: 'kind', title: '请假类型', options },
+          { type: 'checkbox', field: 'details', title: '明细', options },
+          { type: 'radio', field: 'related', title: '关联选项', options },
+        ],
+        linkages: [
+          {
+            source: 'kind',
+            target: 'related',
+            operator: 'eq',
+            value: '1',
+            action: 'options',
+            whenTrue: [{ label: '联动病假', value: '2' }],
+            whenFalse: options,
+          },
+        ],
+      },
+    };
+    const first = (await post('add', { data: design }).expect(200)).body.data;
+    const submission = (path: string, body: object, tenant = '1') =>
+      request(app.getHttpServer())
+        .post(`/admin/form/submission/${path}`)
+        .set('x-test-user', '1')
+        .set('x-test-tenant', tenant)
+        .send(body);
+    const values = { kind: '1', details: ['2', '1'], related: '2' };
+    const record = (
+      await submission('add', {
+        data: { definitionId: first.id, values },
+      }).expect(200)
+    ).body.data;
+    await post('revise', {
+      definitionId: first.id,
+      data: {
+        ...design,
+        designer: {
+          ...design.designer,
+          rule: design.designer.rule.map((rule) => ({
+            ...rule,
+            options: options.map((option) => ({
+              ...option,
+              label: `新版${option.label}`,
+            })),
+          })),
+          linkages: [],
+        },
+      },
+      baseRevision: 1,
+    }).expect(200);
+    const detail = (await submission('info', { id: record.id }).expect(200))
+      .body.data;
+    expect(detail).toMatchObject({
+      revision: 1,
+      values,
+      _display: {
+        'values.kind': '事假',
+        'values.details': '病假、事假',
+        'values.related': '联动病假',
+      },
+    });
+    await submission('info', { id: record.id }, '2').expect(404);
+  });
+
   it('创建快照、解析字段并拒绝额外系统字段和伪造字段清单', async () => {
     const first = await add();
     expect(first).toMatchObject({

@@ -315,6 +315,15 @@ export class FormDefinitionService
     if (!row) throw crudErrors.notFound();
     return row;
   }
+  /** 已授权的提交详情仅从固定表单版本解析字段显示值。 */
+  submissionDefinition(id: string, manager: EntityManager) {
+    return this.repos
+      .for(FormDefinition)
+      .query('f', manager)
+      .select(['f.id', 'f.designer', 'f.fields'])
+      .andWhere('f.id = :id', { id })
+      .getOne();
+  }
   private async loadVersion(id: string) {
     const row = await this.select(this.crud.dataSource.manager, 'info')
       .andWhere('e.id = :id AND e.archived = false', { id })

@@ -49,7 +49,11 @@ export async function attachDisplay(
       const name = v ? maps[kind].get(v) : undefined;
       if (name) display[f] = name;
     }
-    if (Object.keys(display).length) r._display = display;
+    if (Object.keys(display).length)
+      r._display = {
+        ...(r._display as Record<string, string> | undefined),
+        ...display,
+      };
   }
 }
 

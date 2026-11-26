@@ -997,7 +997,7 @@ export class BaseService<T extends BaseEntity> {
   }
 
   /** 详情：主表可读字段，有子表时加上 children */
-  private async toDetail(
+  protected async toDetail(
     manager: EntityManager,
     row: T,
     tenantId: string,
