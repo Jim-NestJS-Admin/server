@@ -317,6 +317,7 @@ export class BaseService<T extends BaseEntity> {
   async page(
     query: PageQuery,
     exportLimit?: number,
+    filter?: (qb: ScopedSelectQueryBuilder<T>) => void,
   ): Promise<PageResult<CrudRow<T>>> {
     const meta = this.meta;
     const page = query.page ?? 1;
@@ -326,6 +327,7 @@ export class BaseService<T extends BaseEntity> {
         { field: 'size', messages: [`每页最多 ${meta.maxSize} 条`] },
       ]);
     const qb = this.select(this.crud.dataSource.manager, 'page');
+    filter?.(qb);
 
     // 脱敏、隐藏的字段不能按原值搜索：从搜索框的字段里去掉
     const canQuery = this.queryableByAll();

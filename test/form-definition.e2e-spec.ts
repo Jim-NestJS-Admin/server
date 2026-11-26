@@ -158,6 +158,48 @@ describe('T35 表单版本、校验与租户边界', () => {
     }
   });
 
+  it('主列表先按编码选最新版本再搜索和分页，保留同租户历史列表', async () => {
+    const first = await add();
+    const latest = (
+      await post('revise', {
+        data: { ...data(), name: '新版名称' },
+        baseRevision: 1,
+      }).expect(200)
+    ).body.data;
+    const another = await add();
+    const otherTenant = await add('2');
+    expect(otherTenant.code).toBe(first.code);
+    for (const baseRevision of [1, 2]) {
+      await post(
+        'revise',
+        { data: { ...data(), name: '其他租户' }, baseRevision },
+        '2',
+      ).expect(200);
+    }
+    const page = (body: object, tenant = '1') =>
+      post('current-page', body, tenant).expect(200);
+    const firstPage = (await page({ page: 1, size: 1 })).body.data;
+    const secondPage = (await page({ page: 2, size: 1 })).body.data;
+    expect(firstPage).toMatchObject({ total: 2, list: [{ id: latest.id }] });
+    expect(secondPage).toMatchObject({ total: 2, list: [{ id: another.id }] });
+    expect((await page({ keyword: '请假申请' })).body.data).toMatchObject({
+      total: 1,
+      list: [{ id: another.id }],
+    });
+    expect(
+      (await page({ eq: { code: first.code } }, '2')).body.data,
+    ).toMatchObject({
+      total: 1,
+      list: [{ revision: 3 }],
+    });
+    expect(
+      (await post('page', { eq: { code: first.code } }).expect(200)).body.data
+        .total,
+    ).toBe(2);
+    await post('current-page', { size: 0 }).expect(400);
+    await post('current-page', {}, '1', '3').expect(403);
+  });
+
   it('未使用的旧版本可以归档和恢复，归档第一版后仍能从第二版创建第三版', async () => {
     const first = await add();
     const identity = { id: first.id, version: 1 };

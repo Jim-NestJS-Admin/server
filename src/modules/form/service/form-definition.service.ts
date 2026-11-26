@@ -89,6 +89,22 @@ export class FormDefinitionService
     );
   }
 
+  currentPage(query: PageQuery) {
+    const newer = this.repos
+      .for(FormDefinition)
+      .query('newer')
+      .select('1')
+      .where('newer.code = e.code')
+      .andWhere('newer.revision > e.revision')
+      .andWhere('newer.archived = false');
+    return super.page(
+      { ...query, eq: { ...query.eq, archived: false } },
+      undefined,
+      (qb) =>
+        qb.andWhere(`NOT EXISTS (${newer.getQuery()})`, newer.getParameters()),
+    );
+  }
+
   setArchived(body: SetFormVersionArchivedBody) {
     return this.transaction(async ({ manager }) => {
       const candidate = await this.select(manager, 'update')
