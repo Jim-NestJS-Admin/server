@@ -584,7 +584,7 @@ describe('T48–T50 AI与OAuth真实身份定向验证', () => {
         },
       }).expect(200)
     ).body.data;
-    expect(form.code).toBe('form_000001');
+    expect(form.code).toMatch(/^form_\d{8}000001$/);
     await post('form/definition/info', tokens[1], { id: form.id }).expect(404);
     const approval = (id: string, user: string) => ({
       id,
@@ -633,7 +633,7 @@ describe('T48–T50 AI与OAuth真实身份定向验证', () => {
         data: definitionData(users[0]!),
       }).expect(200)
     ).body.data;
-    expect(definition.code).toBe('wf_000001');
+    expect(definition.code).toMatch(/^wf_\d{8}000001$/);
     expect(
       (await post('workflow/definition/available', token, {}).expect(200)).body
         .data.total,

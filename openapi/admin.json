@@ -3869,6 +3869,42 @@
         ],
         "type": "object"
       },
+      "GrantablePermissionItem": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "groups"
+        ],
+        "type": "object"
+      },
+      "GrantablePermissionList": {
+        "properties": {
+          "list": {
+            "items": {
+              "$ref": "#/components/schemas/GrantablePermissionItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "list"
+        ],
+        "type": "object"
+      },
       "HistoryBody": {
         "properties": {
           "page": {
@@ -31706,6 +31742,52 @@
         ],
         "x-permission": {
           "code": "system:parameter:update",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/system/permission/grantable": {
+      "get": {
+        "operationId": "systemRoleGrantablePermissions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/GrantablePermissionList"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "当前组织下可授予角色的权限及菜单分组",
+        "tags": [
+          "SystemPermission"
+        ],
+        "x-permission": {
+          "code": "system:role:page",
           "risk": "normal"
         }
       }

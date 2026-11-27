@@ -261,7 +261,7 @@ describe('T35 表单版本、校验与租户边界', () => {
     }).expect(400);
   });
 
-  it('提交详情使用固定版本的单选、多选与联动标签，保留原值', async () => {
+  it('提交详情使用固定版本的字段顺序和选项标签，保留原值', async () => {
     const options = [
       { label: '事假', value: '1' },
       { label: '病假', value: '2' },
@@ -295,7 +295,7 @@ describe('T35 表单版本、校验与租户边界', () => {
         .set('x-test-user', '1')
         .set('x-test-tenant', tenant)
         .send(body);
-    const values = { kind: '1', details: ['2', '1'], related: '2' };
+    const values = { related: '2', details: ['2', '1'], kind: '1' };
     const record = (
       await submission('add', {
         data: { definitionId: first.id, values },
@@ -307,7 +307,7 @@ describe('T35 表单版本、校验与租户边界', () => {
         ...design,
         designer: {
           ...design.designer,
-          rule: design.designer.rule.map((rule) => ({
+          rule: [...design.designer.rule].reverse().map((rule) => ({
             ...rule,
             options: options.map((option) => ({
               ...option,
@@ -321,6 +321,7 @@ describe('T35 表单版本、校验与租户边界', () => {
     }).expect(200);
     const detail = (await submission('info', { id: record.id }).expect(200))
       .body.data;
+    expect(Object.keys(detail.values)).toEqual(['kind', 'details', 'related']);
     expect(detail).toMatchObject({
       revision: 1,
       values,

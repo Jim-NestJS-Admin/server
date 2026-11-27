@@ -140,10 +140,14 @@ export class FormSubmissionService extends BaseService<FormSubmission> {
       manager,
     );
     if (!definition) return out;
+    const remaining = new Map(Object.entries(out.values));
+    const ordered = new Map<string, unknown>();
     const labels: Record<string, string> = {};
     for (const base of definition.fields) {
-      if (!Object.hasOwn(out.values, base.field) || !base.options.length)
-        continue;
+      if (!remaining.has(base.field)) continue;
+      ordered.set(base.field, remaining.get(base.field));
+      remaining.delete(base.field);
+      if (!base.options.length) continue;
       const { state } = this.valueAccess(row, base.field);
       if (state !== 'editable' && state !== 'readonly') continue;
       const field = linkedFormField(
@@ -159,6 +163,7 @@ export class FormSubmissionService extends BaseService<FormSubmission> {
       if (names.length && names.every((name) => name !== undefined))
         labels[`values.${field.field}`] = names.join('、');
     }
+    out.values = Object.fromEntries([...ordered, ...remaining]);
     return Object.keys(labels).length ? { ...out, _display: labels } : out;
   }
   /** 发起审批仅能引用本人且仍在本次数据范围内的提交，不向workflow复制填写内容。 */

@@ -9,6 +9,7 @@ import { crudErrors } from '../../../core/crud/crud.errors.js';
 import { PermissionService } from '../../../core/permission/permission.service.js';
 import { PermissionRegistry } from '../../../core/permission/permission-registry.js';
 import { RequestContext } from '../../../core/tenant/request-context.js';
+import { buttonTitle } from '../../../database/seeds/menus.js';
 import { TenantRepositoryFactory } from '../../../core/tenant/tenant-repository.js';
 import { SessionService } from '../../../core/auth/session.service.js';
 import {
@@ -237,23 +238,91 @@ export class SystemUserService extends BaseService<SystemUser> {
 @Injectable()
 export class SystemRoleService extends SystemCrudService<SystemRole> {
   @Inject(PermissionRegistry) private readonly registry: PermissionRegistry;
+  private async grantableCodes(tenantId: string) {
+    const [current, packageCodes] = await Promise.all([
+      this.permissions.permissions(),
+      this.permissions.packageCodes(tenantId),
+    ]);
+    const allowed = new Set(packageCodes);
+    return new Set(
+      current.codes.filter(
+        (code) => allowed.has(code) && this.registry.get(code),
+      ),
+    );
+  }
+
+  async grantablePermissions() {
+    const { tenantId } = this.context.current();
+    const [codes, menus] = await Promise.all([
+      this.grantableCodes(tenantId),
+      this.permissions.menusFor(tenantId),
+    ]);
+    const byId = new Map(
+      menus.map((menu, position) => [menu.id, { menu, position }]),
+    );
+    type MenuPath = { groups: string[]; order: number[] };
+    const labels = new Map<string, MenuPath & { label: string }>();
+    const resourceGroups = new Map<string, MenuPath>();
+    for (const [position, menu] of menus.entries()) {
+      if (!menu.permission) continue;
+      const groups = menu.type === 'button' ? [] : [menu.title];
+      const order = menu.type === 'button' ? [] : [position];
+      const visited = new Set([menu.id]);
+      let parent = menu.parentId ? byId.get(menu.parentId) : undefined;
+      while (parent && !visited.has(parent.menu.id)) {
+        groups.unshift(parent.menu.title);
+        order.unshift(parent.position);
+        visited.add(parent.menu.id);
+        parent = parent.menu.parentId
+          ? byId.get(parent.menu.parentId)
+          : undefined;
+      }
+      if (!groups.length) continue;
+      const code = menu.permission;
+      const resource = code.slice(0, code.lastIndexOf(':'));
+      if (menu.type === 'page' || !resourceGroups.has(resource))
+        resourceGroups.set(resource, { groups, order });
+      if (menu.type === 'page' || !labels.has(code))
+        labels.set(code, {
+          label:
+            menu.type === 'button' && menu.title !== code
+              ? menu.title
+              : buttonTitle(code),
+          groups,
+          order: [...order, menu.type === 'button' ? position : -1],
+        });
+    }
+    return [...codes]
+      .map((code) => {
+        const known = labels.get(code);
+        if (known) return { code, ...known };
+        const resource = code.slice(0, code.lastIndexOf(':'));
+        const path = resourceGroups.get(resource);
+        return {
+          code,
+          label: buttonTitle(code),
+          groups: path?.groups ?? ['其他权限', resource || code],
+          order: [...(path?.order ?? []), Number.MAX_SAFE_INTEGER],
+        };
+      })
+      .sort((a, b) => {
+        // 菜单位置从根级逐层比较，与侧栏逐层按排序值遍历一致。
+        for (let i = 0; i < Math.min(a.order.length, b.order.length); i++) {
+          const difference = a.order[i]! - b.order[i]!;
+          if (difference) return difference;
+        }
+        return a.order.length - b.order.length;
+      })
+      .map(({ code, label, groups }) => ({ code, label, groups }));
+  }
+
   private async validateRole(
     data: Partial<SystemRole>,
     tx: CrudTx,
   ): Promise<void> {
     if (data.permissions) {
-      const current = new Set((await this.permissions.permissions()).codes);
-      const packageCodes = new Set(
-        await this.permissions.packageCodes(tx.ctx.tenantId),
-      );
-      if (
-        data.permissions.some(
-          (code) =>
-            !this.registry.get(code) ||
-            !current.has(code) ||
-            !packageCodes.has(code),
-        )
-      )
+      const allowed = await this.grantableCodes(tx.ctx.tenantId);
+      if (data.permissions.some((code) => !allowed.has(code)))
         throw crudErrors.badRequest('权限码不存在或超出当前可授予范围');
     }
     for (const id of data.customOrgIds ?? []) await this.org(id, tx);

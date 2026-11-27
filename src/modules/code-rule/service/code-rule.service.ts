@@ -372,11 +372,12 @@ export class CodeRuleService
             name,
             description: '',
             timezone: 'Asia/Shanghai',
-            resetPeriod: 'never',
+            resetPeriod: 'day',
             start: '1',
             status: '1',
             segments: [
               { type: 'literal', value: prefix },
+              { type: 'date', format: 'yyyyMMdd' },
               { type: 'sequence', width: 6 },
             ],
           })

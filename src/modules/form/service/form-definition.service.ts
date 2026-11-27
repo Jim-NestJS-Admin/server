@@ -315,7 +315,7 @@ export class FormDefinitionService
     if (!row) throw crudErrors.notFound();
     return row;
   }
-  /** 已授权的提交详情仅从固定表单版本解析字段显示值。 */
+  /** 已授权的提交详情从固定表单版本读取字段顺序和选项。 */
   submissionDefinition(id: string, manager: EntityManager) {
     return this.repos
       .for(FormDefinition)
