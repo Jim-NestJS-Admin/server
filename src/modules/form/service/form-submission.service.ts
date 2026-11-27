@@ -6,7 +6,7 @@ import { crudErrors } from '../../../core/crud/crud.errors.js';
 import { fieldUsageKey } from '../../../core/crud/crud-code.js';
 import { FormSubmission } from '../entity/form-submission.entity.js';
 import { FormDefinitionService } from './form-definition.service.js';
-import { validateFormValues } from './form-rules.js';
+import { linkedFormField, validateFormValues } from './form-rules.js';
 import { CodeRuleService } from '../../code-rule/service/code-rule.service.js';
 import { RequestContext } from '../../../core/tenant/request-context.js';
 import { documentAccess } from '../../../core/permission/document-access.js';
@@ -128,7 +128,57 @@ export class FormSubmissionService extends BaseService<FormSubmission> {
       );
     return out;
   }
+  protected override async toDetail(
+    manager: EntityManager,
+    row: FormSubmission,
+    tenantId: string,
+  ) {
+    const out = await super.toDetail(manager, row, tenantId);
+    if (!out.values || typeof out.values !== 'object') return out;
+    const definition = await this.definitions.submissionDefinition(
+      row.definitionId,
+      manager,
+    );
+    if (!definition) return out;
+    const remaining = new Map(Object.entries(out.values));
+    const ordered = new Map<string, unknown>();
+    const labels: Record<string, string> = {};
+    for (const base of definition.fields) {
+      if (!remaining.has(base.field)) continue;
+      ordered.set(base.field, remaining.get(base.field));
+      remaining.delete(base.field);
+      if (!base.options.length) continue;
+      const { state } = this.valueAccess(row, base.field);
+      if (state !== 'editable' && state !== 'readonly') continue;
+      const field = linkedFormField(
+        base,
+        definition.designer.linkages ?? [],
+        row.values,
+      );
+      const value = row.values[field.field];
+      const selected = Array.isArray(value) ? (value as unknown[]) : [value];
+      const names = selected.map(
+        (item) => field.options.find((option) => option.value === item)?.label,
+      );
+      if (names.length && names.every((name) => name !== undefined))
+        labels[`values.${field.field}`] = names.join('、');
+    }
+    out.values = Object.fromEntries([...ordered, ...remaining]);
+    return Object.keys(labels).length ? { ...out, _display: labels } : out;
+  }
   /** 发起审批仅能引用本人且仍在本次数据范围内的提交，不向workflow复制填写内容。 */
+  async createForWorkflow(
+    definitionId: string,
+    values: Record<string, unknown>,
+    manager: EntityManager,
+  ) {
+    return this.addWithTransaction(
+      { definitionId, values: structuredClone(values) },
+      undefined,
+      manager,
+    );
+  }
+
   async forWorkflow(id: string, applicantId: string, manager: EntityManager) {
     const row = await this.select(manager, 'info')
       .andWhere('e.id = :id AND e.createdBy = :applicantId', {

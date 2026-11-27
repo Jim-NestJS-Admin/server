@@ -1,4 +1,7 @@
 import { CreateOrderTest1814906215522 } from '../database/migrations/1814906215522-CreateOrderTest.js';
+import { FormVersionArchive1814906215523 } from '../database/migrations/1814906215523-FormVersionArchive.js';
+import { WorkflowApplication1814906215524 } from '../database/migrations/1814906215524-WorkflowApplication.js';
+import { CodeRuleService } from '../modules/code-rule/service/code-rule.service.js';
 import { FormSubmission1794621600000 } from '../database/migrations/1794621600000-FormSubmission.js';
 import { WorkflowDefinition1794625200000 } from '../database/migrations/1794625200000-WorkflowDefinition.js';
 import { WorkflowRuntime1794628800000 } from '../database/migrations/1794628800000-WorkflowRuntime.js';
@@ -133,6 +136,8 @@ async function bootstrapLocal(): Promise<void> {
           OAuthTokens1794736800000,
           McpFoundation1794740400000,
           CreateOrderTest1814906215522,
+          FormVersionArchive1814906215523,
+          WorkflowApplication1814906215524,
         ],
     namingStrategy: new SnakeNamingStrategy(),
     synchronize: false,
@@ -183,6 +188,17 @@ async function bootstrapLocal(): Promise<void> {
         return { menus, dicts, admin, tenants };
       }),
     );
+    if (!menuOnly)
+      for (const tenantId of [
+        PLATFORM_TENANT_ID,
+        DEFAULT_TENANT_ID,
+        report.tenants.demo,
+      ]) {
+        if (tenantId)
+          await context.run({ tenantId }, () =>
+            app.get(CodeRuleService).ensureDocumentDefaults(),
+          );
+      }
     await app.get(PermissionService).bumpVersion(DEFAULT_TENANT_ID);
     await app.get(PermissionService).bumpVersion(PLATFORM_TENANT_ID);
     if (report.tenants.demo)

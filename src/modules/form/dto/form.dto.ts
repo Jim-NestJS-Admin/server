@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsInt,
   IsObject,
   IsString,
@@ -177,4 +178,10 @@ export class FormValidationResult {
   @ApiProperty() definitionId!: string;
   @ApiProperty() revision!: number;
   @ApiProperty({ enum: [true] }) valid!: boolean;
+}
+
+export class SetFormVersionArchivedBody {
+  @ApiProperty() @Matches(/^[1-9]\d{0,19}$/) id!: string;
+  @ApiProperty() @IsInt() @Min(1) version!: number;
+  @ApiProperty() @IsBoolean() archived!: boolean;
 }

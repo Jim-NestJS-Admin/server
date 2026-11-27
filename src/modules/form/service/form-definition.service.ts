@@ -9,11 +9,18 @@ import {
   dynamicFieldResource,
   type DynamicFieldResource,
 } from '../../../core/field-perm/dynamic-fields.js';
-import { BaseService } from '../../../core/crud/base.service.js';
+import {
+  BaseService,
+  type PageQuery,
+} from '../../../core/crud/base.service.js';
 import { crudErrors } from '../../../core/crud/crud.errors.js';
 import type { CrudTx } from '../../../core/crud/crud.types.js';
-import type { FormDefinitionInput } from '../dto/form.dto.js';
+import type {
+  FormDefinitionInput,
+  SetFormVersionArchivedBody,
+} from '../dto/form.dto.js';
 import { FormDefinition } from '../entity/form-definition.entity.js';
+import { FormSubmission } from '../entity/form-submission.entity.js';
 import { parseFormDesigner, validateFormValues } from './form-rules.js';
 import { CodeRuleService } from '../../code-rule/service/code-rule.service.js';
 
@@ -64,6 +71,94 @@ export class FormDefinitionService
     expected: number;
     code?: string;
   }>();
+  private workflowReferences?: (
+    id: string,
+    manager: EntityManager,
+  ) => Promise<boolean>;
+
+  registerWorkflowReferences(
+    check: (id: string, manager: EntityManager) => Promise<boolean>,
+  ) {
+    this.workflowReferences = check;
+  }
+
+  override page(query: PageQuery, exportLimit?: number) {
+    return super.page(
+      { ...query, eq: { ...query.eq, archived: query.eq?.archived ?? false } },
+      exportLimit,
+    );
+  }
+
+  currentPage(query: PageQuery) {
+    const newer = this.repos
+      .for(FormDefinition)
+      .query('newer')
+      .select('1')
+      .where('newer.code = e.code')
+      .andWhere('newer.revision > e.revision')
+      .andWhere('newer.archived = false');
+    return super.page(
+      { ...query, eq: { ...query.eq, archived: false } },
+      undefined,
+      (qb) =>
+        qb.andWhere(`NOT EXISTS (${newer.getQuery()})`, newer.getParameters()),
+    );
+  }
+
+  setArchived(body: SetFormVersionArchivedBody) {
+    return this.transaction(async ({ manager }) => {
+      const candidate = await this.select(manager, 'update')
+        .andWhere('e.id = :id', { id: body.id })
+        .getOne();
+      if (!candidate) throw crudErrors.notFound();
+      // 与修订共用第一版行锁，归档后的第一版继续作为锁锚点。
+      await this.select(manager, 'update')
+        .andWhere('e.code = :code AND e.revision = 1', { code: candidate.code })
+        .setLock('pessimistic_write')
+        .getOne();
+      const row = await this.select(manager, 'update')
+        .andWhere('e.id = :id', { id: body.id })
+        .setLock('pessimistic_write')
+        .getOne();
+      if (!row) throw crudErrors.notFound();
+      if (row.version !== body.version) throw crudErrors.versionConflict();
+      const result = {
+        id: row.id,
+        version: row.version,
+        archived: body.archived,
+      };
+      if (row.archived === body.archived) return result;
+      if (body.archived) await this.assertArchivable(row, manager);
+      const count = await this.repos
+        .for(FormDefinition)
+        .update([row.id], { archived: body.archived }, manager);
+      if (count !== 1) throw crudErrors.versionConflict();
+      return { ...result, version: row.version + 1 };
+    });
+  }
+
+  private async assertArchivable(row: FormDefinition, manager: EntityManager) {
+    const newer = await this.select(manager, 'update')
+      .andWhere(
+        'e.code = :code AND e.revision > :revision AND e.archived = false',
+        { code: row.code, revision: row.revision },
+      )
+      .setLock('pessimistic_read')
+      .getOne();
+    if (!newer) throw crudErrors.badRequest('只能归档有更新版本的表单');
+    const submission = await this.repos
+      .for(FormSubmission)
+      .query('s', manager)
+      .withDeleted()
+      .andWhere('s.definitionId = :id', { id: row.id })
+      .setLock('pessimistic_read')
+      .getOne();
+    if (!this.workflowReferences) throw new Error('表单归档缺少流程引用检查');
+    if (submission || (await this.workflowReferences(row.id, manager)))
+      throw crudErrors.badRequest(
+        '此表单版本已被提交记录或审批流程引用，不能归档',
+      );
+  }
   constructor(
     private readonly codes: CodeRuleService,
     private readonly repos: TenantRepositoryFactory,
@@ -191,7 +286,8 @@ export class FormDefinitionService
   /** workflow只读取固定表单快照；仍经本服务的数据/字段范围，不跨模块查表。 */
   async forWorkflow(id: string, manager: EntityManager) {
     const row = await this.select(manager, 'info')
-      .andWhere('e.id = :id', { id })
+      .andWhere('e.id = :id AND e.archived = false', { id })
+      .setLock('pessimistic_read')
       .getOne();
     if (!row || !Array.isArray(this.toRow(row).fields))
       throw crudErrors.notFound();
@@ -213,14 +309,24 @@ export class FormDefinitionService
   /** 提交模块调用本服务读取固定版本；与提交接口共用数据范围，绝不由调用方查询定义表。 */
   async forSubmission(id: string, manager: EntityManager) {
     const row = await this.select(manager, 'add')
-      .andWhere('e.id = :id', { id })
+      .andWhere('e.id = :id AND e.archived = false', { id })
+      .setLock('pessimistic_read')
       .getOne();
     if (!row) throw crudErrors.notFound();
     return row;
   }
+  /** 已授权的提交详情从固定表单版本读取字段顺序和选项。 */
+  submissionDefinition(id: string, manager: EntityManager) {
+    return this.repos
+      .for(FormDefinition)
+      .query('f', manager)
+      .select(['f.id', 'f.designer', 'f.fields'])
+      .andWhere('f.id = :id', { id })
+      .getOne();
+  }
   private async loadVersion(id: string) {
     const row = await this.select(this.crud.dataSource.manager, 'info')
-      .andWhere('e.id = :id', { id })
+      .andWhere('e.id = :id AND e.archived = false', { id })
       .getOne();
     if (!row) throw crudErrors.notFound();
     return row;

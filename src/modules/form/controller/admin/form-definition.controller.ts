@@ -1,7 +1,11 @@
-import { Body, HttpCode, Post } from '@nestjs/common';
+import { Body, HttpCode, Post, type Type } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiProperty } from '@nestjs/swagger';
 import { IsObject } from 'class-validator';
 import { BaseController, CrudController } from '../../../../core/crud/index.js';
+import type { PageQuery } from '../../../../core/crud/base.service.js';
+import type { CrudControllerOptions } from '../../../../core/crud/crud.types.js';
+import { buildCrudDtos } from '../../../../core/crud/crud.dto.js';
+import { resolveCrudMeta } from '../../../../core/crud/crud-meta.js';
 import { Perms } from '../../../../core/permission/perms.decorator.js';
 import { ApiErrors, ApiResult } from '../../../../core/swagger/api-result.js';
 import {
@@ -10,6 +14,7 @@ import {
   FormFieldDto,
   FormValidationResult,
   ReviseFormBody,
+  SetFormVersionArchivedBody,
   ValidateFormBody,
 } from '../../dto/form.dto.js';
 import { FormDefinition } from '../../entity/form-definition.entity.js';
@@ -26,7 +31,7 @@ class InspectFormResult {
   @ApiProperty({ type: [FormFieldDto] }) fields!: FormFieldDto[];
 }
 
-@CrudController({
+const formDefinitionCrud = {
   prefix: 'form/definition',
   label: '表单定义',
   entity: FormDefinition,
@@ -34,13 +39,34 @@ class InspectFormResult {
   api: ['page', 'info'],
   pageQuery: {
     keyWords: ['code', 'name'],
-    fieldEq: ['code', 'revision'],
+    fieldEq: ['code', 'revision', 'archived'],
     defaultSort: [{ field: 'revision', order: 'desc' }],
   },
-})
+} satisfies CrudControllerOptions<FormDefinition>;
+const currentPageDtos = buildCrudDtos({
+  ...resolveCrudMeta(formDefinitionCrud),
+  name: 'FormDefinitionCurrent',
+});
+class CurrentFormPageBody extends (currentPageDtos.PageBody as Type<PageQuery>) {}
+
+@CrudController(formDefinitionCrud)
 export class FormDefinitionController extends BaseController<FormDefinition> {
   constructor(private readonly definitions: FormDefinitionService) {
     super();
+  }
+
+  @Post('current-page')
+  @HttpCode(200)
+  @Perms('form:definition:page')
+  @ApiOperation({
+    operationId: 'formDefinitionCurrentPage',
+    summary: '每个表单编码最新有效版本的分页列表',
+  })
+  @ApiBody({ type: CurrentFormPageBody })
+  @ApiResult(currentPageDtos.PageResult)
+  @ApiErrors(400, 403)
+  currentPage(@Body() body: CurrentFormPageBody) {
+    return this.definitions.currentPage(body);
   }
 
   @Post('add')
@@ -73,6 +99,19 @@ export class FormDefinitionController extends BaseController<FormDefinition> {
       body.baseRevision,
       body.definitionId,
     );
+  }
+
+  @Post('set-archived')
+  @HttpCode(200)
+  @Perms('form:definition:update')
+  @ApiOperation({
+    operationId: 'formDefinitionSetArchived',
+    summary: '归档未使用的旧表单版本，或恢复归档版本',
+  })
+  @ApiResult(SetFormVersionArchivedBody)
+  @ApiErrors(400, 403, 404, 409)
+  setArchived(@Body() body: SetFormVersionArchivedBody) {
+    return this.definitions.setArchived(body);
   }
 
   @Post('inspect')

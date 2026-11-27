@@ -170,6 +170,7 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
             (code) =>
               !code.startsWith('platform:') &&
               !code.startsWith('system:menu:') &&
+              code !== 'system:parameter:page' &&
               code !== 'system:user:page',
           ))
           allMenus.push(
@@ -444,7 +445,7 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
                 id: rolePage,
                 resource: 'system:role',
                 title: '角色管理',
-                selectable: readAll,
+                selectable: true,
               },
             ],
           },
@@ -455,6 +456,27 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
       {
         menus: menuTree(true),
       },
+    );
+    const grantable = 'system/permission/grantable';
+    const options = (await get(grantable, '1', tenantUser).expect(200)).body
+      .data.list;
+    const orderedCodes = options.map((item: { code: string }) => item.code);
+    expect(orderedCodes.indexOf('system:user:page')).toBeLessThan(
+      orderedCodes.indexOf('system:org:page'),
+    );
+    expect(orderedCodes.indexOf('system:org:page')).toBeLessThan(
+      orderedCodes.indexOf('system:role:page'),
+    );
+    expect(options).toContainEqual({
+      code: 'system:role:page',
+      label: '查看',
+      groups: ['系统', '角色 / 权限', '角色管理'],
+    });
+    expect(options).not.toContainEqual(
+      expect.objectContaining({ code: 'system:parameter:page' }),
+    );
+    expect(options).not.toContainEqual(
+      expect.objectContaining({ code: 'platform:tenant:page' }),
     );
 
     const user = (
@@ -470,6 +492,7 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
       ).expect(200)
     ).body.data;
     await get(catalog, '1', user.id).expect(403);
+    await get(grantable, '1', user.id).expect(403);
     const role = (
       await http(
         'system/role/add',
@@ -478,7 +501,11 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
             code: 'config-editor',
             name: '配置管理员',
             enabled: true,
-            permissions: ['system:page-config:info', 'system:user:page'],
+            permissions: [
+              'system:page-config:info',
+              'system:role:page',
+              'system:user:page',
+            ],
             dataScope: 'all',
             customOrgIds: [],
           },
@@ -496,6 +523,16 @@ describe('T31 平台租户管理、初始化与事务配额', () => {
     expect((await get(catalog, '1', user.id).expect(200)).body.data).toEqual({
       menus: menuTree(false),
     });
+    const editorOptions = (await get(grantable, '1', user.id).expect(200)).body
+      .data.list;
+    expect(editorOptions).toHaveLength(3);
+    expect(editorOptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'system:page-config:info' }),
+        expect.objectContaining({ code: 'system:role:page' }),
+        expect.objectContaining({ code: 'system:user:page' }),
+      ]),
+    );
     await get('system/org/schema', '1', user.id).expect(403);
   });
   it('菜单管理可移动到组织与权限，仍仅在平台菜单中显示', async () => {

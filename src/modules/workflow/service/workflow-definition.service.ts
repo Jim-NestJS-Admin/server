@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { EntityManager } from 'typeorm';
 import { BaseService } from '../../../core/crud/base.service.js';
@@ -10,7 +10,10 @@ import { SystemDirectory } from '../../system/service/system-directory.service.j
 import { SystemFieldCatalog } from '../../system/service/system-field.catalog.js';
 import { CodeRuleService } from '../../code-rule/service/code-rule.service.js';
 import { WorkflowDefinition } from '../entity/workflow-definition.entity.js';
+import { WorkflowInstance } from '../entity/workflow-runtime.entity.js';
 import type { WorkflowDefinitionInput } from '../dto/workflow.dto.js';
+import type { WorkflowAvailableBody } from '../dto/workflow-available.dto.js';
+import { WorkflowPlanner, workflowProgress } from './workflow-plan.js';
 import {
   compileWorkflow,
   WORKFLOW_COMPILER_VERSION,
@@ -19,24 +22,49 @@ import {
 } from './workflow-rules.js';
 
 @Injectable()
-export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
+export class WorkflowDefinitionService
+  extends BaseService<WorkflowDefinition>
+  implements OnModuleInit
+{
+  onModuleInit() {
+    this.forms.registerWorkflowReferences(async (id, manager) => {
+      for (const repository of [
+        this.repos.for(WorkflowDefinition),
+        this.repos.for(WorkflowInstance),
+      ]) {
+        const row = await repository
+          .query('w', manager)
+          .withDeleted()
+          .andWhere('w.formDefinitionId = :id', { id })
+          .setLock('pessimistic_read')
+          .getOne();
+        if (row) return true;
+      }
+      return false;
+    });
+  }
   /** 发起人仅取得已发布流程的选择摘要；不开放管理接口、BPMN或条件/人员配置。 */
-  async availableForStart(body: {
-    id?: string;
-    keyword: string;
-    page: number;
-    size: number;
-  }) {
+  async availableForStart(body: WorkflowAvailableBody) {
     return this.crud.dataSource.transaction(async (manager) => {
       const query = this.select(manager, 'info').andWhere(
         'e.status = :status',
         { status: 'published' },
       );
       if (body.id) query.andWhere('e.id = :id', { id: body.id });
+      else {
+        const latest = this.select(manager, 'info')
+          .select('MAX(e.id)')
+          .andWhere('e.status = :status')
+          .groupBy('e.code');
+        query.andWhere(`e.id IN (${latest.getQuery()})`);
+      }
       if (body.keyword)
-        query.andWhere('(e.name LIKE :keyword OR e.code LIKE :keyword)', {
-          keyword: `%${body.keyword}%`,
-        });
+        query.andWhere(
+          '(e.name LIKE :keyword OR e.category LIKE :keyword OR e.code LIKE :keyword)',
+          {
+            keyword: `%${body.keyword}%`,
+          },
+        );
       const [rows, total] = await query
         .orderBy('e.revision', 'DESC')
         .skip((body.page - 1) * body.size)
@@ -57,6 +85,7 @@ export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
           return {
             id: row.id,
             name: visible.name,
+            category: visible.category,
             code: visible.code,
             revision: visible.revision,
             formDefinitionId: row.formDefinitionId,
@@ -67,6 +96,11 @@ export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
                     row.formDefinitionId,
                     manager,
                   ),
+                  progress: await this.previewForApplicant(
+                    row,
+                    body.selections ?? {},
+                    manager,
+                  ),
                 }
               : {}),
           };
@@ -74,6 +108,39 @@ export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
       );
       return { list, total };
     });
+  }
+  private async previewForApplicant(
+    row: WorkflowDefinition,
+    selections: Record<string, string[]>,
+    manager: EntityManager,
+  ) {
+    const { userId, orgId } = this.crud.context.current();
+    if (
+      !userId ||
+      !(await this.directory.workflowIdentity(userId, orgId, manager))
+    )
+      throw crudErrors.notFound();
+    const actors = await this.planner.plan(
+      {
+        designer: row.designer,
+        applicantId: userId,
+        applicantOrgId: orgId,
+        selections,
+        actors: {},
+      },
+      manager,
+      'preview',
+    );
+    const members = await this.directory.workflowMemberSummaries(
+      [...new Set(Object.values(actors).flat())],
+      manager,
+    );
+    return workflowProgress(row.designer.nodes, (node) => ({
+      status: 'waiting',
+      members: actors[node.id]?.map(
+        (id) => members.get(id) ?? { id, name: '成员不可用' },
+      ),
+    }));
   }
   private readonly saving = new AsyncLocalStorage<{
     expected: number;
@@ -85,6 +152,7 @@ export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
     private readonly fields: SystemFieldCatalog,
     private readonly codes: CodeRuleService,
     private readonly repos: TenantRepositoryFactory,
+    private readonly planner: WorkflowPlanner,
   ) {
     super();
   }
@@ -143,6 +211,7 @@ export class WorkflowDefinitionService extends BaseService<WorkflowDefinition> {
     if (!saving) throw crudErrors.badRequest('请使用流程创建或修订接口');
     if (!data.name || !data.formDefinitionId || !data.designer)
       throw crudErrors.badRequest('缺少可写的流程名称、表单版本或流程设计');
+    data.category = data.category?.trim() ?? '';
     const parsed = await this.prepare(
       data.formDefinitionId,
       data.designer,

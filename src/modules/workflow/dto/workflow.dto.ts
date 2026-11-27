@@ -138,6 +138,10 @@ export class WorkflowDefinitionInput {
   @ApiProperty() @IsString() @MaxLength(100) @Matches(/\S/) name!: string;
   @ApiPropertyOptional({ default: '' })
   @IsString()
+  @MaxLength(50)
+  category: string = '';
+  @ApiPropertyOptional({ default: '' })
+  @IsString()
   @MaxLength(500)
   description: string = '';
   @ApiProperty() @Matches(ID_PATTERN) formDefinitionId!: string;

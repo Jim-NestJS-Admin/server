@@ -10,6 +10,7 @@ import {
   IsArray,
   ArrayMaxSize,
   ArrayUnique,
+  Max,
 } from 'class-validator';
 import { ID_PATTERN } from '../../../core/crud/crud.dto.js';
 import { WorkflowInstance } from '../entity/workflow-runtime.entity.js';
@@ -32,6 +33,53 @@ export class StartWorkflowBody {
   })
   @Matches(ID_PATTERN)
   submissionId!: string;
+}
+export class ApplicationInput {
+  @ApiProperty() @Matches(ID_PATTERN) definitionId!: string;
+  @ApiProperty({ type: 'object', additionalProperties: true })
+  @IsObject()
+  values!: Record<string, unknown>;
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: { type: 'array', items: { type: 'string' } },
+  })
+  @IsOptional()
+  @IsObject()
+  selections?: Record<string, string[]>;
+  @ApiPropertyOptional() @IsOptional() @Matches(ID_PATTERN) draftId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) version?: number;
+}
+export class ApplicationDraftRow {
+  @ApiProperty() id!: string;
+  @ApiProperty() version!: number;
+  @ApiProperty() definitionId!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({ type: 'object', additionalProperties: true }) values!: Record<
+    string,
+    unknown
+  >;
+  @ApiProperty({
+    type: 'object',
+    additionalProperties: { type: 'array', items: { type: 'string' } },
+  })
+  selections!: Record<string, string[]>;
+}
+export class ApplicationDraftPageBody {
+  @ApiPropertyOptional({ default: 1 })
+  @IsInt()
+  @Min(1)
+  @Max(10000)
+  page: number = 1;
+}
+export class ApplicationDraftChoice {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty() updatedAt!: Date;
+}
+export class ApplicationDraftPage {
+  @ApiProperty({ type: [ApplicationDraftChoice] })
+  list!: ApplicationDraftChoice[];
+  @ApiProperty() total!: number;
 }
 export class ApproveWorkflowBody {
   @ApiPropertyOptional({
@@ -129,11 +177,16 @@ export class WorkflowProgressBranch {
   @ApiProperty({ type: () => [WorkflowProgressNode] })
   nodes!: WorkflowProgressNode[];
 }
+export class WorkflowGraphMember {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiPropertyOptional() avatar?: string;
+}
 export class WorkflowProgressNode {
   @ApiProperty() id!: string;
   @ApiProperty() name!: string;
   @ApiProperty({ enum: ['approve', 'copy', 'condition', 'parallel'] })
-  type!: string;
+  type!: 'approve' | 'copy' | 'condition' | 'parallel';
   @ApiProperty({
     enum: [
       'waiting',
@@ -145,7 +198,29 @@ export class WorkflowProgressNode {
       'taken',
     ],
   })
-  status!: string;
+  status!:
+    | 'waiting'
+    | 'pending'
+    | 'approved'
+    | 'cancelled'
+    | 'returned'
+    | 'copied'
+    | 'taken';
+  @ApiPropertyOptional({
+    enum: [
+      'users',
+      'roles',
+      'department_leader',
+      'supervisor',
+      'self_select',
+      'applicant',
+    ],
+  })
+  actorType?: string;
+  @ApiPropertyOptional() actorLevel?: number;
+  @ApiPropertyOptional({ enum: ['all', 'any', 'sequential'] }) mode?: string;
+  @ApiPropertyOptional({ type: [WorkflowGraphMember] })
+  members?: WorkflowGraphMember[];
   @ApiPropertyOptional() chosenBranch?: string;
   @ApiPropertyOptional({ type: () => [WorkflowProgressBranch] })
   branches?: WorkflowProgressBranch[];

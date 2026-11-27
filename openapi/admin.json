@@ -1037,6 +1037,122 @@
         ],
         "type": "object"
       },
+      "ApplicationDraftChoice": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ApplicationDraftPage": {
+        "properties": {
+          "list": {
+            "items": {
+              "$ref": "#/components/schemas/ApplicationDraftChoice"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "list",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ApplicationDraftPageBody": {
+        "properties": {
+          "page": {
+            "default": 1,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ApplicationDraftRow": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "selections": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "values": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "definitionId",
+          "name",
+          "values",
+          "selections"
+        ],
+        "type": "object"
+      },
+      "ApplicationInput": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "selections": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "values": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "definitionId",
+          "values"
+        ],
+        "type": "object"
+      },
       "ApproveWorkflowBody": {
         "properties": {
           "attachmentIds": {
@@ -1966,6 +2082,50 @@
         ],
         "type": "object"
       },
+      "CurrentFormPageBody": {
+        "properties": {
+          "eq": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FormDefinitionCurrentPageEq"
+              }
+            ],
+            "description": "按等于筛选"
+          },
+          "keyword": {
+            "description": "搜索框，模糊匹配：code、name",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1,
+            "type": "number"
+          },
+          "size": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "type": "number"
+          },
+          "sort": {
+            "items": {
+              "$ref": "#/components/schemas/FormDefinitionCurrentPageSort"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "where": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryGroupDto"
+              }
+            ],
+            "description": "高级查询：最多 3 层、20 个条件（契约 query.md）"
+          }
+        },
+        "type": "object"
+      },
       "DictionaryOption": {
         "properties": {
           "label": {
@@ -2568,6 +2728,178 @@
       },
       "FormDefinition": {
         "properties": {
+          "archived": {
+            "description": "已归档",
+            "type": "boolean"
+          },
+          "code": {
+            "description": "表单编码",
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "创建时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "description": "创建人",
+            "nullable": true,
+            "type": "string"
+          },
+          "designer": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FormDesignerDto"
+              }
+            ],
+            "description": "表单设计"
+          },
+          "fields": {
+            "description": "字段清单",
+            "items": {
+              "$ref": "#/components/schemas/FormFieldDto"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "编号",
+            "example": "1",
+            "type": "string"
+          },
+          "name": {
+            "description": "表单名称",
+            "type": "string"
+          },
+          "orgId": {
+            "description": "所属组织（新增时取当前组织，数据权限按它过滤）",
+            "nullable": true,
+            "type": "string"
+          },
+          "revision": {
+            "description": "表单版本",
+            "type": "number"
+          },
+          "updatedAt": {
+            "description": "修改时间",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "description": "修改人",
+            "nullable": true,
+            "type": "string"
+          },
+          "version": {
+            "description": "版本号，修改时原样带回",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "orgId",
+          "createdBy",
+          "updatedBy",
+          "createdAt",
+          "updatedAt",
+          "version"
+        ],
+        "type": "object"
+      },
+      "FormDefinitionCurrentPageEq": {
+        "properties": {
+          "archived": {
+            "description": "已归档",
+            "type": "boolean"
+          },
+          "code": {
+            "description": "表单编码",
+            "type": "string"
+          },
+          "revision": {
+            "description": "表单版本",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "FormDefinitionCurrentPageResult": {
+        "properties": {
+          "list": {
+            "items": {
+              "$ref": "#/components/schemas/FormDefinitionCurrentRow"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "number"
+          },
+          "size": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "list",
+          "total",
+          "page",
+          "size"
+        ],
+        "type": "object"
+      },
+      "FormDefinitionCurrentPageSort": {
+        "properties": {
+          "field": {
+            "description": "排序字段",
+            "enum": [
+              "id",
+              "createdAt",
+              "updatedAt",
+              "code",
+              "revision"
+            ],
+            "type": "string"
+          },
+          "order": {
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "order"
+        ],
+        "type": "object"
+      },
+      "FormDefinitionCurrentRow": {
+        "properties": {
+          "_display": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "编号字段的显示名：createdBy / updatedBy 是用户名称，orgId 是组织名称；查不到的不返回",
+            "type": "object"
+          },
+          "_fieldState": {
+            "additionalProperties": {
+              "enum": [
+                "readonly",
+                "masked",
+                "hidden"
+              ],
+              "type": "string"
+            },
+            "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
+            "type": "object"
+          },
+          "archived": {
+            "description": "已归档",
+            "type": "boolean"
+          },
           "code": {
             "description": "表单编码",
             "type": "string"
@@ -2714,6 +3046,10 @@
       },
       "FormDefinitionPageEq": {
         "properties": {
+          "archived": {
+            "description": "已归档",
+            "type": "boolean"
+          },
           "code": {
             "description": "表单编码",
             "type": "string"
@@ -2798,6 +3134,10 @@
             },
             "description": "这一行上不是「可编辑」的字段：readonly 只读、masked 值已打码、hidden 不返回（契约 field-perm.md 3.1）",
             "type": "object"
+          },
+          "archived": {
+            "description": "已归档",
+            "type": "boolean"
           },
           "code": {
             "description": "表单编码",
@@ -3526,6 +3866,42 @@
           "definitionId",
           "revision",
           "valid"
+        ],
+        "type": "object"
+      },
+      "GrantablePermissionItem": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "groups"
+        ],
+        "type": "object"
+      },
+      "GrantablePermissionList": {
+        "properties": {
+          "list": {
+            "items": {
+              "$ref": "#/components/schemas/GrantablePermissionItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "list"
         ],
         "type": "object"
       },
@@ -5290,6 +5666,11 @@
           "readAt": {
             "description": "阅读时间",
             "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "taskId": {
+            "description": "关联待办",
             "nullable": true,
             "type": "string"
           },
@@ -8162,6 +8543,25 @@
         },
         "required": [
           "spec"
+        ],
+        "type": "object"
+      },
+      "SetFormVersionArchivedBody": {
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "archived"
         ],
         "type": "object"
       },
@@ -14616,6 +15016,15 @@
             "default": 1,
             "type": "number"
           },
+          "selections": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
           "size": {
             "default": 20,
             "type": "number"
@@ -14643,6 +15052,9 @@
       },
       "WorkflowAvailableRow": {
         "properties": {
+          "category": {
+            "type": "string"
+          },
           "code": {
             "type": "string"
           },
@@ -14657,6 +15069,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "progress": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowProgressNode"
+            },
+            "type": "array"
           },
           "revision": {
             "type": "number"
@@ -14808,6 +15226,10 @@
             "description": "BPMN",
             "type": "string"
           },
+          "category": {
+            "description": "事项分组",
+            "type": "string"
+          },
           "code": {
             "description": "流程编码",
             "type": "string"
@@ -14922,6 +15344,10 @@
       },
       "WorkflowDefinitionInput": {
         "properties": {
+          "category": {
+            "default": "",
+            "type": "string"
+          },
           "description": {
             "default": "",
             "type": "string"
@@ -15087,6 +15513,10 @@
           },
           "bpmn": {
             "description": "BPMN",
+            "type": "string"
+          },
+          "category": {
+            "description": "事项分组",
             "type": "string"
           },
           "code": {
@@ -15256,6 +15686,9 @@
       },
       "WorkflowDirectoryOption": {
         "properties": {
+          "avatar": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -15271,6 +15704,9 @@
       },
       "WorkflowDirectoryOrganization": {
         "properties": {
+          "avatar": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -15407,6 +15843,24 @@
           "fields",
           "values",
           "fieldStates"
+        ],
+        "type": "object"
+      },
+      "WorkflowGraphMember": {
+        "properties": {
+          "avatar": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ],
         "type": "object"
       },
@@ -15950,6 +16404,20 @@
       },
       "WorkflowProgressNode": {
         "properties": {
+          "actorLevel": {
+            "type": "number"
+          },
+          "actorType": {
+            "enum": [
+              "users",
+              "roles",
+              "department_leader",
+              "supervisor",
+              "self_select",
+              "applicant"
+            ],
+            "type": "string"
+          },
           "branches": {
             "items": {
               "$ref": "#/components/schemas/WorkflowProgressBranch"
@@ -15960,6 +16428,20 @@
             "type": "string"
           },
           "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowGraphMember"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "enum": [
+              "all",
+              "any",
+              "sequential"
+            ],
             "type": "string"
           },
           "name": {
@@ -20056,6 +20538,82 @@
         }
       }
     },
+    "/admin/form/definition/current-page": {
+      "post": {
+        "operationId": "formDefinitionCurrentPage",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CurrentFormPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FormDefinitionCurrentPageResult"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          }
+        },
+        "summary": "每个表单编码最新有效版本的分页列表",
+        "tags": [
+          "form/definition 表单定义"
+        ],
+        "x-permission": {
+          "code": "form:definition:page",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/form/definition/info": {
       "post": {
         "operationId": "formDefinitionInfo",
@@ -20412,6 +20970,102 @@
         ],
         "x-permission": {
           "code": "form:definition:page",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/form/definition/set-archived": {
+      "post": {
+        "operationId": "formDefinitionSetArchived",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetFormVersionArchivedBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SetFormVersionArchivedBody"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "summary": "归档未使用的旧表单版本，或恢复归档版本",
+        "tags": [
+          "form/definition 表单定义"
+        ],
+        "x-permission": {
+          "code": "form:definition:update",
           "risk": "normal"
         }
       }
@@ -31092,6 +31746,52 @@
         }
       }
     },
+    "/admin/system/permission/grantable": {
+      "get": {
+        "operationId": "systemRoleGrantablePermissions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/GrantablePermissionList"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "当前组织下可授予角色的权限及菜单分组",
+        "tags": [
+          "SystemPermission"
+        ],
+        "x-permission": {
+          "code": "system:role:page",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/system/permission/list": {
       "get": {
         "operationId": "systemPermissionList",
@@ -34744,6 +35444,224 @@
         }
       }
     },
+    "/admin/workflow/instance/draft-info": {
+      "post": {
+        "operationId": "workflowInstanceDraftInfo",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowDocumentBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ApplicationDraftRow"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          }
+        },
+        "summary": "继续填写本人申请草稿",
+        "tags": [
+          "workflow/instance 审批申请"
+        ],
+        "x-permission": {
+          "code": "workflow:instance:add",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/workflow/instance/draft-page": {
+      "post": {
+        "operationId": "workflowInstanceDraftPage",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationDraftPageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ApplicationDraftPage"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "列出本人申请草稿",
+        "tags": [
+          "workflow/instance 审批申请"
+        ],
+        "x-permission": {
+          "code": "workflow:instance:add",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/workflow/instance/draft-save": {
+      "post": {
+        "operationId": "workflowInstanceDraftSave",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ApplicationDraftRow"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "summary": "保存本人申请草稿",
+        "tags": [
+          "workflow/instance 审批申请"
+        ],
+        "x-permission": {
+          "code": "workflow:instance:add",
+          "risk": "normal"
+        }
+      }
+    },
     "/admin/workflow/instance/info": {
       "post": {
         "operationId": "workflowInstanceInfo",
@@ -35201,6 +36119,102 @@
           }
         },
         "summary": "由本人正式表单提交发起审批，固定已发布版本",
+        "tags": [
+          "workflow/instance 审批申请"
+        ],
+        "x-permission": {
+          "code": "workflow:instance:add",
+          "risk": "normal"
+        }
+      }
+    },
+    "/admin/workflow/instance/start-application": {
+      "post": {
+        "operationId": "workflowInstanceStartApplication",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        1000
+                      ],
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowInstance"
+                    },
+                    "message": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4000：参数有误、唯一冲突等，字段错误在 data.errors"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4003：没有权限"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4004：数据不存在或无权访问"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "4009：数据已被他人修改，请刷新后重试"
+          }
+        },
+        "summary": "一次提交表单并发起审批",
         "tags": [
           "workflow/instance 审批申请"
         ],

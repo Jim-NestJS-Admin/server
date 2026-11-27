@@ -317,6 +317,7 @@ export class BaseService<T extends BaseEntity> {
   async page(
     query: PageQuery,
     exportLimit?: number,
+    filter?: (qb: ScopedSelectQueryBuilder<T>) => void,
   ): Promise<PageResult<CrudRow<T>>> {
     const meta = this.meta;
     const page = query.page ?? 1;
@@ -326,6 +327,7 @@ export class BaseService<T extends BaseEntity> {
         { field: 'size', messages: [`每页最多 ${meta.maxSize} 条`] },
       ]);
     const qb = this.select(this.crud.dataSource.manager, 'page');
+    filter?.(qb);
 
     // 脱敏、隐藏的字段不能按原值搜索：从搜索框的字段里去掉
     const canQuery = this.queryableByAll();
@@ -440,6 +442,14 @@ export class BaseService<T extends BaseEntity> {
 
   /** 新增；有子表时 children 里每个子表只有 added，主表和子表在同一个事务里写入 */
   async add(data: Partial<T>, children?: unknown): Promise<CrudRow<T>> {
+    return this.addWithTransaction(data, children);
+  }
+
+  protected async addWithTransaction(
+    data: Partial<T>,
+    children?: unknown,
+    manager?: EntityManager,
+  ): Promise<CrudRow<T>> {
     this.assertNotChild();
     const plans = await planChildren(
       this.meta as CrudResourceMeta,
@@ -447,7 +457,7 @@ export class BaseService<T extends BaseEntity> {
       'add',
       this.crud.dataSource,
     );
-    return this.transaction(async (tx) => {
+    const save = async (tx: CrudTx) => {
       const values = this.pick(data, this.meta.addable);
       this.dropChildNotEditable(plans, {
         orgId: tx.ctx.orgId,
@@ -496,6 +506,16 @@ export class BaseService<T extends BaseEntity> {
       if (!row) throw new Error(`新增后读不到数据：${this.meta.prefix} ${id}`);
       await this.afterAdd(row, tx);
       return this.toDetail(tx.manager, row, tx.ctx.tenantId);
+    };
+    if (!manager) return this.transaction(save);
+    const ctx = this.crud.context.current();
+    if (!manager.queryRunner?.isTransactionActive || ctx.ignoreTenant)
+      throw new Error('新增必须使用当前租户的活动事务');
+    return save({
+      manager,
+      ctx,
+      meta: this.meta,
+      dictionary: this.crud.dictionary?.(),
     });
   }
 
@@ -977,7 +997,7 @@ export class BaseService<T extends BaseEntity> {
   }
 
   /** 详情：主表可读字段，有子表时加上 children */
-  private async toDetail(
+  protected async toDetail(
     manager: EntityManager,
     row: T,
     tenantId: string,

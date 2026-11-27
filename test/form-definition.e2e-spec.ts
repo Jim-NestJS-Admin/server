@@ -11,6 +11,7 @@ import { PermissionSource } from '../src/core/permission/permission-source.js';
 import { RequestContext } from '../src/core/tenant/request-context.js';
 import { FormDefinitionService } from '../src/modules/form/service/form-definition.service.js';
 import { FormDefinition1794470400000 } from '../src/database/migrations/1794470400000-FormDefinition.js';
+import { FormVersionArchive1814906215523 } from '../src/database/migrations/1814906215523-FormVersionArchive.js';
 import { buildOpenApiDocument } from '../src/core/swagger/swagger.js';
 import { createTestModule } from './support/test-auth.js';
 import { assertTestDatabase } from './support/test-database.js';
@@ -141,6 +142,7 @@ describe('T35 表单版本、校验与租户边界', () => {
     try {
       await migration.down(runner);
       await migration.up(runner);
+      await new FormVersionArchive1814906215523().up(runner);
       const table = await runner.getTable('form_definition');
       expect(
         table?.columns.find((c) => c.name === 'active_guard')?.asExpression,
@@ -154,6 +156,182 @@ describe('T35 表单版本、校验与租户边界', () => {
     } finally {
       await runner.release();
     }
+  });
+
+  it('主列表先按编码选最新版本再搜索和分页，保留同租户历史列表', async () => {
+    const first = await add();
+    const latest = (
+      await post('revise', {
+        data: { ...data(), name: '新版名称' },
+        baseRevision: 1,
+      }).expect(200)
+    ).body.data;
+    const another = await add();
+    const otherTenant = await add('2');
+    expect(otherTenant.code).toBe(first.code);
+    for (const baseRevision of [1, 2]) {
+      await post(
+        'revise',
+        { data: { ...data(), name: '其他租户' }, baseRevision },
+        '2',
+      ).expect(200);
+    }
+    const page = (body: object, tenant = '1') =>
+      post('current-page', body, tenant).expect(200);
+    const firstPage = (await page({ page: 1, size: 1 })).body.data;
+    const secondPage = (await page({ page: 2, size: 1 })).body.data;
+    expect(firstPage).toMatchObject({ total: 2, list: [{ id: latest.id }] });
+    expect(secondPage).toMatchObject({ total: 2, list: [{ id: another.id }] });
+    expect((await page({ keyword: '请假申请' })).body.data).toMatchObject({
+      total: 1,
+      list: [{ id: another.id }],
+    });
+    expect(
+      (await page({ eq: { code: first.code } }, '2')).body.data,
+    ).toMatchObject({
+      total: 1,
+      list: [{ revision: 3 }],
+    });
+    expect(
+      (await post('page', { eq: { code: first.code } }).expect(200)).body.data
+        .total,
+    ).toBe(2);
+    await post('current-page', { size: 0 }).expect(400);
+    await post('current-page', {}, '1', '3').expect(403);
+  });
+
+  it('未使用的旧版本可以归档和恢复，归档第一版后仍能从第二版创建第三版', async () => {
+    const first = await add();
+    const identity = { id: first.id, version: 1 };
+    await post('set-archived', { ...identity, archived: true }).expect(400);
+    const second = (
+      await post('revise', { data: data(), baseRevision: 1 }).expect(200)
+    ).body.data;
+    await post(
+      'set-archived',
+      { ...identity, archived: true },
+      '1',
+      '3',
+    ).expect(403);
+    await post('set-archived', { ...identity, archived: true }, '2').expect(
+      404,
+    );
+    await post('set-archived', { ...identity, archived: true }).expect(200);
+    const active = (await post('page', {}).expect(200)).body.data.list;
+    expect(active.map((row: { id: string }) => row.id)).toEqual([second.id]);
+    const archived = (
+      await post('page', { eq: { archived: true } }).expect(200)
+    ).body.data.list;
+    expect(archived).toMatchObject([
+      { id: first.id, version: 2, archived: true },
+    ]);
+    await post('validate', { definitionId: first.id, data: {} }).expect(404);
+    const third = await post('revise', {
+      definitionId: second.id,
+      data: data(),
+      baseRevision: 2,
+    }).expect(200);
+    expect(third.body.data).toMatchObject({
+      code: first.code,
+      revision: 3,
+      archived: false,
+    });
+    await post('set-archived', { ...identity, archived: false }).expect(409);
+    await post('set-archived', {
+      id: first.id,
+      version: 2,
+      archived: false,
+    }).expect(200);
+    expect((await post('page', {}).expect(200)).body.data.total).toBe(3);
+  });
+
+  it('已有提交记录的旧版本不能归档', async () => {
+    const first = await add();
+    await post('revise', { data: data(), baseRevision: 1 }).expect(200);
+    await request(app.getHttpServer())
+      .post('/admin/form/submission/add')
+      .set('x-test-user', '1')
+      .set('x-test-tenant', '1')
+      .send({ data: { definitionId: first.id, values: { reason: '测试' } } })
+      .expect(200);
+    await post('set-archived', {
+      id: first.id,
+      version: 1,
+      archived: true,
+    }).expect(400);
+  });
+
+  it('提交详情使用固定版本的字段顺序和选项标签，保留原值', async () => {
+    const options = [
+      { label: '事假', value: '1' },
+      { label: '病假', value: '2' },
+    ];
+    const design = {
+      ...data(),
+      designer: {
+        schemaVersion: 1,
+        rule: [
+          { type: 'select', field: 'kind', title: '请假类型', options },
+          { type: 'checkbox', field: 'details', title: '明细', options },
+          { type: 'radio', field: 'related', title: '关联选项', options },
+        ],
+        linkages: [
+          {
+            source: 'kind',
+            target: 'related',
+            operator: 'eq',
+            value: '1',
+            action: 'options',
+            whenTrue: [{ label: '联动病假', value: '2' }],
+            whenFalse: options,
+          },
+        ],
+      },
+    };
+    const first = (await post('add', { data: design }).expect(200)).body.data;
+    const submission = (path: string, body: object, tenant = '1') =>
+      request(app.getHttpServer())
+        .post(`/admin/form/submission/${path}`)
+        .set('x-test-user', '1')
+        .set('x-test-tenant', tenant)
+        .send(body);
+    const values = { related: '2', details: ['2', '1'], kind: '1' };
+    const record = (
+      await submission('add', {
+        data: { definitionId: first.id, values },
+      }).expect(200)
+    ).body.data;
+    await post('revise', {
+      definitionId: first.id,
+      data: {
+        ...design,
+        designer: {
+          ...design.designer,
+          rule: [...design.designer.rule].reverse().map((rule) => ({
+            ...rule,
+            options: options.map((option) => ({
+              ...option,
+              label: `新版${option.label}`,
+            })),
+          })),
+          linkages: [],
+        },
+      },
+      baseRevision: 1,
+    }).expect(200);
+    const detail = (await submission('info', { id: record.id }).expect(200))
+      .body.data;
+    expect(Object.keys(detail.values)).toEqual(['kind', 'details', 'related']);
+    expect(detail).toMatchObject({
+      revision: 1,
+      values,
+      _display: {
+        'values.kind': '事假',
+        'values.details': '病假、事假',
+        'values.related': '联动病假',
+      },
+    });
+    await submission('info', { id: record.id }, '2').expect(404);
   });
 
   it('创建快照、解析字段并拒绝额外系统字段和伪造字段清单', async () => {

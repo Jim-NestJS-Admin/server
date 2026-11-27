@@ -11,7 +11,7 @@ export async function workflowLocal(apply: boolean) {
     menus: ['流程管理', '审批工作台'],
     package: 'all（仅default使用时）',
     codeRule: 'workflow_definition_default',
-    format: 'wf_000001',
+    format: 'wf_yyyyMMdd000001',
     businessWrites: false,
   };
   if (!apply) {
@@ -211,11 +211,12 @@ export async function workflowLocal(apply: boolean) {
         name: '流程定义默认编码',
         description: '本机审批联调初始化；管理员可在编码规则中查看和维护',
         timezone: 'Asia/Shanghai',
-        resetPeriod: 'never',
+        resetPeriod: 'day',
         start: '1',
         status: '1',
         segments: [
           { type: 'literal' as const, value: 'wf_' },
+          { type: 'date' as const, format: 'yyyyMMdd' },
           { type: 'sequence' as const, width: 6 },
         ],
       };

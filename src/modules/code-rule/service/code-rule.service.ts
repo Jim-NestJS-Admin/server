@@ -347,7 +347,46 @@ export class CodeRuleService
       };
     });
   }
-  async bind(usageKey: string, ruleId: string) {
+  async ensureDocumentDefaults() {
+    for (const [usageKey, name, prefix] of [
+      ['form_definition_code', '表单定义默认编码', 'form_'],
+      ['workflow_definition_code', '流程定义默认编码', 'wf_'],
+    ] as const) {
+      const existing = await this.repos
+        .for(CodeBinding)
+        .query('b')
+        .andWhere('b.usageKey = :usageKey', { usageKey })
+        .getOne();
+      if (existing) continue;
+      const code = usageKey.replace(/_code$/, '_default');
+      const rule = await this.repos
+        .for(CodeRule)
+        .query('r')
+        .andWhere('r.code = :code', { code })
+        .getOne();
+      const id =
+        rule?.id ??
+        (
+          await this.add({
+            code,
+            name,
+            description: '',
+            timezone: 'Asia/Shanghai',
+            resetPeriod: 'day',
+            start: '1',
+            status: '1',
+            segments: [
+              { type: 'literal', value: prefix },
+              { type: 'date', format: 'yyyyMMdd' },
+              { type: 'sequence', width: 6 },
+            ],
+          })
+        ).id;
+      await this.bind(usageKey, id, true);
+    }
+  }
+
+  async bind(usageKey: string, ruleId: string, onlyMissing = false) {
     if (!(await this.usages.catalog()).some((u) => u.key === usageKey))
       invalid('请选择已注册的用途', 'usageKey');
     const usage = await this.usages.resolve(usageKey);
@@ -362,7 +401,8 @@ export class CodeRuleService
         tx.manager,
         `保存业务字段绑定（usageKey=${usageKey}，ruleId=${ruleId}）`,
       );
-      if (binding?.ruleId === ruleId) return { usageKey, ruleId };
+      if (binding && (onlyMissing || binding.ruleId === ruleId))
+        return { usageKey, ruleId: binding.ruleId };
       if (binding && !usage.allowRuleSwitch) conflict('该用途不允许更换规则');
       const switching = Boolean(binding);
       if (!binding) {

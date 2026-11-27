@@ -527,6 +527,28 @@ export function parseFormDesigner(input: unknown): {
   return { designer, fields };
 }
 
+export function linkedFormField(
+  base: FormFieldDto,
+  linkages: FormLinkageDto[],
+  values: Obj,
+) {
+  const field = Object.assign({}, base);
+  for (const link of linkages)
+    if (link.target === field.field) {
+      const src = values[link.source];
+      const match =
+        link.operator === 'in'
+          ? (link.value as unknown[]).includes(src)
+          : link.operator === 'eq'
+            ? src === link.value
+            : src !== link.value;
+      const result = match ? link.whenTrue : link.whenFalse;
+      if (link.action === 'options') field.options = result as FormOptionDto[];
+      else field[link.action] = result as boolean;
+    }
+  return field;
+}
+
 /** 可供workflow/CMS直接复用；调用方必须自行实施当前动作的数据/字段权限。 */
 export function validateFormValues(
   definition: { fields: FormFieldDto[]; designer: FormDesignerDto },
@@ -542,21 +564,11 @@ export function validateFormValues(
     if (!known.has(key) || DANGEROUS.has(key)) add(key, '未知字段，不允许提交');
   const effective: Obj = {};
   for (const base of definition.fields) {
-    const field = Object.assign({}, base);
-    for (const link of definition.designer.linkages ?? [])
-      if (link.target === field.field) {
-        const src = effective[link.source];
-        const match =
-          link.operator === 'in'
-            ? (link.value as unknown[]).includes(src)
-            : link.operator === 'eq'
-              ? src === link.value
-              : src !== link.value;
-        const result = match ? link.whenTrue : link.whenFalse;
-        if (link.action === 'options')
-          field.options = result as FormOptionDto[];
-        else field[link.action] = result as boolean;
-      }
+    const field = linkedFormField(
+      base,
+      definition.designer.linkages ?? [],
+      effective,
+    );
     const value = Object.hasOwn(values, field.field)
       ? values[field.field]
       : undefined;

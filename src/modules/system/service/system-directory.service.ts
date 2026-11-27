@@ -65,7 +65,7 @@ export class SystemDirectory {
       const query = this.repos
         .for(SystemUser)
         .query('u')
-        .select(['u.id', 'u.nickname'])
+        .select(['u.id', 'u.nickname', 'u.avatar'])
         .andWhere('u.enabled = :enabled', { enabled: true });
       if (keyword)
         query.andWhere('u.nickname LIKE :keyword', { keyword: `%${keyword}%` });
@@ -127,6 +127,7 @@ export class SystemDirectory {
         list: rows.map((row) => ({
           id: row.id,
           label: row.nickname || `成员 ${row.id}`,
+          ...(row.avatar ? { avatar: row.avatar } : {}),
         })),
         total,
       };
@@ -249,6 +250,20 @@ export class SystemDirectory {
   ): Promise<string[]> {
     let candidates: string[] = [];
     if (type === 'department_leader') {
+      // 默认组织只用于解析部门负责人，不改变当前组织或授权范围。
+      const departmentId =
+        orgId ??
+        (
+          await this.repos
+            .for(SystemUser)
+            .query('u', manager)
+            .andWhere('u.id = :applicantId AND u.enabled = :enabled', {
+              applicantId,
+              enabled: true,
+            })
+            .setLock('pessimistic_read')
+            .getOne()
+        )?.defaultOrgId;
       const orgs = validOrganizations(
         await this.repos
           .for(SystemOrg)
@@ -256,7 +271,7 @@ export class SystemDirectory {
           .setLock('pessimistic_read')
           .getMany(),
       );
-      let org = orgs.find((o) => o.id === orgId);
+      let org = orgs.find((o) => o.id === departmentId);
       for (let n = 1; n < level && org; n++)
         org = orgs.find((o) => o.id === org!.parentId);
       candidates = org?.leaderId ? [org.leaderId] : [];
@@ -324,6 +339,28 @@ export class SystemDirectory {
       .getMany();
     const enabled = new Set(rows.map((row) => row.id));
     return ids.filter((id) => enabled.has(id));
+  }
+
+  /** 仅解析由当前流程授权并计算出的成员编号，返回画布所需的显示资料。 */
+  async workflowMemberSummaries(ids: string[], manager: EntityManager) {
+    if (!ids.length)
+      return new Map<string, { id: string; name: string; avatar?: string }>();
+    const rows = await this.repos
+      .for(SystemUser)
+      .query('u', manager)
+      .select(['u.id', 'u.nickname', 'u.avatar'])
+      .andWhere('u.id IN (:...ids)', { ids })
+      .getMany();
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        {
+          id: row.id,
+          name: row.nickname || `成员 ${row.id}`,
+          ...(row.avatar ? { avatar: row.avatar } : {}),
+        },
+      ]),
+    );
   }
 
   /** 流程发布校验只返回引用是否有效，不向workflow泄露用户/角色原始数据。 */

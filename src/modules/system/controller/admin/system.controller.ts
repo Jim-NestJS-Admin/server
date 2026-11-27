@@ -204,9 +204,21 @@ class PermissionItem {
 class PermissionList {
   @ApiProperty({ type: [PermissionItem] }) list: PermissionItem[];
 }
+class GrantablePermissionItem {
+  @ApiProperty() code: string;
+  @ApiProperty() label: string;
+  @ApiProperty({ type: [String] }) groups: string[];
+}
+class GrantablePermissionList {
+  @ApiProperty({ type: [GrantablePermissionItem] })
+  list: GrantablePermissionItem[];
+}
 @AdminController('system/permission')
 export class SystemPermissionController {
-  constructor(private readonly registry: PermissionRegistry) {}
+  constructor(
+    private readonly registry: PermissionRegistry,
+    private readonly roles: SystemRoleService,
+  ) {}
   @Get('list')
   @Perms('system:role:info')
   @ApiResult(PermissionList)
@@ -216,5 +228,16 @@ export class SystemPermissionController {
   })
   list() {
     return { list: this.registry.all() };
+  }
+
+  @Get('grantable')
+  @Perms('system:role:page')
+  @ApiResult(GrantablePermissionList)
+  @ApiOperation({
+    operationId: 'systemRoleGrantablePermissions',
+    summary: '当前组织下可授予角色的权限及菜单分组',
+  })
+  async grantable() {
+    return { list: await this.roles.grantablePermissions() };
   }
 }

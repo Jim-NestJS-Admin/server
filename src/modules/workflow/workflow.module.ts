@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FormModule } from '../form/form.module.js';
 import { SystemModule } from '../system/system.module.js';
 import { WorkflowDefinition } from './entity/workflow-definition.entity.js';
+import { WorkflowApplicationDraft } from './entity/workflow-application-draft.entity.js';
 import { WorkflowDefinitionService } from './service/workflow-definition.service.js';
 import { WorkflowDefinitionController } from './controller/admin/workflow-definition.controller.js';
 import { WORKFLOW_RUNTIME_ENTITIES } from './entity/workflow-runtime.entity.js';
@@ -31,6 +32,7 @@ import {
     SystemModule,
     TypeOrmModule.forFeature([
       WorkflowDefinition,
+      WorkflowApplicationDraft,
       WorkflowTimer,
       ...WORKFLOW_RUNTIME_ENTITIES,
     ]),

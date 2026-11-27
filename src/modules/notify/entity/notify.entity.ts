@@ -26,8 +26,10 @@ export class NotifyMessage extends BaseEntity {
   @Matches(/^[1-9]\d{0,19}$/)
   @Column({ type: 'bigint', unsigned: true })
   instanceId!: string;
-  @Column({ type: 'bigint', unsigned: true, nullable: true }) taskId!:
-    string | null;
+  @ApiProperty({ type: String, nullable: true })
+  @CrudField({ label: '关联待办', edit: 'none', list: false, nullable: true })
+  @Column({ type: 'bigint', unsigned: true, nullable: true })
+  taskId!: string | null;
   @CrudField({ label: '阅读时间', edit: 'none', nullable: true })
   @ApiProperty({ type: String, format: 'date-time', nullable: true })
   @Type(() => Date)

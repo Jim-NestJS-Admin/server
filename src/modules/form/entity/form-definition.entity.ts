@@ -1,7 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Column, Entity, Index } from 'typeorm';
-import { IsObject, IsString, Matches, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsObject,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 import { BaseEntity, CrudField } from '../../../core/crud/index.js';
+import { FieldPerm } from '../../../core/field-perm/field-perm.decorator.js';
 import { FormDesignerDto, FormFieldDto } from '../dto/form.dto.js';
 
 /** 每次修订追加一条不可变快照；version 为框架行版本，revision 为表单业务版本。 */
@@ -27,6 +34,12 @@ export class FormDefinition extends BaseEntity {
   @CrudField({ label: '表单版本', edit: 'none', list: { sortable: true } })
   @Column({ type: 'int', unsigned: true })
   revision!: number;
+
+  @CrudField({ label: '已归档', edit: 'none', list: false })
+  @FieldPerm({ default: 'readonly', configurable: false })
+  @IsBoolean()
+  @Column({ type: 'boolean', default: false })
+  archived!: boolean;
 
   @ApiProperty({ type: FormDesignerDto })
   @CrudField({ label: '表单设计', edit: 'add', list: false })

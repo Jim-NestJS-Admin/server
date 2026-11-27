@@ -287,6 +287,11 @@ export function parseWorkflow(
       if (n.type === 'approve' || n.type === 'copy') {
         if (n.branches !== undefined)
           workflowInvalid(p, '审批/抄送节点不能包含分支');
+        if (!n.actor)
+          workflowInvalid(
+            `${p}.actor`,
+            `请配置节点「${String(n.name)}」的办理人员`,
+          );
         actor(n.actor, `${p}.actor`);
         if (n.type === 'approve') {
           approvals++;
@@ -409,6 +414,31 @@ export function parseWorkflow(
         });
         if (n.type === 'condition' && defaults !== 1)
           workflowInvalid(p, '条件分支必须恰有一个默认分支');
+        if (n.type === 'parallel') {
+          const owners = new Map<string, string>();
+          const approvers = (items: WorkflowNode[]): string[] =>
+            items.flatMap((item) => [
+              ...(item.type === 'approve' && item.actor?.type === 'users'
+                ? (item.actor.ids ?? [])
+                : []),
+              ...approvers(
+                item.branches?.flatMap((branch) => branch.nodes) ?? [],
+              ),
+            ]);
+          for (const branch of n.branches as NonNullable<
+            WorkflowNode['branches']
+          >) {
+            for (const id of new Set(approvers(branch.nodes))) {
+              const owner = owners.get(id);
+              if (owner)
+                workflowInvalid(
+                  p,
+                  `并行分支「${owner}」和「${branch.name}」指定了同一审批人`,
+                );
+              owners.set(id, branch.name);
+            }
+          }
+        }
       } else
         workflowInvalid(`${p}.type`, '只支持审批、抄送、条件分支和并行分支');
       return n as unknown as WorkflowNode;
