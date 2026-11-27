@@ -15667,7 +15667,7 @@
             "type": "string"
           },
           "orgId": {
-            "description": "按成员的组织角色归属筛选，仅用于成员目录",
+            "description": "按成员的默认组织或有效的组织角色归属筛选，仅用于成员目录",
             "type": "string"
           },
           "page": {

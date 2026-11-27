@@ -92,8 +92,7 @@ export class SystemDirectory {
             }
           }
         }
-        // 组织归属与userOrgs一致：有启用角色的组织授权，不把全局授权当作所有部门成员。
-        // 子查询同样由租户Repository构造，包含租户和软删除限制。
+        // 成员可按默认组织或有效的组织角色找到。全局角色不代表归属所有组织。
         const roles = this.repos
           .for(SystemRole)
           .query('member_role')
@@ -111,7 +110,9 @@ export class SystemDirectory {
           .andWhere(`member_grant.roleId IN (${roles.getQuery()})`)
           .setParameters(roles.getParameters());
         query
-          .andWhere(`u.id IN (${memberships.getQuery()})`)
+          .andWhere(
+            `(u.defaultOrgId IN (:...memberOrgIds) OR u.id IN (${memberships.getQuery()}))`,
+          )
           .setParameters(memberships.getParameters());
       }
       if (ids) {

@@ -25,7 +25,7 @@ import { SystemDirectory } from '../../../system/service/system-directory.servic
 
 class WorkflowDirectoryBody {
   @ApiPropertyOptional({
-    description: '按成员的组织角色归属筛选，仅用于成员目录',
+    description: '按成员的默认组织或有效的组织角色归属筛选，仅用于成员目录',
   })
   @IsOptional()
   @Matches(/^[1-9]\d{0,19}$/)

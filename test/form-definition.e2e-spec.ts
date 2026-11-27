@@ -52,10 +52,7 @@ describe('T35 表单版本、校验与租户边界', () => {
       await dictionaryRunner.release();
     }
   });
-  afterAll(async () => {
-    await app?.close();
-  });
-  beforeEach(async () => {
+  async function clearFormFixtures() {
     assertTestDatabase(ds.options.database, process.env.DB_NAME);
     await ds.query('DELETE FROM form_definition');
     for (const table of [
@@ -66,6 +63,16 @@ describe('T35 表单版本、校验与租户边界', () => {
       'sys_code_rule',
     ])
       await ds.query(`DELETE FROM ${table}`);
+  }
+  afterAll(async () => {
+    try {
+      if (ds?.isInitialized) await clearFormFixtures();
+    } finally {
+      await app?.close();
+    }
+  });
+  beforeEach(async () => {
+    await clearFormFixtures();
     const redis = rawRedis();
     try {
       await clearTestRedis(redis);

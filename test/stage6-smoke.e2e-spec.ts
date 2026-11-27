@@ -406,6 +406,100 @@ describe('T48–T50 AI与OAuth真实身份定向验证', () => {
     await post('platform/tenant/page', tokens[0], {}).expect(403);
   });
 
+  it('审批选人按默认组织和有效组织角色筛选，包含子组织时仍隔离租户', async () => {
+    const passwordHash = await app
+      .get(SystemTenantService)
+      .passwordHash(password);
+    const { childOrgId, memberId, roleMemberId } = await context.run(
+      { tenantId: tenants[0] },
+      () =>
+        db.transaction(async (manager) => {
+          const childOrgId = await repos
+            .for(SystemOrg)
+            .insert(
+              { name: '选人测试小组', parentId: orgs[0], enabled: true },
+              manager,
+            );
+          const memberId = await repos.for(SystemUser).insert(
+            {
+              username: 'directory-member',
+              nickname: '默认组织测试成员',
+              passwordHash,
+              enabled: true,
+              defaultOrgId: childOrgId,
+            },
+            manager,
+          );
+          await repos.for(SystemUser).insert(
+            {
+              username: 'directory-disabled',
+              nickname: '默认组织测试成员（已停用）',
+              passwordHash,
+              enabled: false,
+              defaultOrgId: childOrgId,
+            },
+            manager,
+          );
+          const roleMemberId = await repos.for(SystemUser).insert(
+            {
+              username: 'directory-role-member',
+              nickname: '组织角色测试成员',
+              passwordHash,
+              enabled: true,
+              defaultOrgId: null,
+            },
+            manager,
+          );
+          const grant = await repos
+            .for(SystemUserRole)
+            .query('r', manager)
+            .andWhere('r.userId = :id', { id: peerId })
+            .getOneOrFail();
+          await repos.for(SystemUserRole).insert(
+            {
+              userId: roleMemberId,
+              roleId: grant.roleId,
+              scopeOrgId: childOrgId,
+            },
+            manager,
+          );
+          return { childOrgId, memberId, roleMemberId };
+        }),
+    );
+    const search = async (
+      orgId: string,
+      includeChildren = false,
+      token = tokens[0],
+    ) => {
+      const response = await post('workflow/directory/page', token, {
+        kind: 'users',
+        keyword: '测试成员',
+        orgId,
+        includeChildren,
+      }).expect(200);
+      return response.body.data;
+    };
+    const member = { id: memberId, label: '默认组织测试成员' };
+    const roleMember = { id: roleMemberId, label: '组织角色测试成员' };
+    const peer = { id: peerId, label: '同组织测试成员' };
+    expect(await search(childOrgId)).toEqual({
+      list: [member, roleMember],
+      total: 2,
+    });
+    expect(await search(orgs[0])).toEqual({
+      list: expect.arrayContaining([peer]),
+      total: 2,
+    });
+    expect(await search(orgs[0], true)).toEqual({
+      list: expect.arrayContaining([peer, member, roleMember]),
+      total: 4,
+    });
+    expect(await search(childOrgId, true, tokens[1])).toEqual({
+      list: [],
+      total: 0,
+    });
+  });
+
   it('新增列表按统一页面描述开放查询，密文字段不能进入搜索和筛选', async () => {
     const queries: Record<string, Record<string, unknown>> = {
       'oauth/client': {
